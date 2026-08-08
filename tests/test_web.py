@@ -1031,15 +1031,12 @@ def test_the_custom_letter_fills_its_placeholders(
 def test_the_reminder_clock_time_is_kept(client: TestClient) -> None:
     customer_id = _add_customer(client)
     client.post(
-        f"/kunden/{customer_id}",
+        f"/kunden/{customer_id}/serie",
         data={
-            "name": "Erika Beispiel",
-            "street": "Beispielstraße 21",
-            "city": "54321 Beispielstadt",
-            "email": "",
-            "phone": "",
-            "status": "active",
-            "delivery": "email",
+            "recurrence": "RRULE:FREQ=WEEKLY;BYDAY=MO",
+            "quantity": "1",
+            "starts_on": "2026-06-01",
+            "starts_at": "15:00",
             "reminder_at": "08:30",
         },
     )

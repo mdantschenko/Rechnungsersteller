@@ -174,7 +174,6 @@ def save_customer(
     student_name: str = Form(""),
     student_grade: str = Form(""),
     lesson_address: str = Form(""),
-    reminder_at: str = Form(""),
     online: str = Form(""),
     mail_text: str = Form(""),
     session: Session = Depends(database),
@@ -190,7 +189,6 @@ def save_customer(
     customer.student_name = student_name.strip() or None
     customer.student_grade = student_grade.strip() or None
     customer.lesson_address = lesson_address.strip() or None
-    customer.reminder_at = time.fromisoformat(reminder_at) if reminder_at else None
     customer.online = bool(online)
     customer.mail_text = mail_text.strip() or None
     session.add(customer)
@@ -304,6 +302,7 @@ def add_series(
     quantity: Decimal = Form(...),
     starts_on: date = Form(...),
     starts_at: str = Form(""),
+    reminder_at: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
     session.add(
@@ -315,7 +314,16 @@ def add_series(
             starts_at=time.fromisoformat(starts_at) if starts_at else None,
         )
     )
+    _remember_reminder(session, customer_id, reminder_at)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
+
+
+def _remember_reminder(session: Session, customer_id: int, reminder_at: str) -> None:
+    """The reminder time lives on the customer: one wake-up call per pupil,
+    however many series they have."""
+    customer = _customer(session, customer_id)
+    customer.reminder_at = time.fromisoformat(reminder_at) if reminder_at else None
+    session.add(customer)
 
 
 @router.post("/kunden/{customer_id}/serie/{series_id}/anpassen")
@@ -325,6 +333,7 @@ def change_series(
     recurrence: str = Form(...),
     quantity: Decimal = Form(...),
     starts_at: str = Form(""),
+    reminder_at: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
     """Rewrite the series from today on.
@@ -335,6 +344,7 @@ def change_series(
     series = session.get(LessonSeries, series_id)
     if series is None or not series.active:
         return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
+    _remember_reminder(session, customer_id, reminder_at)
     today = date.today()
     series.recurrence = recurrence
     series.quantity = quantity

@@ -50,10 +50,6 @@
       </div>
       <p class="hint">Leer gelassen wird der eingebaute Standardtext verwendet.</p>
     </details>
-    <label>Erinnerung am Termintag um (optional, sonst gilt „Mehr“)
-      <input type="time" name="reminder_at"
-             value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}">
-    </label>
     <label>E-Mail<input type="text" name="email" value="{{ customer.email or '' }}"></label>
     <label>WhatsApp<input type="text" name="phone" value="{{ customer.phone or '' }}"></label>
     <label>Rechnung
@@ -213,6 +209,9 @@
             </label>
             <label>Uhrzeit<input type="time" name="starts_at"
               value="{% if entry.starts_at %}{{ '%02d:%02d'|format(entry.starts_at.hour, entry.starts_at.minute) }}{% endif %}"></label>
+            <label>Erinnerung am Termintag um (optional, sonst gilt „Mehr“)
+              <input type="time" name="reminder_at"
+                value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}"></label>
             <label>Stunden<input type="number" name="quantity" value="{{ entry.quantity }}"
               step="0.25" min="0.25" max="12" required></label>
             <button class="button button-small" type="submit">Speichern — gilt ab heute</button>
@@ -242,6 +241,9 @@
     </label>
     <label>Beginn<input type="date" name="starts_on" required></label>
     <label>Uhrzeit<input type="time" name="starts_at"></label>
+    <label>Erinnerung am Termintag um (optional, sonst gilt „Mehr“)
+      <input type="time" name="reminder_at"
+        value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}"></label>
     <label>Stunden<input type="number" name="quantity" value="1" step="0.25" min="0.25" max="12" required></label>
     <button class="button button-fill" type="submit">Serie anlegen</button>
   </form>
