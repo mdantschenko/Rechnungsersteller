@@ -38,7 +38,7 @@
     {% if not day.lessons %}<span class="day-empty">frei</span>{% endif %}
   </span>
 </div>
-<ul class="plain">
+<ul class="plain{{ ' today-rows' if day.is_today and day.lessons }}">
   {% for lesson in day.lessons %}
   <li>{{ lesson_row(lesson, names, back, today, series, places, extras) }}</li>
   {% endfor %}

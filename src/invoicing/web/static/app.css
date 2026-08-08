@@ -265,6 +265,32 @@ ul.plain {
   list-style: none;
 }
 
+ul.plain.today-rows li {
+  position: relative;
+}
+
+ul.plain.today-rows li::before {
+  content: "";
+  position: absolute;
+  top: 0.375rem;
+  bottom: 0.375rem;
+  left: 0.375rem;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 3px 3px 5px -1px rgba(37, 99, 235, 0.45);
+}
+
+ul.plain.today-rows li:has(.lesson-done)::before {
+  background: var(--green);
+  box-shadow: 3px 3px 5px -1px rgba(52, 199, 89, 0.5);
+}
+
+ul.plain.today-rows li:has(.lesson-cancelled)::before {
+  background: var(--faint);
+  box-shadow: 3px 3px 5px -1px rgba(60, 60, 67, 0.35);
+}
+
 a.reminder-body .reminder-title::after {
   content: "›";
   margin-left: auto;
@@ -297,8 +323,8 @@ a.reminder-link {
 }
 
 .tick.is-done {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--green);
+  border-color: var(--green);
 }
 
 .tick.is-cancelled {
@@ -681,7 +707,8 @@ textarea {
 }
 
 .mark-done {
-  background: var(--accent);
+  border-color: var(--green);
+  background: var(--green);
 }
 
 .mark-cancelled {

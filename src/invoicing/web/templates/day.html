@@ -28,7 +28,7 @@
 <p class="hint">An diesem Tag steht nichts an.</p>
 {% endif %}
 
-<ul class="plain">
+<ul class="plain{{ ' today-rows' if on == today and lessons }}">
   {% for lesson in lessons %}
   <li>{{ lesson_row(lesson, names, back, today, series, places, extras) }}</li>
   {% endfor %}
