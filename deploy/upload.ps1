@@ -26,6 +26,7 @@ Get-ChildItem $staging -Recurse -Directory -Filter "__pycache__" | Remove-Item -
 Write-Host "Uploading to ${Server}:${Target}"
 ssh $Server "mkdir -p $Target"
 scp -r "$staging/*" "${Server}:${Target}/"
+ssh $Server "chmod -R a+rX $Target"
 Remove-Item $staging -Recurse -Force
 
 Write-Host ""
