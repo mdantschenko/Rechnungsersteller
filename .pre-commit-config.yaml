@@ -1,0 +1,61 @@
+# The full quality chain, run before every commit.
+# Every hook uses the project's uv environment so that a hook can never pass
+# with a different toolchain than a developer sees locally.
+repos:
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: black
+        name: black
+        entry: uv run black --check .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: ruff
+        name: ruff
+        entry: uv run ruff check .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: radon
+        name: radon
+        entry: uv run radon cc src main.py -s -a
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: skylos
+        name: skylos
+        entry: uv run skylos . -a
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: complexipy
+        name: complexipy
+        entry: uv run complexipy src main.py
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: pydeps
+        name: pydeps
+        entry: uv run pydeps src/invoicing --noshow -o dependency_graph.svg --only invoicing --rmprefix invoicing.
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: pyright
+        name: pyright
+        entry: uv run --with pyright pyright
+        language: system
+        types: [python]
+        pass_filenames: false

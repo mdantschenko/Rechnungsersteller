@@ -1,0 +1,10 @@
+# Normalise line endings so the repository never depends on the checkout host.
+* text=auto eol=lf
+
+# Bundled fonts must never be line-ending converted; that corrupts them.
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.png binary
