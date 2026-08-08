@@ -34,6 +34,10 @@
       <textarea name="mail_text" rows="6"
         placeholder="Guten Tag,&#10;&#10;anbei die Rechnung für {MONAT} über {BETRAG}.&#10;&#10;Mit freundlichen Grüßen&#10;{ABSENDER}">{{ customer.mail_text or '' }}</textarea>
     </label>
+    <label>Zahlungserinnerungs-Anschreiben (optional)
+      <textarea name="reminder_text" rows="6"
+        placeholder="Guten Tag,&#10;&#10;dies ist die {ANZAHL}. Erinnerung zur Rechnung Nr. {NUMMER} über {BETRAG}.&#10;&#10;Mit freundlichen Grüßen&#10;{ABSENDER}">{{ customer.reminder_text or '' }}</textarea>
+    </label>
     <details class="reminder-actions">
       <summary>Platzhalter fürs Anschreiben anzeigen</summary>
       <div class="simple-list" style="margin-top: 0.5rem">
@@ -46,9 +50,13 @@
           <li><span>{NAME}</span><span>{{ customer.name }}</span></li>
           <li><span>{SCHUELER}</span><span>{{ customer.student_name or customer.name }}</span></li>
           <li><span>{ABSENDER}</span><span>dein Name aus „Mehr“</span></li>
+          <li><span>{ANZAHL}</span><span>2 — nur im Erinnerungstext</span></li>
         </ul>
       </div>
-      <p class="hint">Leer gelassen wird der eingebaute Standardtext verwendet.</p>
+      <p class="hint">
+        Gilt für beide Anschreiben. Leer gelassen wird der eingebaute
+        Standardtext verwendet.
+      </p>
     </details>
     <label>E-Mail<input type="text" name="email" value="{{ customer.email or '' }}"></label>
     <label>WhatsApp<input type="text" name="phone" value="{{ customer.phone or '' }}"></label>

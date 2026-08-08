@@ -91,6 +91,7 @@ class Customer(SQLModel, table=True):
     online: bool = False
     """Lessons happen over video, so the calendar shows no address."""
     mail_text: str | None = None
+    reminder_text: str | None = None
     """The letter accompanying this customer's invoices. May carry
     placeholders such as {MONAT} and {BETRAG}; empty falls back to the
     built-in wording."""

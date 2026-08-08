@@ -525,6 +525,11 @@ def _issued(session: Session, number: int) -> IssuedInvoice | None:
 
 
 def _reminder_mail_body(session: Session, record: IssuedInvoice, count: int) -> str:
+    signature = _issuer_name(session)
+    customer = session.get(Customer, record.customer_id)
+    if customer is not None and customer.reminder_text:
+        text = _filled_in(customer.reminder_text, record, customer, signature)
+        return text.replace("{ANZAHL}", str(count))
     return (
         f"Guten Tag,\n\n"
         f"dies ist die {count}. Zahlungserinnerung zur Rechnung Nr. "
@@ -532,7 +537,7 @@ def _reminder_mail_body(session: Session, record: IssuedInvoice, count: int) -> 
         f"{german_date(record.issued_on)} — anbei noch einmal als PDF. "
         f"Falls die Zahlung schon unterwegs ist, betrachte diese Nachricht "
         f"bitte als gegenstandslos.\n\n"
-        f"Mit freundlichen Grüßen\n{_issuer_name(session)}\n"
+        f"Mit freundlichen Grüßen\n{signature}\n"
     )
 
 

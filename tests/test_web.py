@@ -581,6 +581,40 @@ def test_a_reminder_is_recorded_and_counted(client: TestClient, location: Path) 
     assert "Erneut erinnern" in client.get("/rechnungen").text
 
 
+def test_the_reminder_letter_can_be_the_customers_own(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict[str, str] = {}
+
+    def capture(settings: object, **mail_parts: object) -> None:
+        sent["body"] = str(mail_parts["body"])
+
+    monkeypatch.setattr("invoicing.web.invoices_page.mail.send_pdf", capture)
+    customer_id = _add_customer(client)
+    _set_terms(client, customer_id)
+    client.post(
+        f"/kunden/{customer_id}",
+        data={
+            "name": "Erika Beispiel",
+            "street": "Beispielstraße 21",
+            "city": "54321 Beispielstadt",
+            "email": "erika@example.com",
+            "status": "active",
+            "delivery": "email",
+            "reminder_text": "Rechnung {NUMMER}: {ANZAHL}. Mahnung über {BETRAG}.",
+        },
+    )
+    lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
+    client.post(f"/termine/{lesson_id}/erledigt")
+    client.post(
+        f"/rechnungen/{customer_id}/freigeben", data={"closing_day": "2026-06-15"}
+    )
+
+    client.post("/rechnungen/115/erinnern")
+
+    assert sent["body"] == "Rechnung 115: 1. Mahnung über 33,33\xa0€."
+
+
 def test_a_customer_without_invoices_can_be_deleted(
     client: TestClient, location: Path
 ) -> None:

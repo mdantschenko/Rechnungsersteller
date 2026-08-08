@@ -176,6 +176,7 @@ def save_customer(
     lesson_address: str = Form(""),
     online: str = Form(""),
     mail_text: str = Form(""),
+    reminder_text: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
     customer = _customer(session, customer_id)
@@ -191,6 +192,7 @@ def save_customer(
     customer.lesson_address = lesson_address.strip() or None
     customer.online = bool(online)
     customer.mail_text = mail_text.strip() or None
+    customer.reminder_text = reminder_text.strip() or None
     session.add(customer)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
