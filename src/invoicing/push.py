@@ -76,6 +76,7 @@ def send_to_all(
                 data=json.dumps(message),
                 vapid_private_key=settings.vapid_private_key,
                 vapid_claims={"sub": _contact(settings)},
+                headers={"Urgency": "high"},
             )
             delivered += 1
         except WebPushException as error:
