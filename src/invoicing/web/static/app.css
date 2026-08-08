@@ -944,3 +944,50 @@ html.nav-back::view-transition-new(root) {
 .sign-in .page-title {
   margin: 0 0 1rem;
 }
+
+/* --- tablet and desktop ---------------------------------------------------- */
+
+@media (min-width: 48rem) {
+  .app-content {
+    max-width: 46rem;
+    margin-inline: auto;
+  }
+
+  .app-tabs {
+    justify-content: center;
+    grid-auto-columns: minmax(0, 11rem);
+  }
+
+  .app-bar {
+    padding-inline: max(0.75rem, calc((100% - 46rem) / 2 + 0.25rem));
+  }
+
+  .peek {
+    left: 50%;
+    right: auto;
+    width: 26rem;
+    max-width: calc(100vw - 2rem);
+    transform: translateX(-50%);
+  }
+}
+
+@media (hover: hover) {
+  .button:hover {
+    filter: brightness(0.95);
+  }
+
+  .button-fill:hover {
+    filter: none;
+    background: var(--accent-deep);
+  }
+
+  .app-tabs a:hover {
+    color: var(--ink);
+  }
+
+  a.reminder-body:hover,
+  .planner-day:hover {
+    background: var(--group);
+    border-radius: 0.75rem;
+  }
+}
