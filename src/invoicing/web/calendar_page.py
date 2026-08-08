@@ -55,12 +55,13 @@ class CalendarDay:
 
     @property
     def peek(self) -> str:
-        """What the long press shows: holidays first, then the lessons."""
+        """What the long press shows: holidays first, then the lessons,
+        one per line."""
         parts = [self.holiday] if self.holiday else []
         parts.extend(f"{name} ({state})" for state, name in self.vacations)
         if self.summary:
             parts.append(self.summary)
-        return " · ".join(parts)
+        return "\n".join(parts)
 
 
 @router.get("/")
@@ -237,7 +238,7 @@ def _summary(lessons: tuple[Lesson, ...], names: dict[int, str]) -> str:
             f"{clock}{names.get(lesson.customer_id, '?')} "
             f"({format_quantity(lesson.quantity)} h{extra})"
         )
-    return " · ".join(pieces)
+    return "\n".join(pieces)
 
 
 def _holiday_notes(

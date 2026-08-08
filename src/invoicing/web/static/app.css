@@ -664,6 +664,8 @@ textarea {
   border-radius: 1rem;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
   font-size: 0.875rem;
+  text-align: center;
+  white-space: pre-line;
   z-index: 30;
 }
 
