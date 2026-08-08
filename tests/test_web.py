@@ -490,7 +490,7 @@ def test_a_sent_invoice_carries_its_mark(client: TestClient) -> None:
     page = client.post("/rechnungen/115/gesendet").text
 
     assert "#Gesendet" in page
-    assert "Nochmal senden" in page
+    assert "Nochmal senden" not in page
 
 
 def test_an_unpaid_invoice_past_the_due_date_is_flagged(

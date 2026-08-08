@@ -155,12 +155,6 @@
           </form>
           <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf" download>PDF</a>
         </div>
-        {% if invoice.sent_on %}
-        <details class="reminder-actions">
-          <summary>Nochmal senden</summary>
-          <div class="row-actions">{{ send_buttons(invoice, mode) }}</div>
-        </details>
-        {% endif %}
         {% if sent | length > 1 %}
         <details class="reminder-actions">
           <summary>Alle Erinnerungen</summary>
