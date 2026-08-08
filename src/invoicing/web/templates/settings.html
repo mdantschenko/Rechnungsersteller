@@ -41,17 +41,13 @@
     <button class="button button-small color-red" type="submit">Zugangsdaten löschen</button>
   </form>
   {% endif %}
-  <p class="hint">
-    Für Gmail brauchst du ein App-Passwort: myaccount.google.com/apppasswords
-    (die Bestätigung in zwei Schritten muss dafür an sein). Server
-    smtp.gmail.com, Port 587.
-  </p>
 </div>
 
 <div class="block">
   <form method="post" action="/einstellungen/email-test" class="stack">
     <label>Testrechnung senden an
-      <input type="email" name="to" placeholder="deine@adresse.de" required>
+      <input type="email" name="to" value="{{ settings.smtp_from or settings.smtp_user or '' }}"
+             placeholder="deine@adresse.de" required>
     </label>
     <button class="button" type="submit">Testrechnung senden</button>
   </form>
