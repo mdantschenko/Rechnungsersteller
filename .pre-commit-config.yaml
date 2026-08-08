@@ -48,7 +48,7 @@ repos:
 
       - id: pydeps
         name: pydeps
-        entry: uv run pydeps src/invoicing --noshow -o dependency_graph.svg --only invoicing --rmprefix invoicing.
+        entry: uv run pydeps src/invoicing --noshow -o dependency_graph.svg --only invoicing --rmprefix invoicing. --max-module-depth 2
         language: system
         types: [python]
         pass_filenames: false
