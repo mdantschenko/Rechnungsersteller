@@ -1,0 +1,160 @@
+{% extends "layout.html" %}
+{% set tab = "settings" %}
+{% block title %}Einstellungen{% endblock %}
+{% block heading %}Einstellungen{% endblock %}
+
+{% block content %}
+<div class="section-title">Absender</div>
+<div class="block">
+  <form method="post" action="/einstellungen/absender" class="stack">
+    <label>Name<input type="text" name="name" value="{{ issuer.name if issuer else '' }}" required></label>
+    <label>Straße<input type="text" name="street" value="{{ issuer.street if issuer else '' }}" required></label>
+    <label>PLZ und Ort<input type="text" name="city" value="{{ issuer.city if issuer else '' }}" required></label>
+    <label>Land<input type="text" name="country" value="{{ issuer.country if issuer else 'Deutschland' }}" required></label>
+    <label>Bank<input type="text" name="bank" value="{{ issuer.bank if issuer else '' }}" required></label>
+    <label>IBAN<input type="text" name="iban" value="{{ issuer.iban if issuer else '' }}" required></label>
+    <label>BIC<input type="text" name="bic" value="{{ issuer.bic if issuer else '' }}" required></label>
+    <label>Steuer-Nr.<input type="text" name="tax_number" value="{{ issuer.tax_number if issuer else '' }}" required></label>
+    <label>E-Mail<input type="text" name="email" value="{{ issuer.email if issuer else '' }}" required></label>
+    <label>PayPal<input type="text" name="paypal" value="{{ issuer.paypal if issuer else '' }}" required></label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+</div>
+
+<div class="section-title">E-Mail-Versand</div>
+<div class="block">
+  <form method="post" action="/einstellungen/email" class="stack">
+    <label>SMTP-Server<input type="text" name="smtp_host" value="{{ settings.smtp_host or '' }}" placeholder="smtp.gmail.com"></label>
+    <label>Port<input type="number" name="smtp_port" value="{{ settings.smtp_port }}" min="1" max="65535" required></label>
+    <label>Benutzername<input type="text" name="smtp_user" value="{{ settings.smtp_user or '' }}" placeholder="name@gmail.com"></label>
+    <label>Passwort
+      <input type="password" name="smtp_password"
+             placeholder="{{ 'gespeichert — leer lassen zum Behalten' if settings.smtp_password else '' }}">
+    </label>
+    <label>Absenderadresse (leer = Benutzername)
+      <input type="text" name="smtp_from" value="{{ settings.smtp_from or '' }}">
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+  {% if settings.smtp_password %}
+  <form method="post" action="/einstellungen/email-loeschen" class="row-actions">
+    <button class="button button-small color-red" type="submit">Zugangsdaten löschen</button>
+  </form>
+  {% endif %}
+  <p class="hint">
+    Für Gmail brauchst du ein App-Passwort: myaccount.google.com/apppasswords
+    (die Bestätigung in zwei Schritten muss dafür an sein). Server
+    smtp.gmail.com, Port 587.
+  </p>
+</div>
+
+<div class="block">
+  <form method="post" action="/einstellungen/email-test" class="stack">
+    <label>Testrechnung senden an
+      <input type="email" name="to" placeholder="deine@adresse.de" required>
+    </label>
+    <button class="button" type="submit">Testrechnung senden</button>
+  </form>
+  <p class="hint">Schickt eine Beispielrechnung mit erfundenen Daten als PDF.</p>
+</div>
+
+<div class="section-title">Erinnerungen</div>
+<div class="block">
+  <form method="post" action="/einstellungen/erinnerungen" class="stack">
+    <label>Benachrichtigung vor dem Termin (Minuten)
+      <input type="number" name="reminder_minutes" value="{{ settings.reminder_minutes }}" min="0" max="1440" required>
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+  <p class="hint">
+    Einmalig auf dem iPhone antippen:
+    <a href="webcal://{{ request.url.netloc }}/kalender.ics?schluessel={{ settings.calendar_token }}">Termine als Kalender abonnieren</a>.
+    Danach meldet sich das Handy von selbst vor jedem Termin — mit Namen des
+    Schülers, Uhrzeit und Adresse. Ton und Wecker-Stil bestimmst du in den
+    iPhone-Einstellungen unter Kalender.
+  </p>
+</div>
+
+<div class="section-title">Feiertage und Ferien</div>
+<div class="block">
+  <form method="post" action="/einstellungen/feiertage" class="stack">
+    <label class="check">
+      <input type="checkbox" name="show_public_holidays" {{ 'checked' if settings.show_public_holidays }}>
+      Feiertage im Kalender zeigen
+    </label>
+    <label class="check">
+      <input type="checkbox" name="show_school_holidays" {{ 'checked' if settings.show_school_holidays }}>
+      Ferien im Kalender zeigen
+    </label>
+    <label>Bundesländer (mehrere möglich)
+      <select name="states" multiple size="8">
+        {% for code, name in states.items() %}
+        <option value="{{ code }}" {{ 'selected' if code in chosen_states }}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+  <p class="hint">
+    Feiertage rechnet die App selbst aus. Ferien kommen von
+    openholidaysapi.org und werden beim Speichern neu geladen.
+  </p>
+</div>
+
+<div class="section-title">Zahlungsziel</div>
+<div class="block">
+  <form method="post" action="/einstellungen/zahlungsziel" class="stack">
+    <label>Tage bis zur Fälligkeit
+      <input type="number" name="payment_days" value="{{ settings.payment_days }}" min="0" max="90" required>
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+  <p class="hint">
+    Unbezahlte Rechnungen werden nach Ablauf rot markiert und mit
+    „überfällig seit …“ versehen.
+  </p>
+</div>
+
+<div class="section-title">Rechnungsnummern</div>
+<div class="block">
+  <p class="hint">
+    {% if numbering and numbering.last_assigned %}
+    Zuletzt vergeben: {{ numbering.last_assigned }}.
+    {% endif %}
+    Nächste Nummer: {{ numbering.start if numbering else 1 }}.
+  </p>
+  <form method="post" action="/einstellungen/nummern" class="stack">
+    <label>Startnummer
+      <input type="number" name="start" value="{{ numbering.start if numbering else 1 }}" min="1" required>
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+</div>
+
+<div class="section-title">Ablage</div>
+<div class="block">
+  <form method="post" action="/einstellungen/ablage" class="stack">
+    <label>Ordner für die PDFs
+      <input type="text" name="invoice_folder" value="{{ settings.invoice_folder }}" required>
+    </label>
+    <label>Termine vorausplanen (Tage)
+      <input type="number" name="lesson_horizon_days" value="{{ settings.lesson_horizon_days }}" min="7" max="365" required>
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+</div>
+
+<div class="section-title">Passwort</div>
+<div class="block">
+  <form method="post" action="/einstellungen/passwort" class="stack">
+    <label>Neues Passwort<input type="password" name="password" minlength="8" required></label>
+    <button class="button button-fill" type="submit">Ändern</button>
+  </form>
+</div>
+
+<div class="block">
+  <form method="post" action="/abmelden">
+    <button class="button button-fill color-red" type="submit">Abmelden</button>
+  </form>
+</div>
+{% endblock %}
