@@ -1,0 +1,332 @@
+{% extends "layout.html" %}
+{% set tab = "customers" %}
+{% set rhythms = [
+  ("RRULE:FREQ=WEEKLY;BYDAY=MO", "jeden Montag"),
+  ("RRULE:FREQ=WEEKLY;BYDAY=TU", "jeden Dienstag"),
+  ("RRULE:FREQ=WEEKLY;BYDAY=WE", "jeden Mittwoch"),
+  ("RRULE:FREQ=WEEKLY;BYDAY=TH", "jeden Donnerstag"),
+  ("RRULE:FREQ=WEEKLY;BYDAY=FR", "jeden Freitag"),
+  ("RRULE:FREQ=WEEKLY;BYDAY=SA", "jeden Samstag"),
+  ("RRULE:FREQ=WEEKLY;BYDAY=SU", "jeden Sonntag"),
+  ("RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TU", "jeden zweiten Dienstag"),
+] %}
+{% block title %}{{ customer.name }}{% endblock %}
+{% block heading %}{{ customer.name }}{% endblock %}
+{% block bar_left %}<a class="bar-button" href="/kunden" aria-label="Zurück">‹</a>{% endblock %}
+
+{% block content %}
+<div class="section-title">Stammdaten</div>
+<div class="block">
+  <form method="post" action="/kunden/{{ customer.id }}" class="stack">
+    <label>Name (Rechnungsempfänger)<input type="text" name="name" value="{{ customer.name }}" required></label>
+    <label>Straße<input type="text" name="street" value="{{ customer.street }}" required></label>
+    <label>PLZ und Ort<input type="text" name="city" value="{{ customer.city }}" required></label>
+    <label>Schüler/in (optional)<input type="text" name="student_name" value="{{ customer.student_name or '' }}"></label>
+    <label>Klasse (optional)<input type="text" name="student_grade" value="{{ customer.student_grade or '' }}"></label>
+    <label>Unterrichtsadresse (optional, falls abweichend)
+      <input type="text" name="lesson_address" value="{{ customer.lesson_address or '' }}">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="online" {{ 'checked' if customer.online }}>
+      Online-Unterricht (keine Adresse im Kalender)
+    </label>
+    <label>Rechnungs-Anschreiben (optional)
+      <textarea name="mail_text" rows="6"
+        placeholder="Guten Tag,&#10;&#10;anbei die Rechnung für {MONAT} über {BETRAG}.&#10;&#10;Mit freundlichen Grüßen&#10;{ABSENDER}">{{ customer.mail_text or '' }}</textarea>
+    </label>
+    <details class="reminder-actions">
+      <summary>Platzhalter fürs Anschreiben anzeigen</summary>
+      <div class="simple-list" style="margin-top: 0.5rem">
+        <ul>
+          <li><span>{MONAT}</span><span>Oktober</span></li>
+          <li><span>{JAHR}</span><span>2026</span></li>
+          <li><span>{BETRAG}</span><span>123,45&nbsp;€</span></li>
+          <li><span>{NUMMER}</span><span>118</span></li>
+          <li><span>{ZEITRAUM}</span><span>01.10.2026 bis 31.10.2026</span></li>
+          <li><span>{NAME}</span><span>{{ customer.name }}</span></li>
+          <li><span>{SCHUELER}</span><span>{{ customer.student_name or customer.name }}</span></li>
+          <li><span>{ABSENDER}</span><span>dein Name aus „Mehr“</span></li>
+        </ul>
+      </div>
+      <p class="hint">Leer gelassen wird der eingebaute Standardtext verwendet.</p>
+    </details>
+    <label>Erinnerung am Termintag um (optional, sonst gilt „Mehr“)
+      <input type="time" name="reminder_at"
+             value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}">
+    </label>
+    <label>E-Mail<input type="text" name="email" value="{{ customer.email or '' }}"></label>
+    <label>WhatsApp<input type="text" name="phone" value="{{ customer.phone or '' }}"></label>
+    <label>Rechnung
+      <select name="delivery">
+        <option value="email" {{ 'selected' if customer.delivery.value == 'email' }}>per E-Mail senden</option>
+        <option value="whatsapp" {{ 'selected' if customer.delivery.value == 'whatsapp' }}>per WhatsApp teilen</option>
+        <option value="none" {{ 'selected' if customer.delivery.value == 'none' }}>keine Rechnung — nur Erinnerung</option>
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        <option value="active" {{ 'selected' if customer.status.value == 'active' }}>Aktiv</option>
+        <option value="archived" {{ 'selected' if customer.status.value == 'archived' }}>Archiviert</option>
+      </select>
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+</div>
+
+<div class="section-title">Rechnungsvorlage</div>
+<div class="block">
+  <form method="post" action="/kunden/{{ customer.id }}/vorlage" class="stack">
+    <label>Einzelpreis
+      <input type="number" name="unit_price" value="{{ terms.unit_price }}" step="0.01" min="0" required>
+    </label>
+    <label>Einheit (zum Rechnen: „h“ = pro Stunde, „1,5h“ = pro 1,5 Stunden)
+      <input type="text" name="unit" value="{{ terms.unit }}" required>
+    </label>
+    <label>Bezeichnung<input type="text" name="description" value="{{ terms.description }}" required></label>
+    <label>Abrechnung
+      <select name="cycle">
+        <option value="month_start" {{ 'selected' if terms.cycle.value == 'month_start' }}>
+          Monatsanfang, für den Vormonat
+        </option>
+        <option value="month_midpoint" {{ 'selected' if terms.cycle.value == 'month_midpoint' }}>
+          Monatsmitte, 15. bis 15.
+        </option>
+      </select>
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+</div>
+
+<div class="section-title">Zusatzkosten</div>
+{% set source_words = {'fixed': 'zählt bei jedem Termin', 'per_lesson': 'je Termin an/abwählbar'} %}
+{% set rule_words = {'excluded': 'zählt nicht zur Summe', 'add_per_row': 'einmal je Termin', 'multiply_by_quantity': 'mal Stundenzahl'} %}
+{% if terms.columns %}
+<ul class="plain">
+  {% for column in terms.columns %}
+  <li>
+    <div class="reminder">
+      <div class="reminder-body">
+        <div class="reminder-title">
+          <strong>{{ column.label }}</strong>
+          {% if column.default_value %}
+          <span class="spread"></span>
+          <span class="amount">{{ column.default_value | replace('.', ',') }}&nbsp;€</span>
+          {% endif %}
+        </div>
+        <div class="reminder-meta">
+          <span>{{ source_words.get(column.source.value, column.source.value) }}</span>
+          <span>{{ rule_words.get(column.total_rule.value, column.total_rule.value) }}</span>
+        </div>
+        <details class="reminder-actions">
+          <summary>Anpassen</summary>
+          <form method="post" action="/kunden/{{ customer.id }}/spalte/{{ column.id }}"
+                class="stack" style="margin-top: 0.5rem">
+            <label>Bezeichnung<input type="text" name="label" value="{{ column.label }}" required></label>
+            <label>Gilt
+              <select name="source">
+                <option value="fixed" {{ 'selected' if column.source.value == 'fixed' }}>bei jedem Termin automatisch</option>
+                <option value="per_lesson" {{ 'selected' if column.source.value == 'per_lesson' }}>je Termin an/abwählbar (im Kalender)</option>
+              </select>
+            </label>
+            <label>Berechnung
+              <select name="total_rule">
+                <option value="add_per_row" {{ 'selected' if column.total_rule.value == 'add_per_row' }}>einmal je Termin</option>
+                <option value="multiply_by_quantity" {{ 'selected' if column.total_rule.value == 'multiply_by_quantity' }}>Betrag mal Stundenzahl</option>
+              </select>
+            </label>
+            <label>Betrag (€)<input type="text" name="default_value" value="{{ (column.default_value or '') | replace('.', ',') }}" required></label>
+            <label>Auf der Rechnung, wenn nicht angefallen
+              <input type="text" name="placeholder" value="{{ column.placeholder }}">
+            </label>
+            <button class="button button-small" type="submit">Speichern</button>
+          </form>
+        </details>
+        <div class="row-actions">
+          <form method="post" action="/kunden/{{ customer.id }}/spalte/{{ column.id }}/entfernen">
+            <button class="button button-small color-red" type="submit">Entfernen</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<div class="block">
+  <details class="reminder-actions">
+    <summary class="button button-small">Zusatzkosten hinzufügen ▾</summary>
+    <form method="post" action="/kunden/{{ customer.id }}/spalte" class="stack" style="margin-top: 0.5rem">
+      <input type="hidden" name="kind" value="money">
+      <label>Bezeichnung<input type="text" name="label" placeholder="Anfahrtskosten" required></label>
+      <label>Gilt
+        <select name="source">
+          <option value="fixed">bei jedem Termin automatisch</option>
+          <option value="per_lesson">je Termin an/abwählbar (im Kalender)</option>
+        </select>
+      </label>
+      <label>Berechnung
+        <select name="total_rule">
+          <option value="add_per_row">einmal je Termin</option>
+          <option value="multiply_by_quantity">Betrag mal Stundenzahl</option>
+        </select>
+      </label>
+      <label>Betrag (€)<input type="text" name="default_value" placeholder="25,00" required></label>
+      <label>Auf der Rechnung, wenn nicht angefallen<input type="text" name="placeholder" value="/"></label>
+      <button class="button button-fill" type="submit">Hinzufügen</button>
+    </form>
+  </details>
+  <p class="hint">
+    Erscheint als eigene Spalte auf der Rechnung und zählt zur Summe.
+    „Je Termin an/abwählbar“ schaltest du im Kalender unter „Ändern“.
+  </p>
+</div>
+
+<div class="section-title">Serien</div>
+{% if series %}
+<ul class="plain">
+  {% for entry in series %}
+  <li>
+    <div class="reminder">
+      <div class="reminder-body">
+        <div class="reminder-title">
+          <span class="repeat">↻</span>
+          <strong>{{ entry.recurrence | serie }}</strong>
+        </div>
+        <div class="reminder-meta">
+          <span>ab {{ entry.starts_on | german_date }}</span>
+          {% if entry.starts_at %}<span>{{ "%02d:%02d"|format(entry.starts_at.hour, entry.starts_at.minute) }}</span>{% endif %}
+          <span>{{ entry.quantity | quantity }} h</span>
+          <span>{{ 'läuft' if entry.active else 'beendet' }}</span>
+        </div>
+        {% if entry.active %}
+        <details class="reminder-actions">
+          <summary>Anpassen</summary>
+          <form method="post" action="/kunden/{{ customer.id }}/serie/{{ entry.id }}/anpassen"
+                class="stack" style="margin-top: 0.5rem">
+            <label>Rhythmus
+              <select name="recurrence">
+                {% for rule, label in rhythms %}
+                <option value="{{ rule }}" {{ 'selected' if rule == entry.recurrence }}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Uhrzeit<input type="time" name="starts_at"
+              value="{% if entry.starts_at %}{{ '%02d:%02d'|format(entry.starts_at.hour, entry.starts_at.minute) }}{% endif %}"></label>
+            <label>Stunden<input type="number" name="quantity" value="{{ entry.quantity }}"
+              step="0.25" min="0.25" max="12" required></label>
+            <button class="button button-small" type="submit">Speichern — gilt ab heute</button>
+          </form>
+        </details>
+        <div class="row-actions">
+          <form method="post" action="/kunden/{{ customer.id }}/serie/{{ entry.id }}/beenden">
+            <button class="button button-small" type="submit">Beenden</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<div class="block">
+  <form method="post" action="/kunden/{{ customer.id }}/serie" class="stack">
+    <label>Rhythmus
+      <select name="recurrence">
+        {% for rule, label in rhythms %}
+        <option value="{{ rule }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Beginn<input type="date" name="starts_on" required></label>
+    <label>Uhrzeit<input type="time" name="starts_at"></label>
+    <label>Stunden<input type="number" name="quantity" value="1" step="0.25" min="0.25" max="12" required></label>
+    <button class="button button-fill" type="submit">Serie anlegen</button>
+  </form>
+</div>
+
+{% if invoices %}
+<div class="section-title">Rechnungen</div>
+<ul class="plain">
+  {% for invoice in invoices %}
+  <li>
+    <div class="reminder">
+      <a class="reminder-body" href="/rechnungen/{{ invoice.number }}/ansehen">
+        <div class="reminder-title">
+          <strong>Nr. {{ invoice.number }}</strong>
+          <span class="spread"></span>
+          <span class="amount">{{ invoice.printed_total | euro }}</span>
+        </div>
+        <div class="reminder-meta">
+          <span class="meta-date">{{ invoice.issued_on | german_date }}</span>
+          {% if invoice.paid_on %}<span>bezahlt am {{ invoice.paid_on | german_date }}</span>{% endif %}
+        </div>
+      </a>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+<div class="row-actions" style="margin: 0.25rem 1rem">
+  <a class="button button-small" href="/kunden/{{ customer.id }}/rechnungen.zip" download>
+    Alle Rechnungen als ZIP
+  </a>
+</div>
+{% endif %}
+
+{% if earnings %}
+<div class="section-title">Einnahmen</div>
+<div class="block">
+  <div class="simple-list">
+    <ul>
+      {% for row in earnings %}
+      <li>
+        <span>{{ row.label }}</span>
+        <span class="amount">
+          {{ row.invoiced | euro }}{% if row.uninvoiced %} (+{{ row.uninvoiced | euro }} ohne Rechnung){% endif %}
+        </span>
+      </li>
+      {% endfor %}
+      <li>
+        <span><strong>Gesamt</strong></span>
+        <span class="amount"><strong>{{ earnings_total.total | euro }}</strong></span>
+      </li>
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+{% if history %}
+<div class="section-title">Termine</div>
+{% for label, entries in history %}
+<div class="block">
+  <details class="reminder-actions" {{ 'open' if loop.first }}>
+    <summary>{{ label }} ({{ entries | length }})</summary>
+    <div class="simple-list" style="margin-top: 0.5rem">
+      <ul>
+        {% for lesson in entries %}
+        <li>
+          <span>{{ lesson.taught_on | german_date }}
+            {% if lesson.starts_at %}· {{ "%02d:%02d"|format(lesson.starts_at.hour, lesson.starts_at.minute) }}{% endif %}
+            · {{ lesson.quantity | quantity }} h</span>
+          <span class="{{ 'warn' if lesson.status.value == 'cancelled' }}">
+            {{ 'ausgefallen' if lesson.status.value == 'cancelled' else 'stattgefunden' }}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="block">
+  <form method="post" action="/kunden/{{ customer.id }}/loeschen"
+        onsubmit="return confirm('{{ customer.name }} endgültig löschen? Alle Termine und Serien werden mit entfernt.')">
+    <button class="button button-fill color-red" type="submit">Kunde löschen</button>
+  </form>
+  <p class="hint">Geht nur ohne ausgestellte Rechnungen — sonst archivieren.</p>
+</div>
+{% endblock %}

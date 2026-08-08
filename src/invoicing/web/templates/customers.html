@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{% set tab = "customers" %}
+{% block title %}Kunden{% endblock %}
+{% block heading %}Kunden{% endblock %}
+
+{% block content %}
+<div class="section-title">Aktiv</div>
+{% if not active %}
+<p class="hint">Noch keine aktiven Kunden.</p>
+{% endif %}
+<ul class="plain">
+  {% for customer in active %}
+  <li>
+    <div class="reminder">
+      <a class="reminder-body" href="/kunden/{{ customer.id }}">
+        <div class="reminder-title"><strong>{{ customer.name }}</strong></div>
+        <div class="reminder-meta">
+          <span>{{ customer.city }}</span>
+          {% if customer.student_name %}
+          <span class="tag">#{{ customer.student_name }}{% if customer.student_grade %} · Kl. {{ customer.student_grade }}{% endif %}</span>
+          {% endif %}
+        </div>
+      </a>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+
+<div class="section-title" id="neu">Neuer Kunde</div>
+<div class="block">
+  <form method="post" action="/kunden/neu" class="stack">
+    <label>Name<input type="text" name="name" required></label>
+    <label>Straße<input type="text" name="street" required></label>
+    <label>PLZ und Ort<input type="text" name="city" required></label>
+    <button class="button button-fill" type="submit">Anlegen</button>
+  </form>
+</div>
+
+{% if archived %}
+<div class="section-title">Archiv</div>
+<ul class="plain">
+  {% for customer in archived %}
+  <li>
+    <div class="reminder">
+      <a class="reminder-body" href="/kunden/{{ customer.id }}">
+        <div class="reminder-title"><strong>{{ customer.name }}</strong></div>
+        <div class="reminder-meta">
+          <span>{{ customer.city }}</span>
+          {% if customer.student_name %}
+          <span class="tag">#{{ customer.student_name }}{% if customer.student_grade %} · Kl. {{ customer.student_grade }}{% endif %}</span>
+          {% endif %}
+        </div>
+      </a>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+<p class="hint">Archivierte Kunden erscheinen nirgends sonst, ihre Historie bleibt.</p>
+{% endif %}
+{% endblock %}
