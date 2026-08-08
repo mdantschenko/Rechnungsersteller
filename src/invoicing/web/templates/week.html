@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% from "lesson_row.html" import lesson_row, view_switch %}
+{% set tab = "calendar" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block heading %}{{ heading }}{% endblock %}
+{% block bar_action %}
+<span class="bar-buttons">
+  <a class="bar-button" href="/woche/{{ previous }}" aria-label="Vorige Woche">‹</a>
+  <a class="bar-button bar-button-wide" href="/woche/{{ today }}">Heute</a>
+  <a class="bar-button" href="/woche/{{ next }}" aria-label="Nächste Woche">›</a>
+</span>
+{% endblock %}
+
+{% block content %}
+{{ view_switch("week", monday) }}
+
+<div class="swap">
+{% if overdue %}
+<div class="banner">
+  <strong>{{ overdue | length }} Termin(e) noch offen.</strong>
+  Sie blockieren die Rechnung, bis du sie beantwortest.
+  <span class="banner-days">
+    {% for lesson in overdue[:6] %}
+    <a href="/tag/{{ lesson.taught_on }}">{{ lesson.taught_on | short_date }}</a>
+    {% endfor %}
+  </span>
+</div>
+{% endif %}
+
+{% for day in days %}
+<div class="day-heading{{ ' is-today' if day.is_today }}">
+  <a href="/tag/{{ day.on }}">{{ day.on | long_weekday }}</a>
+  <span>
+    {% if day.holiday %}<span class="day-note">{{ day.holiday }}</span>{% endif %}
+    {% for state, name in day.vacations[:2] %}
+    <span class="day-note-vacation" style="color: {{ colors[state] }}">{{ name }} ({{ state }})</span>
+    {% endfor %}
+    {% if not day.lessons %}<span class="day-empty">frei</span>{% endif %}
+  </span>
+</div>
+<ul class="plain">
+  {% for lesson in day.lessons %}
+  <li>{{ lesson_row(lesson, names, back, today, series, places, extras) }}</li>
+  {% endfor %}
+</ul>
+{% endfor %}
+</div>
+{% endblock %}

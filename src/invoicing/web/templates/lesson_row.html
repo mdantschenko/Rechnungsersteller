@@ -1,0 +1,106 @@
+{% macro lesson_row(lesson, names, back, today=None, series={}, places={}, extras={}) %}
+{% set overdue = today and lesson.status.value == 'planned' and lesson.taught_on < today %}
+{% set place = places.get(lesson.customer_id) %}
+{% set columns = extras.get(lesson.id, []) %}
+<div class="reminder lesson-{{ lesson.status.value }}">
+  {% if lesson.status.value == 'planned' %}
+  <form method="post" action="/termine/{{ lesson.id }}/erledigt">
+    <input type="hidden" name="back" value="{{ back }}">
+    <button class="tick" type="submit" aria-label="Als erledigt abhaken"></button>
+  </form>
+  {% else %}
+  <form method="post" action="/termine/{{ lesson.id }}/offen">
+    <input type="hidden" name="back" value="{{ back }}">
+    <button class="tick is-{{ lesson.status.value }}" type="submit"
+            aria-label="Antwort zurücknehmen">{{ '✓' if lesson.status.value == 'done' else '✕' }}</button>
+  </form>
+  {% endif %}
+
+  <div class="reminder-body">
+    <div class="reminder-title">
+      {% if overdue %}<span class="priority">!!!</span>{% endif %}
+      <strong>{{ names[lesson.customer_id] }}</strong>
+    </div>
+    <div class="reminder-meta">
+      {% if overdue %}<span class="meta-date">{{ lesson.taught_on | short_date }}</span>{% endif %}
+      {% if lesson.starts_at %}<span>{{ "%02d:%02d"|format(lesson.starts_at.hour, lesson.starts_at.minute) }}</span>{% endif %}
+      <span>{{ lesson.quantity | quantity }} h</span>
+      {% if lesson.status.value == 'done' %}<span>erledigt</span>
+      {% elif lesson.status.value == 'cancelled' %}<span>ausgefallen</span>{% endif %}
+      {% if lesson.series_id %}<span class="repeat">↻ {{ series.get(lesson.series_id, 'Serie') }}</span>{% endif %}
+      {% if lesson.invoice_id %}<span class="tag">#Abgerechnet</span>{% endif %}
+    </div>
+    {% if place %}
+    <div class="reminder-meta">
+      <span class="{{ 'tag' if place == 'Online' }}">{{ '#Online' if place == 'Online' else place }}</span>
+    </div>
+    {% endif %}
+    {% set active_costs = columns | selectattr('active') | selectattr('amount') | list %}
+    {% if active_costs %}
+    <div class="reminder-meta">
+      {% for entry in active_costs %}<span>+ {{ entry.label }} {{ entry.amount }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if lesson.invoice_id %}
+    <div class="reminder-meta">Steht auf einer Rechnung und lässt sich nicht mehr ändern.</div>
+    {% else %}
+    <details class="reminder-actions">
+      <summary>Ändern</summary>
+      <div class="row-actions">
+        {% if lesson.status.value != 'cancelled' %}
+        <form method="post" action="/termine/{{ lesson.id }}/ausgefallen">
+          <input type="hidden" name="back" value="{{ back }}">
+          <button class="button button-small" type="submit">Ausgefallen</button>
+        </form>
+        {% endif %}
+
+        <form method="post" action="/termine/{{ lesson.id }}/verschieben">
+          <input type="hidden" name="back" value="{{ back }}">
+          <input type="date" name="taught_on" value="{{ lesson.taught_on }}" required>
+          <input type="time" name="starts_at"
+                 value="{% if lesson.starts_at %}{{ '%02d:%02d'|format(lesson.starts_at.hour, lesson.starts_at.minute) }}{% endif %}">
+          <button class="button button-small" type="submit">Verschieben</button>
+        </form>
+
+        <form method="post" action="/termine/{{ lesson.id }}/stunden">
+          <input type="hidden" name="back" value="{{ back }}">
+          {# type="number" wants 1.5, never the German 1,5 — a comma value is
+             silently dropped by the browser and the field turns up empty. #}
+          <input type="number" name="quantity" value="{{ lesson.quantity }}"
+                 step="0.25" min="0.25" max="12" style="width: 5rem" required>
+          <button class="button button-small" type="submit">Stunden</button>
+        </form>
+
+        <form method="post" action="/termine/{{ lesson.id }}/loeschen">
+          <input type="hidden" name="back" value="{{ back }}">
+          <button class="button button-small color-red" type="submit">Löschen</button>
+        </form>
+      </div>
+      {% set switchable = columns | selectattr('toggleable') | list %}
+      {% if switchable %}
+      <form method="post" action="/termine/{{ lesson.id }}/zusatz" class="row-actions">
+        <input type="hidden" name="back" value="{{ back }}">
+        {% for entry in switchable %}
+        <label class="check check-small">
+          <input type="checkbox" name="aktiv" value="{{ entry.label }}" {{ 'checked' if entry.active }}>
+          {{ entry.label }}{% if entry.amount %} ({{ entry.amount }}){% endif %}
+        </label>
+        {% endfor %}
+        <button class="button button-small" type="submit">Zusatzkosten speichern</button>
+      </form>
+      {% endif %}
+    </details>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro view_switch(current, reference) %}
+<div class="segmented">
+  <a href="/kalender/{{ reference.year }}/{{ reference.month }}"
+     class="{{ 'is-current' if current == 'month' }}">Monat</a>
+  <a href="/woche/{{ reference }}" class="{{ 'is-current' if current == 'week' }}">Woche</a>
+  <a href="/tag/{{ reference }}" class="{{ 'is-current' if current == 'day' }}">Tag</a>
+</div>
+{% endmacro %}

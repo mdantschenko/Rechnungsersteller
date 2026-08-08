@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+{% from "lesson_row.html" import lesson_row, view_switch %}
+{% set tab = "calendar" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block heading %}{{ heading }}{% endblock %}
+{% block bar_action %}
+<span class="bar-buttons">
+  <a class="bar-button" href="/tag/{{ previous }}" aria-label="Voriger Tag">‹</a>
+  <a class="bar-button bar-button-wide" href="/tag/{{ today }}">Heute</a>
+  <a class="bar-button" href="/tag/{{ next }}" aria-label="Nächster Tag">›</a>
+</span>
+{% endblock %}
+
+{% block content %}
+{{ view_switch("day", on) }}
+
+<div class="swap">
+{% if holiday or vacations %}
+<p class="hint">
+  {% if holiday %}<span class="day-note">{{ holiday }}</span>{% endif %}
+  {% for state, name in vacations %}
+  <span class="day-note-vacation" style="color: {{ colors[state] }}">{{ name }} ({{ state }})</span>
+  {% endfor %}
+</p>
+{% endif %}
+
+{% if not lessons %}
+<p class="hint">An diesem Tag steht nichts an.</p>
+{% endif %}
+
+<ul class="plain">
+  {% for lesson in lessons %}
+  <li>{{ lesson_row(lesson, names, back, today, series, places, extras) }}</li>
+  {% endfor %}
+</ul>
+
+<div class="block">
+  <details class="reminder-actions" id="neu">
+    <summary>Termin an diesem Tag hinzufügen</summary>
+    <form method="post" action="/termine/neu" class="stack" style="margin-top: 0.5rem">
+      <input type="hidden" name="back" value="{{ back }}">
+      <input type="hidden" name="taught_on" value="{{ on }}">
+      <label>Kunde
+        <select name="customer_id" required>
+          <option value="" disabled selected>Bitte auswählen</option>
+          {% for customer in customers %}
+          <option value="{{ customer.id }}">
+            {%- if customer.student_name -%}
+              {{ customer.student_name }} ({{ customer.name }})
+            {%- else -%}
+              {{ customer.name }}
+            {%- endif -%}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Uhrzeit<input type="time" name="starts_at"></label>
+      <label>Stunden<input type="number" name="quantity" value="1" step="0.25" min="0.25" max="12" required></label>
+      <button class="button button-fill" type="submit">Hinzufügen</button>
+    </form>
+  </details>
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,153 @@
+{% extends "layout.html" %}
+{% from "lesson_row.html" import view_switch %}
+{% set tab = "calendar" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block heading %}{{ heading }}{% endblock %}
+{% block bar_action %}
+<span class="bar-buttons">
+  <a class="bar-button" href="/kalender/{{ previous.year }}/{{ previous.month }}" aria-label="Voriger Monat">‹</a>
+  <a class="bar-button bar-button-wide" href="/kalender/{{ today.year }}/{{ today.month }}">Heute</a>
+  <a class="bar-button" href="/kalender/{{ next.year }}/{{ next.month }}" aria-label="Nächster Monat">›</a>
+</span>
+{% endblock %}
+
+{% block content %}
+{{ view_switch("month", reference) }}
+
+<div class="swap">
+{% if overdue %}
+<div class="banner">
+  <strong>{{ overdue | length }} Termin(e) noch offen.</strong>
+  Sie blockieren die Rechnung, bis du sie beantwortest.
+  <span class="banner-days">
+    {% for lesson in overdue[:6] %}
+    <a href="/tag/{{ lesson.taught_on }}">{{ lesson.taught_on | short_date }}</a>
+    {% endfor %}
+  </span>
+</div>
+{% endif %}
+
+<div class="planner">
+  <div class="planner-head">
+    {% for name in weekday_names %}<span>{{ name }}</span>{% endfor %}
+  </div>
+  {% for week in weeks %}
+  <div class="planner-week">
+    {% for day in week %}
+    <a class="planner-day{{ ' is-outside' if not day.inside_month }}{{ ' is-today' if day.is_today }}{{ ' is-holiday' if day.holiday }}"
+       href="/tag/{{ day.on }}"
+       data-day="{{ day.on | long_weekday }}"
+       data-info="{{ day.peek }}">
+      <span class="planner-number">{{ day.on.day }}</span>
+      <span class="planner-vacs">
+        {% for state, name in day.vacations[:3] %}
+        <span class="vac-dash vac-{{ state }}" style="background: {{ colors[state] }}"></span>
+        {% endfor %}
+      </span>
+      <span class="planner-marks">
+        {% for lesson in day.lessons[:4] %}
+        <span class="mark mark-{{ lesson.status.value }}"></span>
+        {% endfor %}
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="legend">
+  <span><span class="mark mark-planned"></span> offen</span>
+  <span><span class="mark mark-done"></span> erledigt</span>
+  <span><span class="mark mark-cancelled"></span> ausgefallen</span>
+  <span><span class="legend-holiday">1</span> Feiertag</span>
+</div>
+
+{% if school_states %}
+<div class="legend legend-filter">
+  {% for state in school_states %}
+  <label class="check check-small">
+    <input type="checkbox" data-state="{{ state }}" checked>
+    <span class="legend-vacation" style="background: {{ colors[state] }}"></span>
+    Ferien {{ state }}
+  </label>
+  {% endfor %}
+</div>
+{% endif %}
+</div>
+
+<div class="peek" id="peek" hidden>
+  <strong id="peek-title"></strong>
+  <div id="peek-body"></div>
+</div>
+
+<script>
+(function () {
+  /* Ticking a state off hides its holiday dashes; the choice sticks. */
+  var hidden = [];
+  try { hidden = JSON.parse(localStorage.getItem("ferien-aus") || "[]"); } catch (e) {}
+
+  function apply(state, show) {
+    document.querySelectorAll(".vac-" + state).forEach(function (dash) {
+      dash.style.display = show ? "" : "none";
+    });
+  }
+
+  document.querySelectorAll(".legend-filter input[data-state]").forEach(function (box) {
+    var state = box.dataset.state;
+    if (hidden.indexOf(state) !== -1) {
+      box.checked = false;
+      apply(state, false);
+    }
+    box.addEventListener("change", function () {
+      apply(state, box.checked);
+      var index = hidden.indexOf(state);
+      if (box.checked && index !== -1) hidden.splice(index, 1);
+      if (!box.checked && index === -1) hidden.push(state);
+      try { localStorage.setItem("ferien-aus", JSON.stringify(hidden)); } catch (e) {}
+    });
+  });
+})();
+</script>
+
+<script>
+(function () {
+  const peek = document.getElementById("peek");
+  const title = document.getElementById("peek-title");
+  const body = document.getElementById("peek-body");
+  let timer = null;
+  let justOpened = false;
+
+  function open(cell) {
+    title.textContent = cell.dataset.day;
+    body.textContent = cell.dataset.info || "Nichts geplant.";
+    peek.hidden = false;
+    justOpened = true;
+  }
+
+  document.querySelectorAll(".planner-day").forEach(function (cell) {
+    const start = function () {
+      timer = setTimeout(function () { timer = null; open(cell); }, 450);
+    };
+    const cancel = function () {
+      if (timer) { clearTimeout(timer); timer = null; }
+    };
+    cell.addEventListener("touchstart", start, { passive: true });
+    cell.addEventListener("touchend", cancel);
+    cell.addEventListener("touchmove", cancel, { passive: true });
+    cell.addEventListener("mousedown", start);
+    cell.addEventListener("mouseup", cancel);
+    cell.addEventListener("mouseleave", cancel);
+    cell.addEventListener("contextmenu", function (event) { event.preventDefault(); });
+    cell.addEventListener("click", function (event) {
+      if (justOpened) { event.preventDefault(); justOpened = false; }
+    });
+  });
+
+  document.addEventListener("pointerdown", function (event) {
+    if (!peek.hidden && !event.target.closest(".planner-day") && !event.target.closest(".peek")) {
+      peek.hidden = true;
+    }
+  });
+})();
+</script>
+{% endblock %}
