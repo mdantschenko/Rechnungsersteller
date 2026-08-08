@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the invoicing database and issued invoices
+
+[Service]
+Type=oneshot
+User=invoicing
+Group=invoicing
+ExecStart=/usr/local/bin/invoicing-backup

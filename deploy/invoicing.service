@@ -1,0 +1,27 @@
+[Unit]
+Description=Rechnungsersteller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=invoicing
+Group=invoicing
+# The working directory is the data folder, not the code folder, so that any
+# relative path the application uses lands on writable storage.
+WorkingDirectory=/var/lib/invoicing
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/invoicing/.venv/bin/python /opt/invoicing/main.py serve \
+  --database /var/lib/invoicing/invoicing.db --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+# Only Caddy talks to this process, and it only ever needs its own data.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/invoicing
+
+[Install]
+WantedBy=multi-user.target

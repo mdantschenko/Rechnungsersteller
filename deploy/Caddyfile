@@ -1,0 +1,18 @@
+# Caddy fetches and renews the certificate on its own, so nothing here has to
+# be touched again. {{DOMAIN}} is filled in by deploy/install.sh.
+{{DOMAIN}} {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		# SAMEORIGIN, not DENY: the PDF viewer embeds invoices in an iframe.
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "same-origin"
+	}
+
+	log {
+		output file /var/log/caddy/invoicing.log
+	}
+}

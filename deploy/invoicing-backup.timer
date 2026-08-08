@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly backup of the invoicing data
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+# Runs after the server comes back if it was off at the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
