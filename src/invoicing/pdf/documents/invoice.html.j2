@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Rechnung Nr. {{ invoice.number }}</title>
+<style>{{ font_faces | safe }}{{ stylesheet | safe }}</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="address-field">
+    <p class="return-address">{{ invoice.issuer.return_address_line }}</p>
+    <p class="recipient">
+      {{ invoice.recipient.name }}<br>
+      {{ invoice.recipient.street }}<br>
+      {{ invoice.recipient.city }}
+    </p>
+  </div>
+
+  <div class="letter">
+    <p class="issue-date">Datum: {{ invoice.issued_on | german_date }}</p>
+    <p class="invoice-number">Rechnung Nr. {{ invoice.number }}</p>
+    <p class="period">Berechnung für den Zeitraum vom {{ invoice.period.printed_from | german_date }} bis zum {{ invoice.period.last_day | german_date }}</p>
+
+    <table class="line-items">
+      <colgroup>
+        <col style="width: 16.1mm">
+        <col style="width: 18.7mm">
+        <col>
+        <col style="width: 23.05mm">
+        {% for column in invoice.columns %}
+        <col style="width: 28.95mm">
+        {% endfor %}
+        <col style="width: 26.6mm">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Anzahl</th>
+          <th>Einheit</th>
+          <th class="description">Bezeichnung / Datum</th>
+          <th>Einzelpreis</th>
+          {% for column in invoice.columns %}
+          <th>{{ column.label }}</th>
+          {% endfor %}
+          <th>Gesamtpreis</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in invoice.line_items %}
+        <tr>
+          <td>{{ item.quantity | quantity }}</td>
+          <td>{{ item.unit }}</td>
+          <td class="description">{{ item.label }}</td>
+          <td>{{ item.unit_price | euro }}</td>
+          {% for column in invoice.columns %}
+          <td>{{ column.display(item.column_values[loop.index0]) }}</td>
+          {% endfor %}
+          <td>{{ item.total | euro }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+          <td></td>
+          <td></td>
+          <td class="description">Gesamtbetrag</td>
+          <td></td>
+          {% for column in invoice.columns %}
+          <td></td>
+          {% endfor %}
+          <td>{{ invoice.total | euro }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="tax-note">Gemäß § 19 UstG enthält der Rechnungsbetrag keine Umsatzsteuer.</p>
+
+    {% if invoice.paid_on %}
+    <p class="settled-note">Der Rechnungsbetrag in Höhe von {{ invoice.total | euro }} wurde bereits am {{ invoice.paid_on | german_date }} dankend erhalten/per Überweisung beglichen.</p>
+    {% else %}
+    <p class="payment-terms"><span class="payment-terms-label">Zahlungsbedingungen</span>: Zahlung innerhalb von 14 Tagen ab Rechnungseingang ohne Abzüge.</p>
+    <p class="transfer-note">Bitte überweisen Sie den Rechnungsbetrag unter Angabe der Rechnungsnummer auf das unten angegebene Konto oder auf PayPal.</p>
+    {% endif %}
+
+    <p class="thanks">Ich danke für Ihren Auftrag.</p>
+    <p class="closing">Mit freundlichen Grüßen<br>{{ invoice.issuer.address.name }}</p>
+  </div>
+
+  <div class="footer">
+    <table>
+      <colgroup>
+        <col style="width: 58.8mm">
+        <col style="width: 12.5mm">
+        <col style="width: 49.9mm">
+        <col style="width: 17.5mm">
+        <col>
+      </colgroup>
+      <tbody>
+        <tr>
+          <td><strong>{{ invoice.issuer.address.name }}</strong></td>
+          <td colspan="4"></td>
+        </tr>
+        <tr>
+          <td>{{ invoice.issuer.address.street }}</td>
+          <td colspan="2"><strong>{{ invoice.issuer.bank }}</strong></td>
+          <td colspan="2"></td>
+        </tr>
+        <tr>
+          <td>{{ invoice.issuer.address.city }}</td>
+          <td><strong>IBAN</strong></td>
+          <td>{{ invoice.issuer.iban }}</td>
+          <td><strong>Steuer-Nr.</strong></td>
+          <td>{{ invoice.issuer.tax_number }}</td>
+        </tr>
+        <tr>
+          <td>{{ invoice.issuer.country }}</td>
+          <td><strong>BIC</strong></td>
+          <td>{{ invoice.issuer.bic }}</td>
+          <td colspan="2"></td>
+        </tr>
+        <tr>
+          <td><strong>E-Mail</strong> {{ invoice.issuer.email }}</td>
+          <td><strong>PayPal</strong>:</td>
+          <td>{{ invoice.issuer.paypal }}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

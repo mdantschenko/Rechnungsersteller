@@ -1,0 +1,172 @@
+/* Every measurement was taken from the reference invoice no. 114.
+   Positions are the top edges of line boxes, in millimetres from the page
+   edge, so that a rendered page can be compared against the original by
+   measuring the same points. */
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Open Sans", sans-serif;
+  font-size: 10pt;
+  color: #000;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+p {
+  margin: 0;
+}
+
+.page {
+  position: relative;
+  width: 210mm;
+  height: 297mm;
+  overflow: hidden;
+}
+
+/* --- address field ------------------------------------------------------ */
+
+.address-field {
+  position: absolute;
+  top: 30.8mm;
+  left: 24.5mm;
+  width: 166.1mm;
+  box-sizing: border-box;
+  padding: 4.3mm 0 8.6mm 3.9mm;
+  background: #f4f6f8;
+  font-size: 9pt;
+  line-height: 4.3mm;
+}
+
+.return-address {
+  margin-left: 0.3mm;
+  font-size: 8pt;
+  line-height: 3.85mm;
+  text-decoration: underline;
+}
+
+.recipient {
+  margin-top: 8.6mm;
+}
+
+/* --- letter body -------------------------------------------------------- */
+
+.letter {
+  position: absolute;
+  top: 74.98mm;
+  left: 25mm;
+  width: 166.6mm;
+  line-height: 4.81mm;
+}
+
+.issue-date {
+  font-size: 12pt;
+  line-height: 5.77mm;
+  text-align: right;
+  padding-right: 1.6mm;
+}
+
+.invoice-number {
+  font-size: 12pt;
+  line-height: 5.77mm;
+  font-weight: 700;
+}
+
+.period {
+  margin-top: 5.81mm;
+}
+
+/* --- line item table ---------------------------------------------------- */
+
+.line-items {
+  width: 166.6mm;
+  margin-top: 4.76mm;
+  border-collapse: collapse;
+  table-layout: fixed;
+  line-height: 4.81mm;
+}
+
+.line-items th,
+.line-items td {
+  padding: 1.03mm 0 1.66mm;
+  border-bottom: 0.17mm solid #000;
+  font-weight: 400;
+  text-align: center;
+  vertical-align: top;
+}
+
+.line-items thead th {
+  padding: 2.05mm 0;
+}
+
+.line-items .description {
+  padding-left: 1.7mm;
+  text-align: left;
+}
+
+.line-items .total-row td {
+  border-bottom: none;
+  background: #f4f6f8;
+}
+
+/* --- closing paragraphs ------------------------------------------------- */
+
+.tax-note {
+  margin-top: 6.73mm;
+}
+
+.payment-terms,
+.settled-note {
+  margin-top: 6.79mm;
+}
+
+.payment-terms-label {
+  font-style: italic;
+  text-decoration: underline;
+}
+
+.transfer-note {
+  margin-top: 4.79mm;
+}
+
+.thanks {
+  margin-top: 4.78mm;
+}
+
+.closing {
+  margin-top: 9.59mm;
+}
+
+/* --- footer ------------------------------------------------------------- */
+
+.footer {
+  position: absolute;
+  top: 252.5mm;
+  left: 24.5mm;
+  width: 166.1mm;
+  box-sizing: border-box;
+  padding: 3.85mm 0 3.85mm 4.2mm;
+  background: #f4f6f8;
+  font-size: 8pt;
+  line-height: 3.85mm;
+}
+
+.footer table {
+  width: 161.9mm;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.footer td {
+  padding: 0;
+  vertical-align: top;
+}
