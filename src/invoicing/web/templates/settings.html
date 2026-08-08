@@ -2,6 +2,9 @@
 {% set tab = "settings" %}
 {% block title %}Einstellungen{% endblock %}
 {% block heading %}Einstellungen{% endblock %}
+{% block subheading %}
+<p class="page-subtitle">{{ request.url.netloc }}</p>
+{% endblock %}
 
 {% block content %}
 <div class="section-title">Absender</div>

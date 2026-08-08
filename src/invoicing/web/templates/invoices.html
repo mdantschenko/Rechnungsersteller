@@ -2,6 +2,12 @@
 {% set tab = "invoices" %}
 {% block title %}Rechnungen{% endblock %}
 {% block heading %}Rechnungen{% endblock %}
+{% block subheading %}
+<p class="page-subtitle">
+  {%- if due %}{{ due | length }} fällig · {% endif -%}
+  {{ issued | length }} offen · {{ paid | length }} bezahlt
+</p>
+{% endblock %}
 
 {% macro send_buttons(invoice, mode) %}
 {% if mode == 'email' %}

@@ -2,6 +2,11 @@
 {% set tab = "customers" %}
 {% block title %}Kunden{% endblock %}
 {% block heading %}Kunden{% endblock %}
+{% block subheading %}
+<p class="page-subtitle">
+  {{ active | length }} aktiv{% if archived %} · {{ archived | length }} archiviert{% endif %}
+</p>
+{% endblock %}
 
 {% block content %}
 <div class="section-title">Aktiv</div>
