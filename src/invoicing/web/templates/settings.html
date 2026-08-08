@@ -54,22 +54,95 @@
   <p class="hint">Schickt eine Beispielrechnung mit erfundenen Daten als PDF.</p>
 </div>
 
-<div class="section-title">Erinnerungen</div>
+<div class="section-title">Wecker</div>
 <div class="block">
   <form method="post" action="/einstellungen/erinnerungen" class="stack">
-    <label>Benachrichtigung vor dem Termin (Minuten)
+    <label>Weckruf vor dem Termin (Minuten)
       <input type="number" name="reminder_minutes" value="{{ settings.reminder_minutes }}" min="0" max="1440" required>
     </label>
     <button class="button button-fill" type="submit">Speichern</button>
   </form>
+</div>
+
+<div class="block">
+  <div class="stack">
+    <button class="button button-fill" id="wecker-an" type="button">Wecker auf diesem Gerät aktivieren</button>
+    <p class="hint" id="wecker-status" style="margin: 0" hidden></p>
+  </div>
+  <form method="post" action="/push/test" class="row-actions">
+    <button class="button button-small" type="submit">Probeweckruf</button>
+  </form>
   <p class="hint">
-    Einmalig auf dem iPhone antippen:
-    <a href="webcal://{{ request.url.netloc }}/kalender.ics?schluessel={{ settings.calendar_token }}">Termine als Kalender abonnieren</a>.
-    Danach meldet sich das Handy von selbst vor jedem Termin — mit Namen des
-    Schülers, Uhrzeit und Adresse. Ton und Wecker-Stil bestimmst du in den
-    iPhone-Einstellungen unter Kalender.
+    Klingelt zur Erinnerungszeit — mit Schüler, Uhrzeit und Adresse — und
+    danach alle 2 Minuten weiter, bis du die Meldung antippst. Damit er auch
+    bei Fokus und Nicht-stören durchkommt: iPhone-Einstellungen →
+    Mitteilungen → Rechnungen → Zeitkritische Mitteilungen erlauben.
   </p>
 </div>
+
+<script>
+(function () {
+  var button = document.getElementById("wecker-an");
+  var status = document.getElementById("wecker-status");
+
+  function say(text) {
+    status.textContent = text;
+    status.hidden = false;
+  }
+
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    button.disabled = true;
+    say("Zuerst über Teilen → „Zum Home-Bildschirm“ hinzufügen und die App von dort öffnen.");
+    return;
+  }
+
+  navigator.serviceWorker.register("/sw.js")
+    .then(function () { return navigator.serviceWorker.ready; })
+    .then(function (registration) { return registration.pushManager.getSubscription(); })
+    .then(function (existing) {
+      if (existing) say("Aktiv auf diesem Gerät.");
+    })
+    .catch(function () {});
+
+  function toServerKey(base64) {
+    var padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    var raw = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+    var bytes = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  }
+
+  button.addEventListener("click", function () {
+    Notification.requestPermission().then(function (permission) {
+      if (permission !== "granted") {
+        say("Ohne Erlaubnis kein Wecker — Mitteilungen für diese App zulassen.");
+        return;
+      }
+      Promise.all([
+        navigator.serviceWorker.register("/sw.js").then(function () {
+          return navigator.serviceWorker.ready;
+        }),
+        fetch("/push/schluessel").then(function (answer) { return answer.json(); }),
+      ]).then(function (ready) {
+        return ready[0].pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: toServerKey(ready[1].key),
+        });
+      }).then(function (subscription) {
+        return fetch("/push/abo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(subscription),
+        });
+      }).then(function () {
+        say("Aktiv auf diesem Gerät.");
+      }).catch(function () {
+        say("Aktivieren fehlgeschlagen — nochmal versuchen.");
+      });
+    });
+  });
+})();
+</script>
 
 <div class="section-title">Feiertage und Ferien</div>
 <div class="block">

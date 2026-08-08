@@ -304,10 +304,12 @@ class AppSettings(SQLModel, table=True):
     smtp_from: str | None = None
     """Where invoices are sent from. Empty means the user name is the sender."""
 
-    calendar_token: str | None = None
-    """The secret in the calendar feed URL, since calendar apps cannot sign in."""
     reminder_minutes: int = 60
     """How long before a lesson the phone should speak up."""
+
+    vapid_private_key: str | None = None
+    """Signs every push message so Apple knows it really came from this app."""
+    vapid_public_key: str | None = None
 
     show_public_holidays: bool = True
     show_school_holidays: bool = True
@@ -316,6 +318,33 @@ class AppSettings(SQLModel, table=True):
 
     payment_days: int = 14
     """How many days after issuing a payment is due; later is overdue."""
+
+
+class PushSubscription(SQLModel, table=True):
+    """One device that asked to be woken before its lessons."""
+
+    __tablename__ = "push_subscription"  # type: ignore[assignment]
+
+    id: int | None = Field(default=None, primary_key=True)
+    endpoint: str = Field(unique=True)
+    p256dh: str
+    auth: str
+
+
+class LessonAlarm(SQLModel, table=True):
+    """How often one lesson has rung, and whether anyone answered.
+
+    A row exists only once the first ring went out; opening the lesson's day
+    acknowledges it and ends the ringing.
+    """
+
+    __tablename__ = "lesson_alarm"  # type: ignore[assignment]
+
+    id: int | None = Field(default=None, primary_key=True)
+    lesson_id: int = Field(foreign_key="lesson.id", unique=True)
+    rings: int = 0
+    last_rung_at: datetime | None = None
+    acknowledged: bool = False
 
 
 class SchoolHoliday(SQLModel, table=True):

@@ -7,18 +7,23 @@ customer addresses are on the other side of it.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import asyncio
+import logging
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import Engine
 from sqlmodel import Session
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
+from invoicing import alarms, push
 from invoicing.storage.database import DEFAULT_LOCATION, open_database
 from invoicing.web import (
-    calendar_feed,
     calendar_page,
     customers_page,
     invoices_page,
@@ -27,11 +32,11 @@ from invoicing.web import (
     settings_page,
     sign_in,
 )
-from invoicing.web.page import STATIC_FOLDER
+from invoicing.web.page import STATIC_FOLDER, settings_of
 from invoicing.web.security import SESSION_KEY, signing_key
 
-# The calendar feed guards itself with a token; a calendar app cannot sign in.
-OPEN_PATHS = ("/anmelden", "/static", "/manifest.webmanifest", "/kalender.ics")
+OPEN_PATHS = ("/anmelden", "/static", "/manifest.webmanifest", "/sw.js")
+RING_CHECK_SECONDS = 30
 
 
 def create_app(location: Path = DEFAULT_LOCATION) -> FastAPI:
@@ -40,7 +45,12 @@ def create_app(location: Path = DEFAULT_LOCATION) -> FastAPI:
     with Session(engine) as session:
         secret = signing_key(session)
 
-    app = FastAPI(title="Rechnungsersteller", docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="Rechnungsersteller",
+        docs_url=None,
+        redoc_url=None,
+        lifespan=_with_ticking_alarm_clock,
+    )
     app.state.engine = engine
     # Starlette runs the last middleware added on the outside, so the guard is
     # registered first in order to run inside the session cookie handling.
@@ -50,7 +60,6 @@ def create_app(location: Path = DEFAULT_LOCATION) -> FastAPI:
     for page in (
         sign_in,
         pwa,
-        calendar_feed,
         calendar_page,
         lessons_page,
         customers_page,
@@ -59,6 +68,36 @@ def create_app(location: Path = DEFAULT_LOCATION) -> FastAPI:
     ):
         app.include_router(page.router)
     return app
+
+
+@asynccontextmanager
+async def _with_ticking_alarm_clock(app: FastAPI) -> AsyncGenerator[None]:
+    ticking = asyncio.create_task(_ring_forever(app.state.engine))
+    yield
+    ticking.cancel()
+    with suppress(asyncio.CancelledError):
+        await ticking
+
+
+async def _ring_forever(engine: Engine) -> None:
+    while True:
+        try:
+            await asyncio.to_thread(_ring_once, engine)
+        except Exception:
+            logging.getLogger(__name__).exception("Weckrunde fehlgeschlagen")
+        await asyncio.sleep(RING_CHECK_SECONDS)
+
+
+def _ring_once(engine: Engine) -> None:
+    with Session(engine) as session:
+        settings = settings_of(session)
+        alarms.ring_due(
+            session,
+            settings,
+            datetime.now(),
+            lambda message: push.send_to_all(session, settings, message),
+        )
+        session.commit()
 
 
 async def _send_strangers_to_the_sign_in_page(

@@ -8,7 +8,14 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from invoicing.storage.database import open_database
-from invoicing.storage.models import AppSettings, Issuer, Lesson, NumberState
+from invoicing.storage.models import (
+    AppSettings,
+    Issuer,
+    Lesson,
+    LessonAlarm,
+    NumberState,
+    PushSubscription,
+)
 from invoicing.web import create_app
 from invoicing.web.security import set_password
 
@@ -700,23 +707,53 @@ def test_a_series_can_be_reshaped_from_today_on(
         assert all(str(lesson.quantity) == "2" for lesson in future)
 
 
-def test_the_calendar_feed_needs_its_token(client: TestClient, location: Path) -> None:
+def test_the_service_worker_is_reachable_without_signing_in(
+    stranger: TestClient,
+) -> None:
+    answer = stranger.get("/sw.js")
+
+    assert answer.status_code == 200
+    assert "showNotification" in answer.text
+
+
+def test_a_device_can_subscribe_to_the_alarm(
+    client: TestClient, location: Path
+) -> None:
+    key = client.get("/push/schluessel").json()["key"]
+    assert key
+
+    answer = client.post(
+        "/push/abo",
+        json={
+            "endpoint": "https://push.example.com/geraet-1",
+            "keys": {"p256dh": "schloss", "auth": "geheim"},
+        },
+    )
+
+    assert answer.status_code == 204
+    with Session(open_database(location)) as session:
+        stored = session.exec(select(PushSubscription)).one()
+        assert stored.endpoint == "https://push.example.com/geraet-1"
+
+
+def test_without_devices_the_test_ring_says_so(client: TestClient) -> None:
+    page = client.post("/push/test", follow_redirects=True).text
+
+    assert "Kein Gerät" in page
+
+
+def test_opening_a_day_silences_its_alarms(client: TestClient, location: Path) -> None:
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
-    _add_lesson(client, customer_id, date.today())
-    client.get("/einstellungen")
+    lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
+    with Session(open_database(location)) as session:
+        session.add(LessonAlarm(lesson_id=lesson_id, rings=1))
+        session.commit()
+
+    client.get("/tag/2026-05-20")
 
     with Session(open_database(location)) as session:
-        token = session.exec(select(AppSettings)).one().calendar_token
-    assert token
-
-    assert client.get("/kalender.ics").status_code == 404
-    feed = client.get(f"/kalender.ics?schluessel={token}")
-
-    assert feed.status_code == 200
-    assert "BEGIN:VCALENDAR" in feed.text
-    assert "Nachhilfe Erika Beispiel" in feed.text
-    assert "TRIGGER:-PT60M" in feed.text
+        assert session.exec(select(LessonAlarm)).one().acknowledged
 
 
 def test_a_draft_can_be_previewed_without_releasing(client: TestClient) -> None:

@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, col, select
 from starlette.responses import Response
 
-from invoicing import feiertage
+from invoicing import alarms, feiertage
 from invoicing.billing import stored_columns, typed_values
 from invoicing.domain.columns import ValueSource
 from invoicing.domain.money import format_euro, format_quantity
@@ -127,6 +127,7 @@ def _week_page(request: Request, session: Session, on: date) -> Response:
 
 @router.get("/tag/{on}")
 def a_day(on: date, request: Request, session: Session = Depends(database)) -> Response:
+    alarms.acknowledge_day(session, on)
     public, school = _holiday_notes(session, on, on)
     lessons = _lessons_between(session, on, on)
     return templates.TemplateResponse(

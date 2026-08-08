@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import secrets
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -26,9 +25,6 @@ router = APIRouter()
 @router.get("/einstellungen")
 def settings_form(request: Request, session: Session = Depends(database)) -> Response:
     settings = settings_of(session)
-    if not settings.calendar_token:
-        settings.calendar_token = secrets.token_urlsafe(16)
-        session.add(settings)
     numbering = session.exec(select(NumberState)).first()
     return templates.TemplateResponse(
         request,
