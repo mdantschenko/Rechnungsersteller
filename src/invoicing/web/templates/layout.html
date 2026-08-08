@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rechnungen">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<title>{% block title %}Rechnungen{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+<script>
+window.addEventListener("pageswap", function (event) {
+  if (event.viewTransition && sessionStorage.getItem("nav-skip") === "1") {
+    event.viewTransition.skipTransition();
+  }
+});
+window.addEventListener("pagereveal", function (event) {
+  if (sessionStorage.getItem("nav-skip") === "1") {
+    sessionStorage.removeItem("nav-skip");
+    if (event.viewTransition) event.viewTransition.skipTransition();
+    return;
+  }
+  var direction = sessionStorage.getItem("nav-direction");
+  if (direction) {
+    document.documentElement.classList.add("nav-" + direction);
+    sessionStorage.removeItem("nav-direction");
+  }
+});
+</script>
+</head>
+<body>
+<header class="app-bar">
+  <span class="bar-buttons">{% block bar_left %}{% endblock %}</span>
+  <span class="bar-buttons">{% block bar_action %}{% endblock %}</span>
+</header>
+
+<main class="app-content">
+  <h1 class="page-title">{% block heading %}{% endblock %}</h1>
+  {% set notice = request.session.pop('hinweis', None) %}
+  {% if notice %}<div class="toast">{{ notice }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<nav class="app-tabs">
+  <a href="/" class="{{ 'is-current' if tab == 'calendar' }}">Kalender</a>
+  <a href="/rechnungen" class="{{ 'is-current' if tab == 'invoices' }}">Rechnungen</a>
+  <a href="/kunden" class="{{ 'is-current' if tab == 'customers' }}">Kunden</a>
+  <a href="/einstellungen" class="{{ 'is-current' if tab == 'settings' }}">Mehr</a>
+</nav>
+<script src="/static/swipe.js"></script>
+</body>
+</html>

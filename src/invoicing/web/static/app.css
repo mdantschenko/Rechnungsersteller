@@ -1,0 +1,946 @@
+/* The whole look of the application: the Reminders style.
+
+   White ground, one large coloured heading per screen, flat rows with a round
+   tick on the left, red for what is urgent, blue for tags, and one purple
+   button floating bottom right. Framework7 was tried first and removed again;
+   what follows is the handful of pieces this application actually uses. */
+
+:root {
+  --accent: #af52de;
+  --accent-deep: #9d3fd1;
+  --accent-soft: #f6ecfc;
+  --red: #ff3b30;
+  --blue: #007aff;
+  --green: #34c759;
+  --ink: #1c1c1e;
+  --muted: #86868b;
+  --faint: #c7c7cc;
+  --field: #f2f2f7;
+  --group: #f7f7fa;
+  --hairline: rgba(60, 60, 67, 0.14);
+  --bar: rgba(255, 255, 255, 0.92);
+  --bar-height: 3rem;
+  --tabs-height: 3.25rem;
+  --edge: env(safe-area-inset-bottom, 0px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #fff;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* --- shell -------------------------------------------------------------- */
+
+.app-bar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: calc(var(--bar-height) + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) 0.75rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--bar);
+  backdrop-filter: saturate(180%) blur(20px);
+  z-index: 20;
+}
+
+.app-bar-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.bar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.bar-button-wide {
+  width: auto;
+  padding: 0 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.8125rem;
+  color: var(--accent);
+}
+
+.app-content {
+  padding: calc(var(--bar-height) + env(safe-area-inset-top, 0px)) 0
+    calc(var(--tabs-height) + var(--edge) + 5rem);
+  /* Vertical scrolling stays with the browser; horizontal drags reach the
+     swipe handler without fighting it. */
+  touch-action: pan-y;
+}
+
+.page-title {
+  margin: 0.375rem 1rem 0.625rem;
+  font-size: 1.875rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+}
+
+.app-tabs {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: calc(var(--tabs-height) + var(--edge));
+  padding-bottom: var(--edge);
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--bar);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--hairline);
+  z-index: 20;
+}
+
+.app-tabs a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.app-tabs a.is-current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* --- text and blocks ---------------------------------------------------- */
+
+.section-title {
+  margin: 1.5rem 1rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.block {
+  margin: 0.5rem 1rem;
+  padding: 0.875rem;
+  background: var(--group);
+  border-radius: 1rem;
+}
+
+.hint {
+  margin: 0.5rem 1rem 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.block .hint {
+  margin: 0.625rem 0 0;
+}
+
+.warn {
+  color: var(--red);
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.toast {
+  margin: 0 1rem 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 0.875rem;
+}
+
+/* --- reminder rows ------------------------------------------------------ */
+
+.reminder {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem 0;
+}
+
+.reminder-body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--hairline);
+  color: inherit;
+  text-decoration: none;
+}
+
+.reminder:last-child .reminder-body,
+li:last-child .reminder .reminder-body {
+  border-bottom: 0;
+}
+
+.reminder-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  font-size: 0.9375rem;
+}
+
+.reminder-title .spread {
+  flex: 1;
+}
+
+.priority {
+  color: var(--red);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.reminder-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.1875rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.meta-date {
+  color: var(--red);
+}
+
+.tag {
+  color: var(--blue);
+}
+
+.repeat {
+  color: var(--red);
+}
+
+.reminder.lesson-done .reminder-title,
+.reminder.lesson-cancelled .reminder-title {
+  color: var(--muted);
+}
+
+.reminder.lesson-cancelled .reminder-title {
+  text-decoration: line-through;
+}
+
+ul.plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a.reminder-body .reminder-title::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+a.reminder-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* --- the round tick ------------------------------------------------------ */
+
+.tick {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.0625rem;
+  padding: 0;
+  border: 1.5px solid var(--faint);
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  font-size: 0.8125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tick.is-done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.tick.is-cancelled {
+  background: var(--faint);
+  border-color: var(--faint);
+}
+
+/* --- collapsed row actions ----------------------------------------------- */
+
+.reminder-actions {
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.reminder-actions summary {
+  display: inline-block;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.reminder-actions summary::-webkit-details-marker {
+  display: none;
+}
+
+.reminder-actions summary.button {
+  display: inline-flex;
+  list-style: none;
+}
+
+/* An unpaid invoice past its due date must not look like the others. */
+.reminder.is-overdue .reminder-body {
+  background: #fff1f0;
+  border-radius: 0.75rem;
+  border-bottom: 0;
+  padding: 0.5rem 0.625rem 0.625rem;
+  margin-bottom: 0.375rem;
+}
+
+.mail-preview {
+  margin: 0.375rem 0 0;
+  padding: 0.625rem 0.75rem;
+  background: var(--field);
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--ink);
+  white-space: pre-line;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0;
+}
+
+.row-actions form {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+/* --- lists that link somewhere ------------------------------------------ */
+
+.simple-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simple-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.375rem 0;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.simple-list li:last-child {
+  border-bottom: 0;
+}
+
+/* --- cards --------------------------------------------------------------- */
+
+.card {
+  margin: 0.5rem 1rem;
+  background: var(--group);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.card-content-padding {
+  padding: 0.875rem;
+}
+
+.card-content-padding .hint,
+.card-content-padding .warn {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* --- controls ------------------------------------------------------------ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  padding: 0 0.875rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-fill {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 0.75rem;
+}
+
+.button-small {
+  min-height: 1.875rem;
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.button-large {
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+.color-red {
+  color: var(--red);
+}
+
+.button-fill.color-red {
+  background: var(--red);
+  color: #fff;
+}
+
+input[type="date"],
+input[type="time"],
+input[type="number"],
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: var(--field);
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+}
+
+.block input[type="date"],
+.block input[type="time"],
+.block input[type="number"],
+.block input[type="text"],
+.block input[type="email"],
+.block input[type="password"],
+.block textarea,
+.block select {
+  background: #fff;
+}
+
+textarea {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  resize: vertical;
+}
+
+.stack {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.stack label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+/* --- calendar ------------------------------------------------------------ */
+
+.month-nav {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 1rem;
+}
+
+.segmented {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  margin: 0 1rem 0.75rem;
+  padding: 0.125rem;
+  background: var(--field);
+  border-radius: 0.5625rem;
+}
+
+.segmented a {
+  position: relative;
+  z-index: 1;
+}
+
+/* The gliding pill that follows the finger while swiping. */
+.segment-ghost {
+  position: absolute;
+  top: 0.125rem;
+  bottom: 0.125rem;
+  left: 0;
+  border-radius: 0.5rem;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.segmented.dragging a.is-current {
+  background: transparent;
+  box-shadow: none;
+}
+
+.title-ghost {
+  position: absolute;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented a {
+  padding: 0.4375rem 0;
+  text-align: center;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 0.8125rem;
+  border-radius: 0.5rem;
+}
+
+.segmented a.is-current {
+  background: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.planner {
+  margin: 0 0.5rem;
+}
+
+.planner-head,
+.planner-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.planner-head span {
+  padding: 0.375rem 0;
+  text-align: center;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.planner-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  min-height: 3.25rem;
+  padding: 0.3125rem 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.planner-day.is-outside {
+  color: var(--faint);
+}
+
+.planner-day {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.peek {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(var(--tabs-height) + var(--edge) + 1rem);
+  padding: 0.875rem;
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  font-size: 0.875rem;
+  z-index: 30;
+}
+
+.peek strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.peek[hidden] {
+  display: none;
+}
+
+.planner-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  font-size: 0.9375rem;
+}
+
+.planner-day.is-today .planner-number {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.planner-marks {
+  display: flex;
+  gap: 0.1875rem;
+  min-height: 0.4375rem;
+}
+
+.mark {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+}
+
+.mark-done {
+  background: var(--accent);
+}
+
+.mark-cancelled {
+  border-color: var(--faint);
+  background: var(--faint);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 1rem;
+  justify-content: center;
+  margin: 0.75rem 1rem 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.legend-holiday {
+  color: var(--red);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.legend-vacation {
+  display: inline-block;
+  width: 0.75rem;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(175, 82, 222, 0.45);
+}
+
+.legend-filter {
+  margin-top: 0.375rem;
+}
+
+.check-small {
+  font-size: 0.75rem;
+  color: var(--muted);
+  gap: 0.25rem;
+}
+
+.check-small input {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.banner {
+  margin: 0 1rem 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.75rem;
+  background: #fff1f0;
+  color: #a52a22;
+  font-size: 0.8125rem;
+}
+
+.banner-days {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.banner-days a {
+  margin-right: 0.5rem;
+  color: var(--red);
+}
+
+/* --- days in the week view ----------------------------------------------- */
+
+.day-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 1.25rem 1rem 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.day-heading a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.day-heading.is-today {
+  color: var(--accent);
+}
+
+.day-empty {
+  font-weight: 400;
+  color: var(--faint);
+}
+
+.day-note {
+  font-weight: 400;
+  color: var(--red);
+}
+
+.day-note-vacation {
+  font-weight: 400;
+  color: var(--accent);
+}
+
+.planner-day.is-holiday .planner-number {
+  color: var(--red);
+  font-weight: 600;
+}
+
+/* School holidays stay quiet: short coloured dashes under the number, one
+   per federal state, no tinted cells. */
+.planner-vacs {
+  display: flex;
+  gap: 2px;
+  min-height: 3px;
+  align-items: center;
+}
+
+.vac-dash {
+  width: 0.625rem;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.planner-day.is-today .planner-number {
+  color: #fff;
+}
+
+.check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.check input {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--accent);
+}
+
+/* The three calendar views ride a sliding track: neighbour, current,
+   neighbour. Only the track moves; title and bars stay put. */
+.carousel {
+  overflow: hidden;
+}
+
+.swipe-track {
+  display: flex;
+  width: 300%;
+  transform: translateX(-33.3333%);
+  will-change: transform;
+}
+
+.swipe-slot {
+  width: 33.3333%;
+  flex: none;
+}
+
+.swipe-slot-side {
+  height: 0;
+  overflow: visible;
+}
+
+.app-content {
+  position: relative;
+}
+
+/* --- the PDF viewer --------------------------------------------------------- */
+
+.pdf-shell {
+  margin: 0 1rem;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: var(--field);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.pdf-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - var(--bar-height) - var(--tabs-height) - 9rem);
+  min-height: 24rem;
+  border: none;
+}
+
+/* The HTML preview keeps A4 width and is scaled to fit the screen. */
+.pdf-frame-paper {
+  transform-origin: top left;
+  background: #fff;
+  min-height: 0;
+}
+
+/* --- page transitions ------------------------------------------------------ */
+
+/* Browsers with cross-document view transitions morph the white pill of the
+   segmented switch to its new place and slide the content in the direction
+   of the swipe. Everyone else navigates instantly, which is also fine. */
+
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+
+  .segmented a.is-current {
+    view-transition-name: segment-pill;
+  }
+
+  .page-title {
+    view-transition-name: page-title;
+  }
+
+  .segmented {
+    view-transition-name: view-switch;
+  }
+
+  .app-bar {
+    view-transition-name: top-bar;
+  }
+
+  .app-tabs {
+    view-transition-name: tab-bar;
+  }
+
+  ::view-transition-group(segment-pill) {
+    animation-duration: 0.25s;
+  }
+}
+
+html.nav-forward::view-transition-old(root) {
+  animation: leave-left 0.22s ease both;
+}
+
+html.nav-forward::view-transition-new(root) {
+  animation: enter-right 0.22s ease both;
+}
+
+html.nav-back::view-transition-old(root) {
+  animation: leave-right 0.22s ease both;
+}
+
+html.nav-back::view-transition-new(root) {
+  animation: enter-left 0.22s ease both;
+}
+
+@keyframes leave-left {
+  to {
+    transform: translateX(-28px);
+    opacity: 0;
+  }
+}
+
+@keyframes enter-right {
+  from {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+}
+
+@keyframes leave-right {
+  to {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+}
+
+@keyframes enter-left {
+  from {
+    transform: translateX(-28px);
+    opacity: 0;
+  }
+}
+
+/* --- signing in ----------------------------------------------------------- */
+
+.sign-in {
+  max-width: 22rem;
+  margin: 0 auto;
+  padding: 22vh 1.25rem 2rem;
+}
+
+.sign-in .page-title {
+  margin: 0 0 1rem;
+}
