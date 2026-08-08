@@ -10,7 +10,7 @@ lets the import report the difference instead of hiding it.
 # No "from __future__ import annotations" here: it would turn the relationship
 # annotations into plain strings, which SQLAlchemy cannot resolve into classes.
 
-from datetime import date, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -288,6 +288,11 @@ class AppSettings(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     password_hash: str
     session_secret: str
+    pending_password_hash: str | None = None
+    """A requested new password, waiting for the emailed code to confirm it."""
+    pending_password_code: str | None = None
+    pending_password_until: datetime | None = None
+
     invoice_folder: str = "data/invoices"
     lesson_horizon_days: int = 60
     """How far ahead recurring series are written out as individual lessons."""

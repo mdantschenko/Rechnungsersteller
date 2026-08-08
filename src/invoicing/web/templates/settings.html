@@ -139,12 +139,31 @@
 </div>
 
 <div class="section-title">Passwort</div>
+{% if pending_password %}
+<div class="block">
+  <form method="post" action="/einstellungen/passwort-bestaetigen" class="stack">
+    <label>Bestätigungscode aus der E-Mail
+      <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
+             pattern="[0-9]{6}" required>
+    </label>
+    <button class="button button-fill" type="submit">Passwort ändern</button>
+  </form>
+  <form method="post" action="/einstellungen/passwort-abbrechen" class="row-actions">
+    <button class="button button-small color-red" type="submit">Abbrechen</button>
+  </form>
+  <p class="hint">
+    Der Code ging an dein Postfach und gilt 15 Minuten. Erst mit ihm wird das
+    neue Passwort wirksam.
+  </p>
+</div>
+{% else %}
 <div class="block">
   <form method="post" action="/einstellungen/passwort" class="stack">
     <label>Neues Passwort<input type="password" name="password" minlength="8" required></label>
     <button class="button button-fill" type="submit">Ändern</button>
   </form>
 </div>
+{% endif %}
 
 <div class="block">
   <form method="post" action="/abmelden">

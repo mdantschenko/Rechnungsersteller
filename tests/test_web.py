@@ -1094,6 +1094,79 @@ def test_the_password_can_be_changed_from_the_settings(client: TestClient) -> No
     )
 
 
+def _configure_mail(client: TestClient) -> None:
+    client.post(
+        "/einstellungen/email",
+        data={
+            "smtp_host": "smtp.example.com",
+            "smtp_port": "587",
+            "smtp_user": "ich@example.com",
+            "smtp_password": "geheim",
+            "smtp_from": "",
+        },
+    )
+
+
+def test_with_mail_set_up_the_password_waits_for_the_code(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict[str, str] = {}
+
+    def capture(
+        settings: object, to: str, subject: str, body: str, **_: object
+    ) -> None:
+        sent["to"] = to
+        sent["code"] = body.split("Code lautet: ")[1].split("\n")[0]
+
+    monkeypatch.setattr("invoicing.web.settings_page.mail.send_text", capture)
+    _configure_mail(client)
+    client.post("/einstellungen/passwort", data={"password": "noch-ein-passwort"})
+
+    assert sent["to"] == "ich@example.com"
+    client.post("/abmelden")
+    assert (
+        client.post(
+            "/anmelden", data={"password": "noch-ein-passwort"}, follow_redirects=False
+        ).status_code
+        == 401
+    )
+
+    client.post("/anmelden", data={"password": PASSWORD})
+    client.post("/einstellungen/passwort-bestaetigen", data={"code": sent["code"]})
+    client.post("/abmelden")
+    assert (
+        client.post(
+            "/anmelden", data={"password": "noch-ein-passwort"}, follow_redirects=False
+        ).status_code
+        == 303
+    )
+
+
+def test_a_wrong_code_changes_nothing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "invoicing.web.settings_page.mail.send_text", lambda *a, **k: None
+    )
+    _configure_mail(client)
+    client.post("/einstellungen/passwort", data={"password": "noch-ein-passwort"})
+
+    page = client.post(
+        "/einstellungen/passwort-bestaetigen",
+        data={"code": "000000"},
+        follow_redirects=True,
+    ).text
+
+    assert "stimmt nicht" in page
+    client.post("/abmelden")
+    assert (
+        client.post(
+            "/anmelden", data={"password": PASSWORD}, follow_redirects=False
+        ).status_code
+        == 303
+    )
+
+
 def _add_customer(client: TestClient) -> int:
     answer = client.post(
         "/kunden/neu",

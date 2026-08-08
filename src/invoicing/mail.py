@@ -74,6 +74,35 @@ def send_pdf(
     _copy_into_sent(settings, message)
 
 
+def send_text(
+    settings: AppSettings, to: str, subject: str, body: str, sender_name: str = ""
+) -> None:
+    """Send a short plain-text message to the account's own mailbox.
+
+    Used for the password confirmation code. No attachment and no copy into
+    the Sent folder: the mail is the notification itself.
+
+    Raises:
+        MailError: if the settings are incomplete or the server refuses.
+    """
+    if not is_configured(settings):
+        raise MailError(
+            "Der E-Mail-Versand ist noch nicht eingerichtet. Trage Server, "
+            "Benutzername und Passwort in den Einstellungen ein."
+        )
+    message = EmailMessage()
+    try:
+        message["From"] = from_header(
+            sender_name, settings.smtp_from or settings.smtp_user or ""
+        )
+        message["To"] = to
+        message["Subject"] = subject
+    except ValueError as error:
+        raise MailError("Die Empfängeradresse enthält unzulässige Zeichen.") from error
+    message.set_content(body)
+    _deliver(settings, message)
+
+
 def from_header(name: str, address: str) -> str:
     """The From value: "Michael Dantschenko <info@...>", or just the address."""
     return formataddr((name, address)) if name else address

@@ -17,8 +17,8 @@ from invoicing.domain.invoice_numbers import NumberSequence
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.sample import sample_invoice
 from invoicing.storage.models import Issuer, NumberState
+from invoicing.web import security
 from invoicing.web.page import database, notice_redirect, settings_of, templates
-from invoicing.web.security import set_password
 
 router = APIRouter()
 
@@ -40,6 +40,7 @@ def settings_form(request: Request, session: Session = Depends(database)) -> Res
             "settings": settings,
             "states": feiertage.STATES,
             "chosen_states": feiertage.chosen_states(settings),
+            "pending_password": security.has_pending_password(session),
         },
     )
 
@@ -277,7 +278,53 @@ def save_filing(
 
 @router.post("/einstellungen/passwort")
 def change_password(
-    password: str = Form(...), session: Session = Depends(database)
+    request: Request, password: str = Form(...), session: Session = Depends(database)
 ) -> Response:
-    set_password(session, password)
-    return RedirectResponse("/einstellungen", status_code=303)
+    """Ask the mailbox before the password changes.
+
+    Without a working mail account the change happens directly — otherwise a
+    broken SMTP setting would lock the password forever.
+    """
+    settings = settings_of(session)
+    if not mail.is_configured(settings) or not security.is_configured(session):
+        security.set_password(session, password)
+        return notice_redirect(request, "/einstellungen", "Passwort geändert.")
+    code = security.request_password_change(session, password)
+    recipient = settings.smtp_from or settings.smtp_user or ""
+    try:
+        mail.send_text(
+            settings,
+            to=recipient,
+            subject="Bestätigungscode für die Passwortänderung",
+            body=(
+                "Guten Tag,\n\n"
+                f"der Code lautet: {code}\n\n"
+                "Er gilt 15 Minuten. Wenn du keine Passwortänderung angestoßen "
+                "hast, ändere das Passwort der Anwendung.\n"
+            ),
+        )
+    except mail.MailError as error:
+        security.cancel_password_change(session)
+        return notice_redirect(request, "/einstellungen", str(error))
+    return notice_redirect(request, "/einstellungen", f"Code an {recipient} geschickt.")
+
+
+@router.post("/einstellungen/passwort-bestaetigen")
+def confirm_password(
+    request: Request, code: str = Form(...), session: Session = Depends(database)
+) -> Response:
+    if security.confirm_password_change(session, code):
+        return notice_redirect(request, "/einstellungen", "Passwort geändert.")
+    return notice_redirect(
+        request,
+        "/einstellungen",
+        "Der Code stimmt nicht oder ist abgelaufen. Stoße die Änderung neu an.",
+    )
+
+
+@router.post("/einstellungen/passwort-abbrechen")
+def abandon_password(
+    request: Request, session: Session = Depends(database)
+) -> Response:
+    security.cancel_password_change(session)
+    return notice_redirect(request, "/einstellungen", "Passwortänderung verworfen.")
