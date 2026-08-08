@@ -1,23 +1,23 @@
 /* The whole look of the application: the Reminders style.
 
    White ground, one large coloured heading per screen, flat rows with a round
-   tick on the left, red for what is urgent, blue for tags, and one purple
-   button floating bottom right. Framework7 was tried first and removed again;
+   tick on the left, red for what is urgent, and a mathematical blue as the
+   accent throughout. Framework7 was tried first and removed again;
    what follows is the handful of pieces this application actually uses. */
 
 :root {
-  --accent: #af52de;
-  --accent-deep: #9d3fd1;
-  --accent-soft: #f6ecfc;
+  --accent: #2563eb;
+  --accent-deep: #1d4ed8;
+  --accent-soft: #eaf1fd;
   --red: #ff3b30;
   --blue: #007aff;
   --green: #34c759;
   --ink: #1c1c1e;
-  --muted: #86868b;
-  --faint: #c7c7cc;
+  --muted: #66666c;
+  --faint: #b5b5bc;
   --field: #f2f2f7;
-  --group: #f7f7fa;
-  --hairline: rgba(60, 60, 67, 0.14);
+  --group: #f1f1f6;
+  --hairline: rgba(60, 60, 67, 0.22);
   --bar: rgba(255, 255, 255, 0.92);
   --bar-height: 3rem;
   --tabs-height: 3.25rem;
@@ -690,7 +690,7 @@ textarea {
   width: 0.75rem;
   height: 2px;
   border-radius: 1px;
-  background: rgba(175, 82, 222, 0.45);
+  background: rgba(37, 99, 235, 0.45);
 }
 
 .legend-filter {

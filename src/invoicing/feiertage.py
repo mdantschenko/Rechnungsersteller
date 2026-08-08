@@ -49,7 +49,7 @@ STATE_COLORS = {
     "HE": "#e6ab02",
     "MV": "#6baed6",
     "NI": "#74c476",
-    "NW": "#af52de",
+    "NW": "#2563eb",
     "RP": "#9e9ac8",
     "SL": "#a6761d",
     "SN": "#66a61e",
