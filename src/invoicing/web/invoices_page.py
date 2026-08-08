@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -47,18 +48,7 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
     issued = session.exec(
         select(IssuedInvoice).order_by(col(IssuedInvoice.number).desc())
     ).all()
-    reminders: dict[int, list[date]] = {}
-    for row in session.exec(
-        select(PaymentReminder).order_by(col(PaymentReminder.sent_on))
-    ).all():
-        reminders.setdefault(row.invoice_id, []).append(row.sent_on)
     earnings_rows, earnings_total = monthly_earnings(session)
-    due_days = settings_of(session).payment_days
-    overdue = {
-        record.number: (date.today() - record.issued_on).days - due_days
-        for record in issued
-        if record.paid_on is None and (date.today() - record.issued_on).days > due_days
-    }
     return templates.TemplateResponse(
         request,
         "invoices.html",
@@ -67,7 +57,7 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
             "due": _due_runs(session, date.today()),
             "issued": [record for record in issued if record.paid_on is None],
             "paid": [record for record in issued if record.paid_on is not None],
-            "reminders": reminders,
+            "reminders": _reminder_days(session),
             "mail_bodies": {
                 record.number: _invoice_mail_body(session, record) for record in issued
             },
@@ -79,27 +69,45 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
                 customer.id or 0: _whatsapp_number(customer.phone)
                 for customer in everyone
             },
-            "customers": sorted(
-                (
-                    customer
-                    for customer in everyone
-                    if customer.status is CustomerStatus.ACTIVE
-                ),
-                key=lambda customer: customer.name,
-            ),
+            "customers": _active_by_name(everyone),
             "earnings": earnings_rows,
             "earnings_total": earnings_total,
-            "overdue": overdue,
-            "paid_years": sorted(
-                {
-                    record.paid_on.year
-                    for record in issued
-                    if record.paid_on is not None
-                },
-                reverse=True,
-            ),
+            "overdue": _overdue_days(issued, settings_of(session).payment_days),
+            "paid_years": _paid_years(issued),
         },
     )
+
+
+def _reminder_days(session: Session) -> dict[int, list[date]]:
+    days: dict[int, list[date]] = {}
+    rows = session.exec(
+        select(PaymentReminder).order_by(col(PaymentReminder.sent_on))
+    ).all()
+    for row in rows:
+        days.setdefault(row.invoice_id, []).append(row.sent_on)
+    return days
+
+
+def _overdue_days(issued: Sequence[IssuedInvoice], due_days: int) -> dict[int, int]:
+    """Days past the due date, per unpaid invoice number."""
+    late = {
+        record.number: (date.today() - record.issued_on).days - due_days
+        for record in issued
+        if record.paid_on is None
+    }
+    return {number: days for number, days in late.items() if days > 0}
+
+
+def _paid_years(issued: Sequence[IssuedInvoice]) -> list[int]:
+    years = {record.paid_on.year for record in issued if record.paid_on is not None}
+    return sorted(years, reverse=True)
+
+
+def _active_by_name(everyone: Sequence[Customer]) -> list[Customer]:
+    active = [
+        customer for customer in everyone if customer.status is CustomerStatus.ACTIVE
+    ]
+    return sorted(active, key=lambda customer: customer.name)
 
 
 @router.get("/rechnungen/finanzamt/{year}.zip")
