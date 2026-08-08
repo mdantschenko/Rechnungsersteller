@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% set tab = "invoices" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block heading %}{{ heading }}{% endblock %}
+{% block bar_left %}
+<a class="bar-button" href="/rechnungen" aria-label="Zurück">‹</a>
+{% endblock %}
+{% block bar_action %}
+<a class="bar-button bar-button-wide" href="{{ pdf_url }}" download>Herunterladen</a>
+{% endblock %}
+
+{% block content %}
+<div class="pdf-shell" id="shell">
+  <iframe class="pdf-frame{{ ' pdf-frame-paper' if kind == 'html' }}" id="frame"
+          src="{{ frame_url }}" title="{{ heading }}"></iframe>
+</div>
+
+{% if kind == 'html' %}
+<script>
+(function () {
+  /* An A4 page is 794 CSS pixels wide. The frame keeps that width and is
+     scaled down to fit the screen, so the whole page is visible at once;
+     pinching zooms in the usual way. */
+  var PAGE_WIDTH = 794;
+  var PAGE_HEIGHT = 1123;
+  var shell = document.getElementById("shell");
+  var frame = document.getElementById("frame");
+
+  function fit() {
+    var scale = shell.clientWidth / PAGE_WIDTH;
+    frame.style.width = PAGE_WIDTH + "px";
+    frame.style.height = PAGE_HEIGHT + "px";
+    frame.style.transform = "scale(" + scale + ")";
+    shell.style.height = PAGE_HEIGHT * scale + "px";
+  }
+
+  window.addEventListener("resize", fit);
+  fit();
+})();
+</script>
+{% endif %}
+{% endblock %}

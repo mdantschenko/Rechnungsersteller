@@ -1,0 +1,300 @@
+{% extends "layout.html" %}
+{% set tab = "invoices" %}
+{% block title %}Rechnungen{% endblock %}
+{% block heading %}Rechnungen{% endblock %}
+
+{% macro send_buttons(invoice, mode) %}
+{% if mode == 'email' %}
+<form method="post" action="/rechnungen/{{ invoice.number }}/senden">
+  <button class="button button-small" type="submit">Per E-Mail senden</button>
+</form>
+{% elif mode == 'whatsapp' %}
+<button class="button button-small" type="button"
+        data-pdf="/rechnungen/{{ invoice.number }}.pdf"
+        data-title="Rechnung Nr. {{ invoice.number }}"
+        data-phone="{{ whatsapp.get(invoice.customer_id, '') }}"
+        data-text="{{ mail_bodies.get(invoice.number, '') }}"
+        onclick="sendWhatsApp(this)">
+  Per WhatsApp senden
+</button>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="section-title">Fällig</div>
+{% if not due %}
+<p class="hint">Zurzeit ist nichts abzurechnen.</p>
+{% endif %}
+
+{% for item in due %}
+<div class="card">
+  <div class="card-header">
+    {{ item.customer.name }}
+    <span class="amount">{{ item.invoice.total | euro if item.invoice }}</span>
+  </div>
+  <div class="card-content card-content-padding">
+    <p class="hint">
+      Zeitraum {{ item.period.printed_from | german_date }}
+      bis {{ item.period.last_day | german_date }}
+    </p>
+
+    {% if item.is_blocked %}
+    <p class="warn">
+      {{ item.unanswered | length }} Termin(e) noch offen. Solange entsteht keine
+      Rechnung — bitte im Kalender beantworten:
+    </p>
+    <p class="hint">
+      {% for lesson in item.unanswered %}
+      <a href="/tag/{{ lesson.taught_on }}">{{ lesson.taught_on | german_date }}</a>
+      {% endfor %}
+    </p>
+    {% elif item.invoice %}
+    <div class="simple-list">
+      <ul>
+        {% for line in item.invoice.line_items %}
+        <li>
+          <span>{{ line.label }}</span>
+          <span class="amount">{{ line.total | euro }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <p class="hint">Wird Rechnung Nr. {{ item.invoice.number }}</p>
+    <div class="row-actions">
+      <form method="post" action="/rechnungen/{{ item.customer.id }}/freigeben">
+        <input type="hidden" name="closing_day" value="{{ item.closing_day }}">
+        <button class="button button-fill" type="submit">Freigeben und erzeugen</button>
+      </form>
+      <a class="button"
+         href="/rechnungen/vorschau-ansicht?customer_id={{ item.customer.id }}&closing_day={{ item.closing_day }}">
+        Vorschau
+      </a>
+    </div>
+    {% else %}
+    <p class="hint">Keine abgehakten Stunden in diesem Zeitraum.</p>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="section-title">Manuelle Rechnung</div>
+<div class="block">
+  <details class="reminder-actions">
+    <summary class="button button-small">Zeitraum selbst wählen ▾</summary>
+    <form method="post" action="/rechnungen/manuell" class="stack" style="margin-top: 0.5rem">
+      <label>Kunde
+        <select name="customer_id" required>
+          <option value="" disabled selected>Bitte auswählen</option>
+          {% for customer in customers %}
+          <option value="{{ customer.id }}">{{ customer.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Von<input type="date" name="first_day" required></label>
+      <label>Bis (einschließlich)<input type="date" name="last_day" required></label>
+      <div class="row-actions">
+        <button class="button button-fill" type="submit">Rechnung erzeugen</button>
+        <button class="button" type="submit" formmethod="get"
+                formaction="/rechnungen/vorschau-manuell-ansicht">
+          Vorschau
+        </button>
+      </div>
+    </form>
+  </details>
+  <p class="hint">Nimmt alle abgehakten, noch nicht abgerechneten Stunden im Zeitraum.</p>
+</div>
+
+<div class="section-title">Ausgestellt</div>
+{% if not issued %}
+<p class="hint">Noch keine Rechnung ausgestellt.</p>
+{% else %}
+<ul class="plain">
+  {% for invoice in issued %}
+  {% set late = overdue.get(invoice.number) %}
+  <li>
+    <div class="reminder{{ ' is-overdue' if late }}">
+      <div class="reminder-body">
+        <a class="reminder-link" href="/rechnungen/{{ invoice.number }}/ansehen">
+          <div class="reminder-title">
+            {% if late %}<span class="priority">!!!</span>{% endif %}
+            <strong>Nr. {{ invoice.number }} · {{ names[invoice.customer_id] }}</strong>
+            <span class="spread"></span>
+            <span class="amount">{{ invoice.printed_total | euro }}</span>
+          </div>
+          <div class="reminder-meta">
+            <span class="meta-date">{{ invoice.issued_on | german_date }}</span>
+            {% if late %}
+            <span class="meta-date"><strong>überfällig seit {{ late }} Tag{{ 'en' if late != 1 }}</strong></span>
+            {% endif %}
+            {% if invoice.sent_on %}
+            <span class="tag">#Gesendet {{ invoice.sent_on | german_date }}</span>
+            {% else %}
+            <span class="tag">#Rechnung</span>
+            {% endif %}
+            {% set sent = reminders.get(invoice.id, []) %}
+            {% if sent %}
+            <span class="repeat">{{ sent | length }}. Erinnerung am {{ sent[-1] | german_date }}</span>
+            {% endif %}
+          </div>
+        </a>
+        <div class="row-actions">
+          {% set mode = deliveries.get(invoice.customer_id, 'email') %}
+          {% if not invoice.sent_on %}
+          {{ send_buttons(invoice, mode) }}
+          <form method="post" action="/rechnungen/{{ invoice.number }}/gesendet">
+            <button class="button button-small" type="submit">✓ Gesendet</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/rechnungen/{{ invoice.number }}/bezahlt">
+            <button class="button button-small" type="submit">✓ Geld erhalten</button>
+          </form>
+          <form method="post" action="/rechnungen/{{ invoice.number }}/erinnern">
+            <button class="button button-small color-red" type="submit">
+              {{ 'Erneut erinnern' if sent else 'Zahlungserinnerung' }}
+            </button>
+          </form>
+          <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf" download>PDF</a>
+        </div>
+        {% if invoice.sent_on %}
+        <details class="reminder-actions">
+          <summary>Nochmal senden</summary>
+          <div class="row-actions">{{ send_buttons(invoice, mode) }}</div>
+        </details>
+        {% endif %}
+        {% if sent | length > 1 %}
+        <details class="reminder-actions">
+          <summary>Alle Erinnerungen</summary>
+          <div class="reminder-meta">
+            {% for day in sent %}<span>{{ loop.index }}. am {{ day | german_date }}</span>{% endfor %}
+          </div>
+        </details>
+        {% endif %}
+        {% if mode in ('email', 'whatsapp') %}
+        <details class="reminder-actions">
+          <summary>Text ansehen</summary>
+          <p class="mail-preview">{{ mail_bodies.get(invoice.number, '') }}</p>
+        </details>
+        {% endif %}
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if paid %}
+<div class="section-title">Bezahlt</div>
+<ul class="plain">
+  {% for invoice in paid %}
+  <li>
+    <div class="reminder lesson-done">
+      <div class="reminder-body">
+        <a class="reminder-link" href="/rechnungen/{{ invoice.number }}/ansehen">
+          <div class="reminder-title">
+            <strong>Nr. {{ invoice.number }} · {{ names[invoice.customer_id] }}</strong>
+            <span class="spread"></span>
+            <span class="amount">{{ invoice.printed_total | euro }}</span>
+          </div>
+          <div class="reminder-meta">
+            <span>bezahlt am {{ invoice.paid_on | german_date }}</span>
+          </div>
+        </a>
+        <div class="row-actions">
+          <form method="post" action="/rechnungen/{{ invoice.number }}/unbezahlt">
+            <button class="button button-small" type="submit">Doch nicht bezahlt</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<div class="section-title">Einnahmen</div>
+{% if earnings %}
+<div class="block">
+  <div class="simple-list">
+    <ul>
+      {% for row in earnings %}
+      <li>
+        <span>{{ row.label }}</span>
+        <span class="amount">
+          {{ row.invoiced | euro }}{% if row.uninvoiced %} (+{{ row.uninvoiced | euro }} ohne Rechnung){% endif %}
+        </span>
+      </li>
+      {% endfor %}
+      <li>
+        <span><strong>Gesamt (Rechnungen)</strong></span>
+        <span class="amount"><strong>{{ earnings_total.invoiced | euro }}</strong></span>
+      </li>
+      {% if earnings_total.uninvoiced %}
+      <li>
+        <span><strong>Gesamt inkl. ohne Rechnung</strong></span>
+        <span class="amount"><strong>{{ earnings_total.total | euro }}</strong></span>
+      </li>
+      {% endif %}
+    </ul>
+  </div>
+</div>
+{% else %}
+<p class="hint">Noch keine Einnahmen.</p>
+{% endif %}
+
+<div class="section-title">Finanzamt</div>
+<div class="block">
+  {% if paid_years %}
+  <form class="row-actions"
+        onsubmit="window.location = '/rechnungen/finanzamt/' + this.jahr.value + '.zip'; return false;">
+    <select name="jahr">
+      {% for year in paid_years %}<option>{{ year }}</option>{% endfor %}
+    </select>
+    <button class="button" type="submit">Jahr als ZIP herunterladen</button>
+  </form>
+  <p class="hint">
+    Enthält alle Rechnungen, deren Zahlungseingang in dem Jahr lag
+    („✓ Geld erhalten“).
+  </p>
+  {% else %}
+  <p class="hint">
+    Noch keine bezahlte Rechnung — sobald Zahlungen mit „✓ Geld erhalten“
+    vermerkt sind, gibt es hier das Jahres-ZIP.
+  </p>
+  {% endif %}
+</div>
+
+<script>
+function flash(message) {
+  const note = document.createElement("div");
+  note.className = "toast";
+  note.textContent = message;
+  const main = document.querySelector(".app-content");
+  main.insertBefore(note, main.firstChild.nextSibling);
+  setTimeout(function () { note.remove(); }, 4000);
+}
+
+async function sendWhatsApp(button) {
+  // The text goes to the clipboard, because WhatsApp accepts either a file
+  // or a text, never both. Paste it into the chat next to the PDF.
+  try {
+    await navigator.clipboard.writeText(button.dataset.text);
+    flash("Text kopiert — im Chat einfach einfügen.");
+  } catch (error) {}
+  try {
+    const loaded = await fetch(button.dataset.pdf);
+    const file = new File([await loaded.blob()], button.dataset.title + ".pdf",
+                          {type: "application/pdf"});
+    if (navigator.canShare && navigator.canShare({files: [file]})) {
+      await navigator.share({files: [file], title: button.dataset.title});
+      return;
+    }
+  } catch (error) {
+    if (error.name === "AbortError") return;
+  }
+  // No share sheet on this device: at least open the chat, PDF by hand.
+  if (button.dataset.phone) {
+    window.open("https://wa.me/" + button.dataset.phone, "_blank");
+  }
+}
+</script>
+{% endblock %}
