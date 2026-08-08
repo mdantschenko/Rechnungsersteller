@@ -222,14 +222,20 @@
       <li>
         <span>{{ row.label }}</span>
         <span class="amount">
-          {{ row.invoiced | euro }}{% if row.uninvoiced %} (+{{ row.uninvoiced | euro }} ohne Rechnung){% endif %}
+          {{ row.received | euro }}{% if row.outstanding %} (+{{ row.outstanding | euro }} noch zu erwarten){% endif %}{% if row.uninvoiced %} (+{{ row.uninvoiced | euro }} ohne Rechnung){% endif %}
         </span>
       </li>
       {% endfor %}
       <li>
-        <span><strong>Gesamt (Rechnungen)</strong></span>
-        <span class="amount"><strong>{{ earnings_total.invoiced | euro }}</strong></span>
+        <span><strong>Gesamt erhalten</strong></span>
+        <span class="amount"><strong>{{ earnings_total.received | euro }}</strong></span>
       </li>
+      {% if earnings_total.outstanding %}
+      <li>
+        <span>Noch zu erwarten</span>
+        <span class="amount">{{ earnings_total.outstanding | euro }}</span>
+      </li>
+      {% endif %}
       {% if earnings_total.uninvoiced %}
       <li>
         <span><strong>Gesamt inkl. ohne Rechnung</strong></span>

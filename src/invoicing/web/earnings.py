@@ -1,9 +1,10 @@
-"""What came in, month by month.
+"""What actually came in, month by month.
 
-Two kinds of money: what invoices say, and what the reminder-only pupils —
-the ones deliberately billed on paper nowhere — brought in, computed from
-their ticked-off lessons times their price. The screen shows both, so the
-invoiced figure stays honest on its own.
+Three pots of money. An invoice counts as income only once "Geld erhalten"
+was pressed; until then its amount is merely expected and says so. Beside
+both stands what the reminder-only pupils — the ones deliberately billed on
+paper nowhere — brought in, computed from their ticked-off lessons times
+their price.
 """
 
 from __future__ import annotations
@@ -31,15 +32,16 @@ ZERO = Decimal("0")
 
 @dataclass(frozen=True, slots=True)
 class EarningsRow:
-    """One month's take, split by whether an invoice exists for it."""
+    """One month's take: arrived, still expected, and never invoiced."""
 
     label: str
-    invoiced: Decimal
+    received: Decimal
+    outstanding: Decimal
     uninvoiced: Decimal
 
     @property
     def total(self) -> Decimal:
-        return self.invoiced + self.uninvoiced
+        return self.received + self.uninvoiced
 
 
 def monthly_earnings(
@@ -49,36 +51,41 @@ def monthly_earnings(
 
     With a ``customer``, only their money; without, everyone's.
     """
-    invoiced = _invoiced_by_month(session, customer)
+    received, outstanding = _invoices_by_month(session, customer)
     uninvoiced = _uninvoiced_by_month(session, customer)
-    keys = sorted(set(invoiced) | set(uninvoiced), reverse=True)
+    keys = sorted(set(received) | set(outstanding) | set(uninvoiced), reverse=True)
     rows = [
         EarningsRow(
             label=f"{month_name(date(year, month, 1))} {year}",
-            invoiced=invoiced.get((year, month), ZERO),
+            received=received.get((year, month), ZERO),
+            outstanding=outstanding.get((year, month), ZERO),
             uninvoiced=uninvoiced.get((year, month), ZERO),
         )
         for year, month in keys
     ]
     total = EarningsRow(
         label="Gesamt",
-        invoiced=sum((row.invoiced for row in rows), ZERO),
+        received=sum((row.received for row in rows), ZERO),
+        outstanding=sum((row.outstanding for row in rows), ZERO),
         uninvoiced=sum((row.uninvoiced for row in rows), ZERO),
     )
     return rows, total
 
 
-def _invoiced_by_month(
+def _invoices_by_month(
     session: Session, customer: Customer | None
-) -> dict[tuple[int, int], Decimal]:
+) -> tuple[dict[tuple[int, int], Decimal], dict[tuple[int, int], Decimal]]:
+    """Paid invoices land in the first pot, unpaid ones wait in the second."""
     statement = select(IssuedInvoice)
     if customer is not None:
         statement = statement.where(IssuedInvoice.customer_id == customer.id)
-    found: dict[tuple[int, int], Decimal] = {}
+    received: dict[tuple[int, int], Decimal] = {}
+    outstanding: dict[tuple[int, int], Decimal] = {}
     for record in session.exec(statement).all():
         key = (record.issued_on.year, record.issued_on.month)
-        found[key] = found.get(key, ZERO) + record.printed_total
-    return found
+        pot = received if record.paid_on is not None else outstanding
+        pot[key] = pot.get(key, ZERO) + record.printed_total
+    return received, outstanding
 
 
 def _uninvoiced_by_month(

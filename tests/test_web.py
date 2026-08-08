@@ -620,10 +620,14 @@ def test_earnings_and_the_tax_zip_follow_the_money(client: TestClient) -> None:
     )
 
     page = client.get("/rechnungen").text
-    assert "Gesamt (Rechnungen)" in page
+    assert "Gesamt erhalten" in page
+    assert "noch zu erwarten" in page
     assert "33,33" in page
 
     client.post("/rechnungen/115/bezahlt")
+    page = client.get("/rechnungen").text
+    assert "noch zu erwarten" not in page
+
     year = date.today().year
     archive = client.get(f"/rechnungen/finanzamt/{year}.zip")
     assert archive.status_code == 200
