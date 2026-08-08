@@ -689,6 +689,41 @@ def test_the_customer_page_tells_the_whole_story(client: TestClient) -> None:
     assert "Alle Rechnungen als ZIP" in page
 
 
+def test_the_pdf_previews_inline_and_downloads_only_on_request(
+    client: TestClient,
+) -> None:
+    customer_id = _add_customer(client)
+    _set_terms(client, customer_id)
+    lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
+    client.post(f"/termine/{lesson_id}/erledigt")
+    client.post(
+        f"/rechnungen/{customer_id}/freigeben", data={"closing_day": "2026-06-15"}
+    )
+
+    shown = client.get("/rechnungen/115.pdf")
+    fetched = client.get("/rechnungen/115.pdf?herunterladen=1")
+
+    assert shown.headers["content-disposition"].startswith("inline")
+    assert fetched.headers["content-disposition"].startswith("attachment")
+
+
+def test_the_invoice_view_serves_its_pages_as_images(client: TestClient) -> None:
+    customer_id = _add_customer(client)
+    _set_terms(client, customer_id)
+    lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
+    client.post(f"/termine/{lesson_id}/erledigt")
+    client.post(
+        f"/rechnungen/{customer_id}/freigeben", data={"closing_day": "2026-06-15"}
+    )
+
+    assert "/rechnungen/115/seite/0.png" in client.get("/rechnungen/115/ansehen").text
+
+    page = client.get("/rechnungen/115/seite/0.png")
+    assert page.status_code == 200
+    assert page.content.startswith(b"\x89PNG")
+    assert client.get("/rechnungen/115/seite/9.png").status_code == 404
+
+
 def test_the_pdf_survives_renaming_the_customer(client: TestClient) -> None:
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)

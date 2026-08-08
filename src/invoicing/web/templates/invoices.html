@@ -160,7 +160,10 @@
             </button>
           </form>
           {% endif %}
-          <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf" download>PDF</a>
+          <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf?herunterladen=1" download
+             data-pdf="/rechnungen/{{ invoice.number }}.pdf"
+             data-title="Rechnung Nr. {{ invoice.number }}"
+             onclick="return savePdf(this)">PDF</a>
         </div>
         {% if sent | length > 1 %}
         <details class="reminder-actions">
@@ -304,4 +307,5 @@ async function sendWhatsApp(button) {
   }
 }
 </script>
+<script src="/static/share-pdf.js"></script>
 {% endblock %}

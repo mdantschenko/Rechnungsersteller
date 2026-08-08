@@ -910,11 +910,32 @@ textarea {
 /* --- the PDF viewer --------------------------------------------------------- */
 
 .pdf-shell {
+  position: relative;
   margin: 0 1rem;
   border-radius: 1rem;
   overflow: hidden;
   background: var(--field);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.pdf-zoom {
+  transform-origin: 0 0;
+}
+
+.pdf-touch {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.pdf-page {
+  display: block;
+  width: 100%;
+  background: #fff;
+}
+
+.pdf-page + .pdf-page {
+  border-top: 1px solid var(--hairline);
 }
 
 .pdf-frame {

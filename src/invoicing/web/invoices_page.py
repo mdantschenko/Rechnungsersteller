@@ -20,6 +20,7 @@ from starlette.responses import FileResponse, RedirectResponse, Response
 from invoicing import mail
 from invoicing.billing import BillingRun, draft_for, manual_draft, open_runs, release
 from invoicing.domain.money import format_euro
+from invoicing.pdf import preview
 from invoicing.pdf.invoice_document import to_html, write_pdf
 from invoicing.storage.models import (
     Customer,
@@ -198,17 +199,42 @@ def release_manual_invoice(
 def view_invoice(
     number: int, request: Request, session: Session = Depends(database)
 ) -> Response:
-    """The PDF inside the app's own chrome, with a way back."""
+    """The invoice's pages as images inside the app's own chrome."""
+    path = _stored_pdf(session, number)
+    pages = preview.page_count(path) if path else 0
     return templates.TemplateResponse(
         request,
         "pdf_view.html",
         {
             "heading": f"Rechnung Nr. {number}",
             "pdf_url": f"/rechnungen/{number}.pdf",
-            "frame_url": f"/rechnungen/{number}.pdf",
+            "page_urls": [
+                f"/rechnungen/{number}/seite/{index}.png" for index in range(pages)
+            ],
             "kind": "pdf",
         },
     )
+
+
+@router.get("/rechnungen/{number}/seite/{index}.png")
+def invoice_page_image(
+    number: int, index: int, session: Session = Depends(database)
+) -> Response:
+    path = _stored_pdf(session, number)
+    image = preview.page_png(path, index) if path else None
+    if image is None:
+        raise HTTPException(status_code=404)
+    return Response(image, media_type="image/png")
+
+
+def _stored_pdf(session: Session, number: int) -> Path | None:
+    record = session.exec(
+        select(IssuedInvoice).where(IssuedInvoice.number == number)
+    ).first()
+    if record is None:
+        return None
+    name = _customer_names(session)[record.customer_id]
+    return _find_pdf(session, record, name)
 
 
 @router.get("/rechnungen/vorschau-ansicht")
@@ -542,19 +568,21 @@ def _reminder_mail_body(session: Session, record: IssuedInvoice, count: int) -> 
 
 
 @router.get("/rechnungen/{number}.pdf")
-def invoice_pdf(number: int, session: Session = Depends(database)) -> Response:
-    record = session.exec(
-        select(IssuedInvoice).where(IssuedInvoice.number == number)
-    ).first()
-    if record is None:
-        raise HTTPException(status_code=404, detail=f"keine Rechnung Nr. {number}")
-    name = _customer_names(session)[record.customer_id]
-    path = _find_pdf(session, record, name)
+def invoice_pdf(
+    number: int, herunterladen: bool = False, session: Session = Depends(database)
+) -> Response:
+    """The stored PDF: shown in place by default, a download only on request."""
+    path = _stored_pdf(session, number)
     if path is None:
         raise HTTPException(
-            status_code=404, detail=f"die PDF zu Rechnung Nr. {number} fehlt"
+            status_code=404, detail=f"keine PDF zu Rechnung Nr. {number}"
         )
-    return FileResponse(path, media_type="application/pdf", filename=path.name)
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=path.name,
+        content_disposition_type="attachment" if herunterladen else "inline",
+    )
 
 
 def _due_runs(session: Session, today: date) -> list[BillingRun]:
