@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from invoicing.storage.database import open_database
 from invoicing.storage.models import (
     AppSettings,
+    IssuedInvoice,
     Issuer,
     Lesson,
     LessonAlarm,
@@ -503,10 +504,6 @@ def test_a_sent_invoice_carries_its_mark(client: TestClient) -> None:
 def test_an_unpaid_invoice_past_the_due_date_is_flagged(
     client: TestClient, location: Path
 ) -> None:
-    from datetime import timedelta
-
-    from invoicing.storage.models import IssuedInvoice
-
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
     lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
@@ -548,7 +545,7 @@ def test_a_paid_invoice_moves_out_of_the_open_list(client: TestClient) -> None:
     assert "Doch nicht bezahlt" not in page
 
 
-def test_a_reminder_is_recorded_and_counted(client: TestClient) -> None:
+def test_a_reminder_is_recorded_and_counted(client: TestClient, location: Path) -> None:
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
     client.post(
@@ -573,7 +570,15 @@ def test_a_reminder_is_recorded_and_counted(client: TestClient) -> None:
     page = client.post("/rechnungen/115/erinnern").text
 
     assert "2. Erinnerung" in page
-    assert "Erneut erinnern" in page
+    assert "Erneut erinnern" not in page
+
+    with Session(open_database(location)) as session:
+        record = session.exec(select(IssuedInvoice)).one()
+        record.issued_on = date.today() - timedelta(days=30)
+        session.add(record)
+        session.commit()
+
+    assert "Erneut erinnern" in client.get("/rechnungen").text
 
 
 def test_a_customer_without_invoices_can_be_deleted(

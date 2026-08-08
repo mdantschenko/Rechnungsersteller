@@ -148,11 +148,13 @@
           <form method="post" action="/rechnungen/{{ invoice.number }}/bezahlt">
             <button class="button button-small" type="submit">✓ Geld erhalten</button>
           </form>
+          {% if late %}
           <form method="post" action="/rechnungen/{{ invoice.number }}/erinnern">
             <button class="button button-small color-red" type="submit">
               {{ 'Erneut erinnern' if sent else 'Zahlungserinnerung' }}
             </button>
           </form>
+          {% endif %}
           <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf" download>PDF</a>
         </div>
         {% if sent | length > 1 %}
