@@ -12,6 +12,9 @@ CODE=/opt/invoicing
 DATA=/var/lib/invoicing
 SERVICE_USER=invoicing
 
+echo "==> German clock"
+timedatectl set-timezone Europe/Berlin
+
 echo "==> System packages"
 apt-get update
 # The first four are what WeasyPrint needs to render text; without them it
