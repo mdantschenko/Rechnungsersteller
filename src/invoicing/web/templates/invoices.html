@@ -83,11 +83,10 @@
 </div>
 {% endfor %}
 
-<div class="section-title">Manuelle Rechnung</div>
-<div class="block">
-  <details class="reminder-actions">
-    <summary class="button button-small">Zeitraum selbst wählen ▾</summary>
-    <form method="post" action="/rechnungen/manuell" class="stack" style="margin-top: 0.5rem">
+<details class="section-fold">
+  <summary class="section-title">Manuelle Rechnung</summary>
+  <div class="block">
+    <form method="post" action="/rechnungen/manuell" class="stack">
       <label>Kunde
         <select name="customer_id" required>
           <option value="" disabled selected>Bitte auswählen</option>
@@ -106,9 +105,9 @@
         </button>
       </div>
     </form>
-  </details>
-  <p class="hint">Nimmt alle abgehakten, noch nicht abgerechneten Stunden im Zeitraum.</p>
-</div>
+    <p class="hint">Nimmt alle abgehakten, noch nicht abgerechneten Stunden im Zeitraum.</p>
+  </div>
+</details>
 
 <div class="section-title">Ausgestellt</div>
 {% if not issued %}

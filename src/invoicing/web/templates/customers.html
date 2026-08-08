@@ -31,15 +31,17 @@
   {% endfor %}
 </ul>
 
-<div class="section-title" id="neu">Neuer Kunde</div>
-<div class="block">
-  <form method="post" action="/kunden/neu" class="stack">
-    <label>Name<input type="text" name="name" required></label>
-    <label>Straße<input type="text" name="street" required></label>
-    <label>PLZ und Ort<input type="text" name="city" required></label>
-    <button class="button button-fill" type="submit">Anlegen</button>
-  </form>
-</div>
+<details class="section-fold" id="neu">
+  <summary class="section-title">Neuer Kunde</summary>
+  <div class="block">
+    <form method="post" action="/kunden/neu" class="stack">
+      <label>Name<input type="text" name="name" required></label>
+      <label>Straße<input type="text" name="street" required></label>
+      <label>PLZ und Ort<input type="text" name="city" required></label>
+      <button class="button button-fill" type="submit">Anlegen</button>
+    </form>
+  </div>
+</details>
 
 {% if archived %}
 <div class="section-title">Archiv</div>

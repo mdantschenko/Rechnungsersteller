@@ -172,6 +172,23 @@ body {
   margin: 0.625rem 0 0;
 }
 
+.section-fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.section-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.section-fold > summary::after {
+  content: " ▸";
+}
+
+.section-fold[open] > summary::after {
+  content: " ▾";
+}
+
 .warn {
   color: var(--red);
 }
