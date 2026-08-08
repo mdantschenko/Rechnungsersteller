@@ -544,6 +544,8 @@ textarea {
   position: absolute;
   left: 0;
   right: 0;
+  margin-top: 0;
+  margin-bottom: 0;
   opacity: 0;
   pointer-events: none;
 }
@@ -804,7 +806,7 @@ textarea {
 /* The three calendar views ride a sliding track: neighbour, current,
    neighbour. Only the track moves; title and bars stay put. */
 .carousel {
-  overflow: hidden;
+  overflow-x: clip;
 }
 
 .swipe-track {
@@ -866,10 +868,6 @@ textarea {
 
   .segmented a.is-current {
     view-transition-name: segment-pill;
-  }
-
-  .page-title {
-    view-transition-name: page-title;
   }
 
   .segmented {

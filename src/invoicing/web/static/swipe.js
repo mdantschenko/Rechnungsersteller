@@ -41,22 +41,51 @@
 
   var titles = {};
 
-  function prefetch(index, slot) {
+  function cacheKey(index) {
+    return "swap:" + segments[index].getAttribute("href");
+  }
+
+  function readCache(index) {
+    try {
+      return JSON.parse(sessionStorage.getItem(cacheKey(index)));
+    } catch (ignored) {
+      return null;
+    }
+  }
+
+  function writeCache(index, entry) {
+    try {
+      sessionStorage.setItem(cacheKey(index), JSON.stringify(entry));
+    } catch (ignored) {}
+  }
+
+  function hydrate(index, slot) {
     if (index < 0 || index >= segments.length) return;
+    var kept = readCache(index);
+    if (kept) {
+      slot.innerHTML = kept.html;
+      titles[index] = kept.title;
+    }
     fetch(segments[index].href, { credentials: "same-origin" })
       .then(function (answer) { return answer.text(); })
       .then(function (html) {
         var neighbourDocument = new DOMParser().parseFromString(html, "text/html");
         var neighbour = neighbourDocument.querySelector(".swap");
-        if (neighbour) slot.innerHTML = neighbour.innerHTML;
+        if (!neighbour) return;
+        slot.innerHTML = neighbour.innerHTML;
         var heading = neighbourDocument.querySelector(".page-title");
         titles[index] = heading ? heading.textContent : "";
+        writeCache(index, { html: neighbour.innerHTML, title: titles[index] });
       })
       .catch(function () {});
   }
 
-  prefetch(current - 1, slots[0]);
-  prefetch(current + 1, slots[2]);
+  writeCache(current, {
+    html: swap.innerHTML,
+    title: title ? title.textContent : "",
+  });
+  hydrate(current - 1, slots[0]);
+  hydrate(current + 1, slots[2]);
 
   function remember(direction) {
     try { sessionStorage.setItem("nav-direction", direction); } catch (ignored) {}
