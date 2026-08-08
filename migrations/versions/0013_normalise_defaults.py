@@ -18,24 +18,20 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute(
-        """
+    op.execute("""
         UPDATE template_column
         SET default_value = REPLACE(REPLACE(REPLACE(REPLACE(
                 default_value, '€', ''), ' ', ''), '.', ''), ',', '.')
         WHERE default_value IS NOT NULL
           AND kind IN ('MONEY', 'QUANTITY')
           AND default_value LIKE '%,%'
-        """
-    )
-    op.execute(
-        """
+        """)
+    op.execute("""
         UPDATE template_column
         SET default_value = TRIM(REPLACE(default_value, '€', ''))
         WHERE default_value IS NOT NULL
           AND kind IN ('MONEY', 'QUANTITY')
-        """
-    )
+        """)
 
 
 def downgrade() -> None:
