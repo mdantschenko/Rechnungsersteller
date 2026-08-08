@@ -265,6 +265,13 @@ ul.plain {
   list-style: none;
 }
 
+ul.plain.list-card {
+  margin: 0.5rem 1rem;
+  padding: 0.25rem 0;
+  background: var(--group);
+  border-radius: 1rem;
+}
+
 ul.plain.today-rows li {
   position: relative;
 }
@@ -1038,7 +1045,7 @@ html.nav-back::view-transition-new(root) {
 
   a.reminder-body:hover,
   .planner-day:hover {
-    background: var(--group);
+    background: #e9e9f0;
     border-radius: 0.75rem;
   }
 }
