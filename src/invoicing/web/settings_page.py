@@ -13,6 +13,7 @@ from starlette.responses import RedirectResponse, Response
 
 from invoicing import feiertage, mail
 from invoicing.domain import invoice as document
+from invoicing.domain.invoice_numbers import NumberSequence
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.sample import sample_invoice
 from invoicing.storage.models import Issuer, NumberState
@@ -28,17 +29,25 @@ def settings_form(request: Request, session: Session = Depends(database)) -> Res
     if not settings.calendar_token:
         settings.calendar_token = secrets.token_urlsafe(16)
         session.add(settings)
+    numbering = session.exec(select(NumberState)).first()
     return templates.TemplateResponse(
         request,
         "settings.html",
         {
             "issuer": session.exec(select(Issuer)).first(),
-            "numbering": session.exec(select(NumberState)).first(),
+            "numbering": numbering,
+            "next_number": _sequence(numbering).peek(),
             "settings": settings,
             "states": feiertage.STATES,
             "chosen_states": feiertage.chosen_states(settings),
         },
     )
+
+
+def _sequence(state: NumberState | None) -> NumberSequence:
+    if state is None:
+        return NumberSequence(start=1)
+    return NumberSequence(start=state.start, last_assigned=state.last_assigned)
 
 
 @router.post("/einstellungen/feiertage")
@@ -230,12 +239,27 @@ def _real_issuer(session: Session) -> document.Issuer | None:
 
 @router.post("/einstellungen/nummern")
 def save_numbering(
-    start: int = Form(...), session: Session = Depends(database)
+    request: Request,
+    next_number: int = Form(...),
+    session: Session = Depends(database),
 ) -> Response:
-    state = session.exec(select(NumberState)).first() or NumberState(start=start)
-    state.start = start
+    """Move the sequence so the next release gets exactly this number."""
+    state = session.exec(select(NumberState)).first() or NumberState(start=next_number)
+    sequence = _sequence(state)
+    try:
+        sequence.restart_at(next_number)
+    except ValueError:
+        return notice_redirect(
+            request,
+            "/einstellungen",
+            f"Nummer {next_number} ist schon vergeben — zuletzt: "
+            f"{state.last_assigned}. Es geht erst ab {sequence.peek()} weiter.",
+        )
+    state.start = sequence.start
     session.add(state)
-    return RedirectResponse("/einstellungen", status_code=303)
+    return notice_redirect(
+        request, "/einstellungen", f"Die nächste Rechnung bekommt Nummer {next_number}."
+    )
 
 
 @router.post("/einstellungen/ablage")

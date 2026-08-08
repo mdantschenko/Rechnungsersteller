@@ -1047,6 +1047,44 @@ def test_the_reminder_clock_time_is_kept(client: TestClient) -> None:
     assert 'value="08:30"' in client.get(f"/kunden/{customer_id}").text
 
 
+def test_the_settings_show_the_true_next_number(
+    client: TestClient, location: Path
+) -> None:
+    with Session(open_database(location)) as session:
+        state = session.exec(select(NumberState)).one()
+        state.last_assigned = 119
+        session.add(state)
+        session.commit()
+
+    page = client.get("/einstellungen").text
+
+    assert "Zuletzt vergeben: 119." in page
+    assert 'name="next_number" value="120"' in page
+
+
+def test_the_next_number_can_be_moved_forward(client: TestClient) -> None:
+    client.post("/einstellungen/nummern", data={"next_number": "200"})
+
+    assert 'name="next_number" value="200"' in client.get("/einstellungen").text
+
+
+def test_an_already_assigned_number_is_refused(
+    client: TestClient, location: Path
+) -> None:
+    with Session(open_database(location)) as session:
+        state = session.exec(select(NumberState)).one()
+        state.last_assigned = 119
+        session.add(state)
+        session.commit()
+
+    page = client.post(
+        "/einstellungen/nummern", data={"next_number": "110"}, follow_redirects=True
+    ).text
+
+    assert "schon vergeben" in page
+    assert 'name="next_number" value="120"' in page
+
+
 def test_the_password_can_be_changed_from_the_settings(client: TestClient) -> None:
     client.post("/einstellungen/passwort", data={"password": "noch-ein-passwort"})
     client.post("/abmelden")

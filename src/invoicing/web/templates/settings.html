@@ -113,15 +113,13 @@
 
 <div class="section-title">Rechnungsnummern</div>
 <div class="block">
-  <p class="hint">
-    {% if numbering and numbering.last_assigned %}
-    Zuletzt vergeben: {{ numbering.last_assigned }}.
-    {% endif %}
-    Nächste Nummer: {{ numbering.start if numbering else 1 }}.
-  </p>
+  {% if numbering and numbering.last_assigned %}
+  <p class="hint" style="margin: 0 0 0.625rem">Zuletzt vergeben: {{ numbering.last_assigned }}.</p>
+  {% endif %}
   <form method="post" action="/einstellungen/nummern" class="stack">
-    <label>Startnummer
-      <input type="number" name="start" value="{{ numbering.start if numbering else 1 }}" min="1" required>
+    <label>Nächste Nummer
+      <input type="number" name="next_number" value="{{ next_number }}"
+             min="{{ numbering.last_assigned + 1 if numbering and numbering.last_assigned else 1 }}" required>
     </label>
     <button class="button button-fill" type="submit">Speichern</button>
   </form>
