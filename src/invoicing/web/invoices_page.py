@@ -60,7 +60,7 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
             "paid": [record for record in issued if record.paid_on is not None],
             "reminders": _reminder_days(session),
             "mail_bodies": {
-                record.number: _invoice_mail_body(session, record) for record in issued
+                record.number: invoice_mail_body(session, record) for record in issued
             },
             "names": {customer.id or 0: customer.name for customer in everyone},
             "deliveries": {
@@ -142,11 +142,11 @@ def customer_zip(customer_id: int, session: Session = Depends(database)) -> Resp
 def _zip_response(
     session: Session, records: list[IssuedInvoice], file_name: str
 ) -> Response:
-    names = _customer_names(session)
+    names = customer_names(session)
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for record in records:
-            pdf = _find_pdf(session, record, names.get(record.customer_id, ""))
+            pdf = find_pdf(session, record, names.get(record.customer_id, ""))
             if pdf is None:
                 continue
             archive.write(pdf, arcname=pdf.name)
@@ -187,7 +187,7 @@ def release_manual_invoice(
         )
     released = release(session, run)
     session.flush()
-    write_pdf(released.document, _pdf_path(session, released.record, customer.name))
+    write_pdf(released.document, pdf_path(session, released.record, customer.name))
     return notice_redirect(
         request,
         "/rechnungen",
@@ -233,8 +233,8 @@ def _stored_pdf(session: Session, number: int) -> Path | None:
     ).first()
     if record is None:
         return None
-    name = _customer_names(session)[record.customer_id]
-    return _find_pdf(session, record, name)
+    name = customer_names(session)[record.customer_id]
+    return find_pdf(session, record, name)
 
 
 @router.get("/rechnungen/vorschau-ansicht")
@@ -367,7 +367,7 @@ def release_invoice(
     run = draft_for(session, customer, closing_day, date.today())
     released = release(session, run)
     session.flush()
-    write_pdf(released.document, _pdf_path(session, released.record, customer.name))
+    write_pdf(released.document, pdf_path(session, released.record, customer.name))
     return RedirectResponse("/rechnungen", status_code=303)
 
 
@@ -391,7 +391,7 @@ def send_invoice(
             "Für diesen Kunden ist keine E-Mail-Adresse hinterlegt — "
             "bitte auf der Kundenseite eintragen.",
         )
-    pdf = _find_pdf(session, record, customer.name)
+    pdf = find_pdf(session, record, customer.name)
     if pdf is None:
         return notice_redirect(
             request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
@@ -401,9 +401,9 @@ def send_invoice(
             settings_of(session),
             to=customer.email,
             subject=f"Rechnung Nr. {number}",
-            body=_invoice_mail_body(session, record),
+            body=invoice_mail_body(session, record),
             pdf=pdf,
-            sender_name=_issuer_name(session),
+            sender_name=issuer_name(session),
         )
     except mail.MailError as error:
         return notice_redirect(request, "/rechnungen", str(error))
@@ -427,13 +427,13 @@ def mark_sent(
     )
 
 
-def _issuer_name(session: Session) -> str:
+def issuer_name(session: Session) -> str:
     issuer = session.exec(select(Issuer)).first()
     return issuer.name if issuer else ""
 
 
-def _invoice_mail_body(session: Session, record: IssuedInvoice) -> str:
-    signature = _issuer_name(session)
+def invoice_mail_body(session: Session, record: IssuedInvoice) -> str:
+    signature = issuer_name(session)
     customer = session.get(Customer, record.customer_id)
     if customer is not None and customer.mail_text:
         return _filled_in(customer.mail_text, record, customer, signature)
@@ -519,7 +519,7 @@ def send_payment_reminder(
         and customer.delivery is InvoiceDelivery.EMAIL
         and customer.email
     ):
-        pdf = _find_pdf(session, record, customer.name)
+        pdf = find_pdf(session, record, customer.name)
         if pdf is None:
             return notice_redirect(
                 request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
@@ -531,7 +531,7 @@ def send_payment_reminder(
                 subject=f"Zahlungserinnerung zur Rechnung Nr. {number}",
                 body=_reminder_mail_body(session, record, count),
                 pdf=pdf,
-                sender_name=_issuer_name(session),
+                sender_name=issuer_name(session),
             )
         except mail.MailError as error:
             return notice_redirect(request, "/rechnungen", str(error))
@@ -551,7 +551,7 @@ def _issued(session: Session, number: int) -> IssuedInvoice | None:
 
 
 def _reminder_mail_body(session: Session, record: IssuedInvoice, count: int) -> str:
-    signature = _issuer_name(session)
+    signature = issuer_name(session)
     customer = session.get(Customer, record.customer_id)
     if customer is not None and customer.reminder_text:
         text = _filled_in(customer.reminder_text, record, customer, signature)
@@ -616,19 +616,19 @@ def _customer(session: Session, customer_id: int) -> Customer:
     return customer
 
 
-def _customer_names(session: Session) -> dict[int, str]:
+def customer_names(session: Session) -> dict[int, str]:
     return {
         customer.id or 0: customer.name
         for customer in session.exec(select(Customer)).all()
     }
 
 
-def _pdf_path(session: Session, record: IssuedInvoice, customer_name: str) -> Path:
+def pdf_path(session: Session, record: IssuedInvoice, customer_name: str) -> Path:
     folder = Path(settings_of(session).invoice_folder) / str(record.issued_on.year)
     return folder / f"Rechnung Nr {record.number} {customer_name}.pdf"
 
 
-def _find_pdf(
+def find_pdf(
     session: Session, record: IssuedInvoice, customer_name: str
 ) -> Path | None:
     """The stored PDF, even if the customer was renamed after it was written.
@@ -636,7 +636,7 @@ def _find_pdf(
     The file carries the name the customer had at release time, so when the
     exact path is gone the unique invoice number finds it again.
     """
-    exact = _pdf_path(session, record, customer_name)
+    exact = pdf_path(session, record, customer_name)
     if exact.exists():
         return exact
     return next(
