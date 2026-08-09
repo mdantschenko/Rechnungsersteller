@@ -1,4 +1,7 @@
-"""Reading the stored invoices back as a summary.
+"""Reading the stored invoices back as a summary, for the command line.
+
+The web app's monthly view lives in :mod:`invoicing.web.earnings`; this file
+answers the year-and-customer question the tax return asks.
 
 Totals are added up in Python rather than by the database. Amounts are stored
 as text so that no value ever passes through a float, which also means SQL
