@@ -187,8 +187,6 @@ def _build(
     billable: tuple[models.Lesson, ...],
     issued_on: date,
 ) -> document.Invoice:
-    columns = stored_columns(terms)
-    kinds = {column.label: column.kind for column in columns}
     return document.build_invoice(
         number=_peek_next_number(session),
         issued_on=issued_on,
@@ -196,22 +194,53 @@ def _build(
         recipient=document.Address(
             name=customer.name, street=customer.street, city=customer.city
         ),
-        template=document.BillingTemplate(
-            unit_price=terms.unit_price,
-            unit=terms.unit,
-            description=terms.description,
-            columns=columns,
-        ),
+        template=domain_template(terms),
         period=period,
-        lessons=[
-            document.Lesson(
-                taught_on=lesson.taught_on,
-                quantity=billable_quantity(terms, lesson),
-                column_values=typed_values(kinds, lesson.column_values),
-            )
-            for lesson in billable
-        ],
+        lessons=[domain_lesson(terms, lesson) for lesson in billable],
     )
+
+
+def domain_template(terms: models.BillingTemplate) -> document.BillingTemplate:
+    """The customer's stored terms as the domain template that prices rows."""
+    return document.BillingTemplate(
+        unit_price=terms.unit_price,
+        unit=terms.unit,
+        description=terms.description,
+        columns=stored_columns(terms),
+    )
+
+
+def domain_lesson(
+    terms: models.BillingTemplate, lesson: models.Lesson
+) -> document.Lesson:
+    """The stored lesson as the domain lesson an invoice row is built from."""
+    columns = stored_columns(terms)
+    kinds = {column.label: column.kind for column in columns}
+    return document.Lesson(
+        taught_on=lesson.taught_on,
+        quantity=billable_quantity(terms, lesson),
+        column_values=typed_values(kinds, lesson.column_values),
+    )
+
+
+def priced_line(
+    terms: models.BillingTemplate, lesson: models.Lesson
+) -> document.LineItem:
+    """One stored lesson priced exactly as its invoice row will be.
+
+    The earnings view and the invoice must never disagree about what a
+    lesson is worth, so both go through this one function.
+    """
+    return document.build_line_item(
+        domain_template(terms), domain_lesson(terms, lesson)
+    )
+
+
+def priced_columns(
+    terms: models.BillingTemplate, lesson: models.Lesson
+) -> tuple[tuple[Column, ColumnValue, Decimal], ...]:
+    """Each extra column with its value and its share for this stored lesson."""
+    return document.column_shares(domain_template(terms), domain_lesson(terms, lesson))
 
 
 def billable_quantity(terms: models.BillingTemplate, lesson: models.Lesson) -> Decimal:
@@ -263,17 +292,22 @@ def _issuer_of(session: Session) -> document.Issuer:
     issuer = session.exec(select(models.Issuer)).first()
     if issuer is None:
         raise ValueError("the sender details have not been filled in yet")
+    return domain_issuer(issuer)
+
+
+def domain_issuer(stored: models.Issuer) -> document.Issuer:
+    """The stored sender details as the domain issuer a document prints."""
     return document.Issuer(
         address=document.Address(
-            name=issuer.name, street=issuer.street, city=issuer.city
+            name=stored.name, street=stored.street, city=stored.city
         ),
-        country=issuer.country,
-        bank=issuer.bank,
-        iban=issuer.iban,
-        bic=issuer.bic,
-        tax_number=issuer.tax_number,
-        email=issuer.email,
-        paypal=issuer.paypal,
+        country=stored.country,
+        bank=stored.bank,
+        iban=stored.iban,
+        bic=stored.bic,
+        tax_number=stored.tax_number,
+        email=stored.email,
+        paypal=stored.paypal,
     )
 
 
@@ -313,13 +347,20 @@ def _typed(kind: ValueKind, value: str | None) -> ColumnValue:
     return parse_user_amount(value)
 
 
+def sequence_of(state: models.NumberState | None) -> NumberSequence:
+    """The numbering as a domain sequence; a missing row starts at one."""
+    if state is None:
+        return NumberSequence(start=1)
+    return NumberSequence(start=state.start, last_assigned=state.last_assigned)
+
+
 def _sequence(session: Session) -> tuple[NumberSequence, models.NumberState]:
     state = session.exec(select(models.NumberState)).first()
     if state is None:
         state = models.NumberState(start=1)
         session.add(state)
         session.flush()
-    return NumberSequence(start=state.start, last_assigned=state.last_assigned), state
+    return sequence_of(state), state
 
 
 def _peek_next_number(session: Session) -> int:

@@ -102,26 +102,33 @@ class Invoice:
     paid_on: date | None = None
 
 
+def column_shares(
+    template: BillingTemplate, lesson: Lesson
+) -> tuple[tuple[Column, ColumnValue, Decimal], ...]:
+    """Each column with its resolved value and its share of the row total.
+
+    This is the only place that pairs a column with what it costs; every
+    other view of extra costs derives from it.
+    """
+    shares = []
+    for column in template.columns:
+        value = column.value_for(lesson.column_values)
+        shares.append((column, value, column.contribution(value, lesson.quantity)))
+    return tuple(shares)
+
+
 def build_line_item(template: BillingTemplate, lesson: Lesson) -> LineItem:
     """Turn one taught lesson into a priced row."""
-    values = tuple(
-        column.value_for(lesson.column_values) for column in template.columns
-    )
-    surcharges = sum(
-        (
-            column.contribution(value, lesson.quantity)
-            for column, value in zip(template.columns, values, strict=True)
-        ),
-        start=ZERO,
-    )
+    shares = column_shares(template, lesson)
     return LineItem(
         taught_on=lesson.taught_on,
         quantity=lesson.quantity,
         unit=template.unit,
         description=template.description,
         unit_price=template.unit_price,
-        column_values=values,
-        total=round_to_cents(lesson.quantity * template.unit_price) + surcharges,
+        column_values=tuple(value for _, value, _ in shares),
+        total=round_to_cents(lesson.quantity * template.unit_price)
+        + sum((share for _, _, share in shares), start=ZERO),
     )
 
 

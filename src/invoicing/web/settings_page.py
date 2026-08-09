@@ -12,8 +12,8 @@ from sqlmodel import Session, select
 from starlette.responses import RedirectResponse, Response
 
 from invoicing import feiertage, mail
+from invoicing.billing import domain_issuer, sequence_of
 from invoicing.domain import invoice as document
-from invoicing.domain.invoice_numbers import NumberSequence
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.sample import sample_invoice
 from invoicing.storage.models import Issuer, NumberState
@@ -36,19 +36,13 @@ def settings_form(request: Request, session: Session = Depends(database)) -> Res
         {
             "issuer": session.exec(select(Issuer)).first(),
             "numbering": numbering,
-            "next_number": _sequence(numbering).peek(),
+            "next_number": sequence_of(numbering).peek(),
             "settings": settings,
             "states": feiertage.STATES,
             "chosen_states": feiertage.chosen_states(settings),
             "pending_password": security.has_pending_password(session),
         },
     )
-
-
-def _sequence(state: NumberState | None) -> NumberSequence:
-    if state is None:
-        return NumberSequence(start=1)
-    return NumberSequence(start=state.start, last_assigned=state.last_assigned)
 
 
 @router.post("/einstellungen/feiertage")
@@ -234,20 +228,7 @@ def _real_issuer(session: Session) -> document.Issuer | None:
     falls back to its invented sender.
     """
     stored = session.exec(select(Issuer)).first()
-    if stored is None:
-        return None
-    return document.Issuer(
-        address=document.Address(
-            name=stored.name, street=stored.street, city=stored.city
-        ),
-        country=stored.country,
-        bank=stored.bank,
-        iban=stored.iban,
-        bic=stored.bic,
-        tax_number=stored.tax_number,
-        email=stored.email,
-        paypal=stored.paypal,
-    )
+    return None if stored is None else domain_issuer(stored)
 
 
 @router.post("/einstellungen/nummern")
@@ -258,7 +239,7 @@ def save_numbering(
 ) -> Response:
     """Move the sequence so the next release gets exactly this number."""
     state = session.exec(select(NumberState)).first() or NumberState(start=next_number)
-    sequence = _sequence(state)
+    sequence = sequence_of(state)
     try:
         sequence.restart_at(next_number)
     except ValueError:

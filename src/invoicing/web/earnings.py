@@ -15,8 +15,8 @@ from decimal import Decimal
 
 from sqlmodel import Session, col, select
 
-from invoicing.billing import billable_quantity, stored_columns, typed_values
-from invoicing.domain.money import round_to_cents
+from invoicing.billing import priced_line
+from invoicing.domain.money import ZERO
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -26,8 +26,6 @@ from invoicing.storage.models import (
     LessonStatus,
 )
 from invoicing.web.page import month_name
-
-ZERO = Decimal("0")
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,21 +114,8 @@ def _uninvoiced_by_month(
         if terms is None:
             continue
         key = (lesson.taught_on.year, lesson.taught_on.month)
-        found[key] = found.get(key, ZERO) + _lesson_value(terms, lesson)
+        found[key] = found.get(key, ZERO) + priced_line(terms, lesson).total
     return found
-
-
-def _lesson_value(terms: BillingTemplate, lesson: Lesson) -> Decimal:
-    """One lesson priced the way an invoice row would price it:
-    hours times rate — or the flat rate — plus the extra columns."""
-    columns = stored_columns(terms)
-    kinds = {column.label: column.kind for column in columns}
-    values = typed_values(kinds, lesson.column_values)
-    quantity = billable_quantity(terms, lesson)
-    amount = round_to_cents(quantity * terms.unit_price)
-    for column in columns:
-        amount += column.contribution(column.value_for(values), quantity)
-    return amount
 
 
 def _templates(session: Session, customer_ids: list[int]) -> dict[int, BillingTemplate]:
