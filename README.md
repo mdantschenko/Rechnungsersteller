@@ -23,6 +23,17 @@ interface is German, as are the invoices it produces.
 Everything lives in a single SQLite file on your own server, behind one
 password; nothing leaves your machine.
 
+## Screenshots
+
+From day to night: the app follows the phone, or the switch in the
+settings. All data invented.
+
+<p>
+  <img src="docs/screenshots/woche-light.png" width="260" alt="Week view in light mode">
+  <img src="docs/screenshots/monat-split.png" width="260" alt="Month view, half light and half dark">
+  <img src="docs/screenshots/rechnungen-dark.png" width="260" alt="Invoice screen in dark mode">
+</p>
+
 ## Running your own
 
 Every installation belongs to one person: your server, your database, your
