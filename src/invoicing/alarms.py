@@ -90,19 +90,14 @@ def _upcoming(session: Session, now: datetime) -> list[tuple[Lesson, Customer]]:
 
 
 def _message(lesson: Lesson, customer: Customer, ring: int) -> dict[str, str]:
-    pupil = customer.student_name or customer.name
-    if customer.online:
-        place = "Online"
-    else:
-        place = customer.lesson_address or f"{customer.street}, {customer.city}"
     pieces = []
     if ring > 1:
         pieces.append(f"{ring}. Weckruf")
     if lesson.starts_at is not None:
         pieces.append(f"um {lesson.starts_at:%H:%M}")
-    pieces.append(place)
+    pieces.append(customer.lesson_place)
     return {
-        "title": f"Nachhilfe {pupil}",
+        "title": f"Nachhilfe {customer.pupil_name}",
         "body": " · ".join(pieces),
         "tag": f"termin-{lesson.id}",
         "url": f"/tag/{lesson.taught_on}",

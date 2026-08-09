@@ -24,7 +24,6 @@ from invoicing.billing import release
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
 from invoicing.web.invoices_page import (
-    customer_names,
     due_runs,
     invoice_mail_body,
     issuer_name,
@@ -162,12 +161,11 @@ def _sealed_copy(database: Path, passphrase: str) -> bytes:
 def _newly_overdue(
     session: Session, settings: AppSettings, today: date
 ) -> list[tuple[IssuedInvoice, str]]:
-    names = customer_names(session)
     unpaid = session.exec(
         select(IssuedInvoice).where(IssuedInvoice.paid_on == None)  # noqa: E711
     ).all()
     return [
-        (record, names.get(record.customer_id, "?"))
+        (record, record.customer.name)
         for record in unpaid
-        if (today - record.issued_on).days - settings.payment_days == 1
+        if record.days_overdue(settings.payment_days, today) == 1
     ]

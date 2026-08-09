@@ -98,6 +98,18 @@ class Customer(SQLModel, table=True):
 
     invoices: list["IssuedInvoice"] = Relationship(back_populates="customer")
 
+    @property
+    def pupil_name(self) -> str:
+        """The pupil the lessons are about; the bill may go to a parent."""
+        return self.student_name or self.name
+
+    @property
+    def lesson_place(self) -> str:
+        """Where the lessons happen: online, a special address, or at home."""
+        if self.online:
+            return "Online"
+        return self.lesson_address or f"{self.street}, {self.city}"
+
 
 class IssuedInvoice(SQLModel, table=True):
     """An invoice that has been sent out and can no longer change."""
@@ -130,6 +142,11 @@ class IssuedInvoice(SQLModel, table=True):
     def totals_disagree(self) -> bool:
         """Whether the document contradicts the sum of its own rows."""
         return self.printed_total != self.computed_total
+
+    def days_overdue(self, payment_days: int, today: date) -> int:
+        """How many days past its due date this invoice is; zero and less
+        mean the customer is still within the payment window."""
+        return (today - self.issued_on).days - payment_days
 
 
 class IssuedInvoiceLine(SQLModel, table=True):
