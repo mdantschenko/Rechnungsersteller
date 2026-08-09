@@ -7,12 +7,19 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Rechnungen">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <link rel="icon" href="/static/icon-32.png" type="image/png">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" sizes="any">
 <title>{% block title %}Rechnungen{% endblock %}</title>
+<script>
+try {
+  var thema = localStorage.getItem("thema");
+  if (thema) document.documentElement.dataset.theme = thema;
+} catch (ignored) {}
+</script>
 <link rel="stylesheet" href="/static/app.css">
 <script>
 window.addEventListener("pageswap", function (event) {

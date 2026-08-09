@@ -147,6 +147,41 @@
 })();
 </script>
 
+<div class="section-title">Darstellung</div>
+<div class="block">
+  <form class="stack" onsubmit="return false">
+    <label>Dunkelmodus
+      <select id="thema">
+        <option value="">Automatisch</option>
+        <option value="dark">An</option>
+        <option value="light">Aus</option>
+      </select>
+    </label>
+  </form>
+</div>
+<script>
+(function () {
+  var choice = document.getElementById("thema");
+  try {
+    choice.value = localStorage.getItem("thema") || "";
+  } catch (ignored) {}
+  choice.addEventListener("change", function () {
+    try {
+      if (choice.value) {
+        localStorage.setItem("thema", choice.value);
+      } else {
+        localStorage.removeItem("thema");
+      }
+    } catch (ignored) {}
+    if (choice.value) {
+      document.documentElement.dataset.theme = choice.value;
+    } else {
+      delete document.documentElement.dataset.theme;
+    }
+  });
+})();
+</script>
+
 <div class="section-title">Automatik</div>
 <div class="block">
   <form method="post" action="/einstellungen/automatik" class="stack">

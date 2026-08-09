@@ -17,11 +17,65 @@
   --faint: #b5b5bc;
   --field: #f2f2f7;
   --group: #f1f1f6;
+  --ground: #fff;
+  --sheet: #fff;
+  --hover: #e9e9f0;
+  --danger-soft: #fff1f0;
+  --danger-ink: #a52a22;
+  --title: var(--accent);
   --hairline: rgba(60, 60, 67, 0.22);
   --bar: rgba(255, 255, 255, 0.92);
   --bar-height: 3rem;
   --tabs-height: 3.25rem;
   --edge: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent: #2563eb;
+    --accent-deep: #6ea0ff;
+    --accent-soft: #1d2a44;
+    --red: #ff7a70;
+    --blue: #6aa8ff;
+    --green: #45c97a;
+    --ink: #e7e8ee;
+    --muted: #9a9ca8;
+    --faint: #565a66;
+    --field: #282b34;
+    --group: #1e2028;
+    --ground: #15161c;
+    --sheet: #323641;
+    --hover: #262933;
+    --danger-soft: #37211f;
+    --danger-ink: #ff9d94;
+    --title: var(--ink);
+    --hairline: rgba(140, 145, 160, 0.24);
+    --bar: rgba(23, 24, 30, 0.92);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --accent: #2563eb;
+  --accent-deep: #6ea0ff;
+  --accent-soft: #1d2a44;
+  --red: #ff7a70;
+  --blue: #6aa8ff;
+  --green: #45c97a;
+  --ink: #e7e8ee;
+  --muted: #9a9ca8;
+  --faint: #565a66;
+  --field: #282b34;
+  --group: #1e2028;
+  --ground: #15161c;
+  --sheet: #323641;
+  --hover: #262933;
+  --danger-soft: #37211f;
+  --danger-ink: #ff9d94;
+  --title: var(--ink);
+  --hairline: rgba(140, 145, 160, 0.24);
+  --bar: rgba(23, 24, 30, 0.92);
+  color-scheme: dark;
 }
 
 *,
@@ -34,7 +88,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: #fff;
+  background: var(--ground);
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
@@ -107,7 +161,7 @@ body {
   font-size: 1.875rem;
   font-weight: 800;
   letter-spacing: -0.01em;
-  color: var(--accent);
+  color: var(--title);
 }
 
 .page-subtitle {
@@ -380,7 +434,7 @@ a.reminder-link {
 
 /* An unpaid invoice past its due date must not look like the others. */
 .reminder.is-overdue .reminder-body {
-  background: #fff1f0;
+  background: var(--danger-soft);
   border-radius: 0.75rem;
   border-bottom: 0;
   padding: 0.5rem 0.625rem 0.625rem;
@@ -531,7 +585,7 @@ select {
 .block input[type="password"],
 .block textarea,
 .block select {
-  background: #fff;
+  background: var(--sheet);
 }
 
 textarea {
@@ -584,7 +638,7 @@ textarea {
   bottom: 0.125rem;
   left: 0;
   border-radius: 0.5rem;
-  background: #fff;
+  background: var(--sheet);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   opacity: 0;
   pointer-events: none;
@@ -616,7 +670,7 @@ textarea {
 }
 
 .segmented a.is-current {
-  background: #fff;
+  background: var(--sheet);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
@@ -684,7 +738,7 @@ textarea {
   right: 1rem;
   bottom: calc(var(--tabs-height) + var(--edge) + 1rem);
   padding: 0.875rem;
-  background: #fff;
+  background: var(--sheet);
   border-radius: 1rem;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
   font-size: 0.875rem;
@@ -791,8 +845,8 @@ textarea {
   margin: 0 1rem 0.75rem;
   padding: 0.625rem 0.75rem;
   border-radius: 0.75rem;
-  background: #fff1f0;
-  color: #a52a22;
+  background: var(--danger-soft);
+  color: var(--danger-ink);
   font-size: 0.8125rem;
 }
 
@@ -1083,7 +1137,7 @@ html.nav-back::view-transition-new(root) {
 
   a.reminder-body:hover,
   .planner-day:hover {
-    background: #e9e9f0;
+    background: var(--hover);
     border-radius: 0.75rem;
   }
 }
