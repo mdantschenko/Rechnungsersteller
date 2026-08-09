@@ -69,7 +69,7 @@ def test_the_message_carries_the_pdf_by_name() -> None:
         to="erika@example.com",
         subject="Rechnung Nr. 115",
         body="Guten Tag",
-        pdf_content=b"%PDF-",
+        content=b"%PDF-",
         file_name="Rechnung Nr 115 Erika Beispiel.pdf",
     )
 

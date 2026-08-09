@@ -29,6 +29,12 @@ class MailError(Exception):
     """Sending failed for a reason the user can read and act on."""
 
 
+NOT_CONFIGURED = (
+    "Der E-Mail-Versand ist noch nicht eingerichtet. Trage Server, "
+    "Benutzername und Passwort in den Einstellungen ein."
+)
+
+
 def is_configured(settings: AppSettings) -> bool:
     """Whether the settings hold enough to reach an SMTP server."""
     return bool(settings.smtp_host and settings.smtp_user and settings.smtp_password)
@@ -42,7 +48,7 @@ def send_pdf(
     pdf: Path,
     sender_name: str = "",
 ) -> None:
-    """Send ``pdf`` as an attachment.
+    """Send ``pdf`` as an attachment, with a copy into the Sent folder.
 
     ``sender_name`` is what the recipient's inbox shows instead of the bare
     mailbox name.
@@ -50,26 +56,9 @@ def send_pdf(
     Raises:
         MailError: if the settings are incomplete or the server refuses.
     """
-    if not is_configured(settings):
-        raise MailError(
-            "Der E-Mail-Versand ist noch nicht eingerichtet. Trage Server, "
-            "Benutzername und Passwort in den Einstellungen ein."
-        )
-    try:
-        message = build_message(
-            sender=from_header(
-                sender_name, settings.smtp_from or settings.smtp_user or ""
-            ),
-            to=to,
-            subject=subject,
-            body=body,
-            pdf_content=pdf.read_bytes(),
-            file_name=pdf.name,
-        )
-    except ValueError as error:
-        # The email policy refuses header values with line breaks in them,
-        # which is also what keeps injected extra headers out.
-        raise MailError("Die Empfängeradresse enthält unzulässige Zeichen.") from error
+    message = _outgoing(
+        settings, to, subject, body, sender_name, pdf.read_bytes(), pdf.name, "pdf"
+    )
     _deliver(settings, message)
     _copy_into_sent(settings, message)
 
@@ -89,25 +78,9 @@ def send_attachment(
     Raises:
         MailError: if the settings are incomplete or the server refuses.
     """
-    if not is_configured(settings):
-        raise MailError(
-            "Der E-Mail-Versand ist noch nicht eingerichtet. Trage Server, "
-            "Benutzername und Passwort in den Einstellungen ein."
-        )
-    try:
-        message = build_message(
-            sender=from_header(
-                sender_name, settings.smtp_from or settings.smtp_user or ""
-            ),
-            to=to,
-            subject=subject,
-            body=body,
-            pdf_content=content,
-            file_name=file_name,
-            subtype=subtype,
-        )
-    except ValueError as error:
-        raise MailError("Die Empfängeradresse enthält unzulässige Zeichen.") from error
+    message = _outgoing(
+        settings, to, subject, body, sender_name, content, file_name, subtype
+    )
     _deliver(settings, message)
 
 
@@ -122,22 +95,42 @@ def send_text(
     Raises:
         MailError: if the settings are incomplete or the server refuses.
     """
+    _deliver(settings, _outgoing(settings, to, subject, body, sender_name))
+
+
+def _outgoing(
+    settings: AppSettings,
+    to: str,
+    subject: str,
+    body: str,
+    sender_name: str,
+    content: bytes | None = None,
+    file_name: str = "",
+    subtype: str = "pdf",
+) -> EmailMessage:
+    """The checked and addressed message every send goes through.
+
+    Raises:
+        MailError: if the settings are incomplete or the address is unusable.
+    """
     if not is_configured(settings):
-        raise MailError(
-            "Der E-Mail-Versand ist noch nicht eingerichtet. Trage Server, "
-            "Benutzername und Passwort in den Einstellungen ein."
-        )
-    message = EmailMessage()
+        raise MailError(NOT_CONFIGURED)
     try:
-        message["From"] = from_header(
-            sender_name, settings.smtp_from or settings.smtp_user or ""
+        return build_message(
+            sender=from_header(
+                sender_name, settings.smtp_from or settings.smtp_user or ""
+            ),
+            to=to,
+            subject=subject,
+            body=body,
+            content=content,
+            file_name=file_name,
+            subtype=subtype,
         )
-        message["To"] = to
-        message["Subject"] = subject
     except ValueError as error:
+        # The email policy refuses header values with line breaks in them,
+        # which is also what keeps injected extra headers out.
         raise MailError("Die Empfängeradresse enthält unzulässige Zeichen.") from error
-    message.set_content(body)
-    _deliver(settings, message)
 
 
 def from_header(name: str, address: str) -> str:
@@ -150,19 +143,20 @@ def build_message(
     to: str,
     subject: str,
     body: str,
-    pdf_content: bytes,
-    file_name: str,
+    content: bytes | None = None,
+    file_name: str = "",
     subtype: str = "pdf",
 ) -> EmailMessage:
-    """One plain-text message with a single file attached."""
+    """One plain-text message, with a single file attached when one is given."""
     message = EmailMessage()
     message["From"] = sender
     message["To"] = to
     message["Subject"] = subject
     message.set_content(body)
-    message.add_attachment(
-        pdf_content, maintype="application", subtype=subtype, filename=file_name
-    )
+    if content is not None:
+        message.add_attachment(
+            content, maintype="application", subtype=subtype, filename=file_name
+        )
     return message
 
 
