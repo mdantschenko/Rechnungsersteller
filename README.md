@@ -65,3 +65,7 @@ uv run pytest
 Vor jedem Commit läuft die Kette aus
 [.pre-commit-config.yaml](.pre-commit-config.yaml): pytest, black, ruff,
 radon, skylos, complexipy, pydeps und pyright.
+
+## Lizenz
+
+MIT — siehe [LICENSE](LICENSE).
