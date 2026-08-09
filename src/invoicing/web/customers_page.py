@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, time, timedelta
+from datetime import date, time
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -13,7 +13,7 @@ from starlette.responses import RedirectResponse, Response
 from invoicing.domain.billing_period import BillingCycle
 from invoicing.domain.columns import TotalRule, ValueKind, ValueSource
 from invoicing.domain.money import parse_user_amount
-from invoicing.scheduling import materialise_series
+from invoicing.scheduling import materialise_series, planning_horizon
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -28,6 +28,7 @@ from invoicing.storage.models import (
 )
 from invoicing.web.earnings import monthly_earnings
 from invoicing.web.page import (
+    customer_of,
     database,
     month_name,
     notice_redirect,
@@ -36,6 +37,8 @@ from invoicing.web.page import (
 )
 
 router = APIRouter()
+
+DEFAULT_UNIT_PRICE = Decimal("30.00")
 
 
 @router.get("/kunden")
@@ -72,7 +75,7 @@ def add_customer(
     session.add(customer)
     session.flush()
     session.add(
-        BillingTemplate(customer_id=customer.id or 0, unit_price=Decimal("30.00"))
+        BillingTemplate(customer_id=customer.id or 0, unit_price=DEFAULT_UNIT_PRICE)
     )
     return RedirectResponse(f"/kunden/{customer.id}", status_code=303)
 
@@ -81,7 +84,7 @@ def add_customer(
 def customer_detail(
     customer_id: int, request: Request, session: Session = Depends(database)
 ) -> Response:
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     earnings_rows, earnings_total = monthly_earnings(session, customer)
     return templates.TemplateResponse(
         request,
@@ -199,7 +202,7 @@ def delete_customer(
     customer_id: int, request: Request, session: Session = Depends(database)
 ) -> Response:
     """Remove a customer for good — unless invoices depend on them."""
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     has_invoices = session.exec(
         select(IssuedInvoice).where(IssuedInvoice.customer_id == customer_id)
     ).first()
@@ -247,7 +250,7 @@ def save_customer(
     reminder_text: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     customer.name = name
     customer.street = street
     customer.city = city
@@ -391,7 +394,7 @@ def add_series(
 def _remember_reminder(session: Session, customer_id: int, reminder_at: str) -> None:
     """The reminder time lives on the customer: one wake-up call per pupil,
     however many series they have."""
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     customer.reminder_at = time.fromisoformat(reminder_at) if reminder_at else None
     session.add(customer)
 
@@ -433,8 +436,7 @@ def change_series(
         session.delete(lesson)
     session.flush()
 
-    horizon = today + timedelta(days=settings_of(session).lesson_horizon_days)
-    materialise_series(session, until=horizon)
+    materialise_series(session, until=planning_horizon(settings_of(session), today))
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
@@ -449,19 +451,12 @@ def stop_series(
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
-def _customer(session: Session, customer_id: int) -> Customer:
-    customer = session.get(Customer, customer_id)
-    if customer is None:
-        raise ValueError(f"no customer with id {customer_id}")
-    return customer
-
-
 def _terms(session: Session, customer_id: int) -> BillingTemplate:
     terms = session.exec(
         select(BillingTemplate).where(BillingTemplate.customer_id == customer_id)
     ).first()
     if terms is None:
-        terms = BillingTemplate(customer_id=customer_id, unit_price=Decimal("30.00"))
+        terms = BillingTemplate(customer_id=customer_id, unit_price=DEFAULT_UNIT_PRICE)
         session.add(terms)
         session.flush()
     return terms

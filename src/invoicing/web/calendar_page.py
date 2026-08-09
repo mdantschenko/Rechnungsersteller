@@ -20,18 +20,23 @@ from sqlmodel import Session, col, select
 from starlette.responses import Response
 
 from invoicing import alarms, feiertage
-from invoicing.billing import stored_columns, typed_values
+from invoicing.billing import priced_columns
 from invoicing.domain.columns import ValueSource
 from invoicing.domain.money import format_euro, format_quantity
-from invoicing.scheduling import materialise_series
+from invoicing.scheduling import materialise_series, planning_horizon
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
-    CustomerStatus,
     Lesson,
     LessonStatus,
 )
-from invoicing.web.page import database, series_labels, settings_of, templates
+from invoicing.web.page import (
+    active_customers,
+    database,
+    series_labels,
+    settings_of,
+    templates,
+)
 
 router = APIRouter()
 
@@ -85,12 +90,12 @@ def a_week(
 
 
 def _week_page(request: Request, session: Session, on: date) -> Response:
+    today = date.today()
     monday = on - timedelta(days=on.weekday())
     sunday = monday + timedelta(days=6)
-    materialise_series(session, until=max(sunday, _horizon_end(session)))
+    horizon = planning_horizon(settings_of(session), today)
+    materialise_series(session, until=max(sunday, horizon))
     session.flush()
-
-    today = date.today()
     lessons = _lessons_between(session, monday, sunday)
     public, school = _holiday_notes(session, monday, sunday)
     names = _customer_names(session)
@@ -145,7 +150,7 @@ def a_day(on: date, request: Request, session: Session = Depends(database)) -> R
             "places": _lesson_places(session),
             "extras": _lesson_extras(session, lessons),
             "series": series_labels(session),
-            "customers": _active_customers(session),
+            "customers": active_customers(session),
             "holiday": public.get(on),
             "vacations": school.get(on, []),
             "colors": feiertage.STATE_COLORS,
@@ -164,12 +169,12 @@ def _week_heading(monday: date, sunday: date) -> str:
 
 
 def _month_page(request: Request, session: Session, year: int, month: int) -> Response:
+    today = date.today()
     first_of_month = date(year, month, 1)
     weeks = Calendar(WEEK_STARTS_ON_MONDAY).monthdatescalendar(year, month)
-    materialise_series(session, until=max(weeks[-1][-1], _horizon_end(session)))
+    horizon = planning_horizon(settings_of(session), today)
+    materialise_series(session, until=max(weeks[-1][-1], horizon))
     session.flush()
-
-    today = date.today()
     lessons = _lessons_between(session, weeks[0][0], weeks[-1][-1])
     public, school = _holiday_notes(session, weeks[0][0], weeks[-1][-1])
     names = _customer_names(session)
@@ -227,11 +232,7 @@ def _summary(lessons: tuple[Lesson, ...], names: dict[int, str]) -> str:
     states = {"done": "erledigt", "cancelled": "ausgefallen"}
     pieces = []
     for lesson in lessons:
-        clock = (
-            f"{lesson.starts_at.hour:02d}:{lesson.starts_at.minute:02d} "
-            if lesson.starts_at
-            else ""
-        )
+        clock = f"{lesson.starts_at:%H:%M} " if lesson.starts_at else ""
         state = states.get(lesson.status.value)
         extra = f", {state}" if state else ""
         pieces.append(
@@ -288,19 +289,10 @@ def _open_lessons_before(session: Session, day: date) -> list[Lesson]:
     return list(session.exec(statement).all())
 
 
-def _active_customers(session: Session) -> list[Customer]:
-    statement = (
-        select(Customer)
-        .where(Customer.status == CustomerStatus.ACTIVE)
-        .order_by(col(Customer.name))
-    )
-    return list(session.exec(statement).all())
-
-
 def _customer_names(session: Session) -> dict[int, str]:
     """The pupil's name where one is set; the calendar is about the child."""
     return {
-        customer.id or 0: customer.student_name or customer.name
+        customer.id or 0: customer.pupil_name
         for customer in session.exec(select(Customer)).all()
     }
 
@@ -325,38 +317,27 @@ def _lesson_extras(
         terms = terms_map.get(lesson.customer_id)
         if terms is None:
             continue
-        columns = stored_columns(terms)
-        if not columns:
+        shares = priced_columns(terms, lesson)
+        if not shares:
             continue
-        kinds = {column.label: column.kind for column in columns}
-        values = typed_values(kinds, lesson.column_values)
-        entries: list[dict[str, object]] = []
-        for column in columns:
-            value = column.value_for(values)
-            contribution = column.contribution(value, lesson.quantity)
-            entries.append(
-                {
-                    "label": column.label,
-                    "active": value is not None,
-                    "amount": format_euro(contribution) if contribution > 0 else "",
-                    "toggleable": column.source is ValueSource.PER_LESSON,
-                }
-            )
-        found[lesson.id or 0] = entries
+        found[lesson.id or 0] = [
+            {
+                "label": column.label,
+                "active": value is not None,
+                "amount": format_euro(contribution) if contribution > 0 else "",
+                "toggleable": column.source is ValueSource.PER_LESSON,
+            }
+            for column, value, contribution in shares
+        ]
     return found
 
 
 def _lesson_places(session: Session) -> dict[int, str]:
     """What to print under the name: the lesson address, or Online."""
-    places: dict[int, str] = {}
-    for customer in session.exec(select(Customer)).all():
-        if customer.online:
-            places[customer.id or 0] = "Online"
-        else:
-            places[customer.id or 0] = customer.lesson_address or (
-                f"{customer.street}, {customer.city}"
-            )
-    return places
+    return {
+        customer.id or 0: customer.lesson_place
+        for customer in session.exec(select(Customer)).all()
+    }
 
 
 def _weekday_names() -> list[str]:
@@ -365,7 +346,3 @@ def _weekday_names() -> list[str]:
         format_date(monday + timedelta(days=offset), "EEEEEE", locale=GERMAN)
         for offset in range(7)
     ]
-
-
-def _horizon_end(session: Session) -> date:
-    return date.today() + timedelta(days=settings_of(session).lesson_horizon_days)

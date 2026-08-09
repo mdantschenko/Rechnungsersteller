@@ -8,15 +8,14 @@ renderers produce the same page.
 from __future__ import annotations
 
 import base64
-from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from invoicing.domain.invoice import Invoice
-from invoicing.domain.money import format_euro, format_quantity
 from invoicing.pdf.renderers import AUTOMATIC, select_renderer
+from invoicing.templating import install_german_filters
 
 DOCUMENTS = Path(__file__).parent / "documents"
 FONTS = Path(__file__).parent / "fonts"
@@ -45,10 +44,6 @@ def write_pdf(invoice: Invoice, destination: Path, renderer: str = AUTOMATIC) ->
     return destination
 
 
-def _german_date(day: date) -> str:
-    return f"{day:%d.%m.%Y}"
-
-
 @lru_cache(maxsize=1)
 def _font_face_rules() -> str:
     rules = []
@@ -70,7 +65,5 @@ def _jinja_environment() -> Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    environment.filters["euro"] = format_euro
-    environment.filters["quantity"] = format_quantity
-    environment.filters["german_date"] = _german_date
+    install_german_filters(environment)
     return environment

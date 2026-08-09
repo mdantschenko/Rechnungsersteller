@@ -19,6 +19,7 @@ from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
 from invoicing.billing import BillingRun, draft_for, manual_draft, open_runs, release
+from invoicing.domain.dates import german_date
 from invoicing.domain.money import format_euro
 from invoicing.pdf import preview
 from invoicing.pdf.invoice_document import to_html, write_pdf
@@ -32,8 +33,9 @@ from invoicing.storage.models import (
 )
 from invoicing.web.earnings import monthly_earnings
 from invoicing.web.page import (
+    active_customers,
+    customer_of,
     database,
-    german_date,
     month_name,
     notice_redirect,
     settings_of,
@@ -45,22 +47,26 @@ router = APIRouter()
 
 @router.get("/rechnungen")
 def invoice_list(request: Request, session: Session = Depends(database)) -> Response:
+    today = date.today()
     everyone = session.exec(select(Customer)).all()
     issued = session.exec(
         select(IssuedInvoice).order_by(col(IssuedInvoice.number).desc())
     ).all()
+    unpaid = [record for record in issued if record.paid_on is None]
+    signature = issuer_name(session)
     earnings_rows, earnings_total = monthly_earnings(session)
     return templates.TemplateResponse(
         request,
         "invoices.html",
         {
-            "today": date.today(),
-            "due": due_runs(session, date.today()),
-            "issued": [record for record in issued if record.paid_on is None],
+            "today": today,
+            "due": due_runs(session, today),
+            "issued": unpaid,
             "paid": [record for record in issued if record.paid_on is not None],
             "reminders": _reminder_days(session),
             "mail_bodies": {
-                record.number: invoice_mail_body(session, record) for record in issued
+                record.number: invoice_mail_body(session, record, signature)
+                for record in unpaid
             },
             "names": {customer.id or 0: customer.name for customer in everyone},
             "deliveries": {
@@ -70,10 +76,10 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
                 customer.id or 0: _whatsapp_number(customer.phone)
                 for customer in everyone
             },
-            "customers": _active_by_name(everyone),
+            "customers": active_customers(session),
             "earnings": earnings_rows,
             "earnings_total": earnings_total,
-            "overdue": _overdue_days(issued, settings_of(session).payment_days),
+            "overdue": _overdue_days(unpaid, settings_of(session).payment_days),
             "paid_years": _paid_years(issued),
         },
     )
@@ -89,13 +95,10 @@ def _reminder_days(session: Session) -> dict[int, list[date]]:
     return days
 
 
-def _overdue_days(issued: Sequence[IssuedInvoice], due_days: int) -> dict[int, int]:
+def _overdue_days(unpaid: Sequence[IssuedInvoice], due_days: int) -> dict[int, int]:
     """Days past the due date, per unpaid invoice number."""
-    late = {
-        record.number: (date.today() - record.issued_on).days - due_days
-        for record in issued
-        if record.paid_on is None
-    }
+    today = date.today()
+    late = {record.number: record.days_overdue(due_days, today) for record in unpaid}
     return {number: days for number, days in late.items() if days > 0}
 
 
@@ -104,27 +107,20 @@ def _paid_years(issued: Sequence[IssuedInvoice]) -> list[int]:
     return sorted(years, reverse=True)
 
 
-def _active_by_name(everyone: Sequence[Customer]) -> list[Customer]:
-    active = [
-        customer for customer in everyone if customer.status is CustomerStatus.ACTIVE
-    ]
-    return sorted(active, key=lambda customer: customer.name)
-
-
 @router.get("/rechnungen/finanzamt/{year}.zip")
 def tax_office_zip(year: int, session: Session = Depends(database)) -> Response:
     """Every invoice whose payment arrived in ``year``, as one ZIP."""
-    records = [
-        record
-        for record in session.exec(select(IssuedInvoice)).all()
-        if record.paid_on is not None and record.paid_on.year == year
-    ]
+    records = session.exec(
+        select(IssuedInvoice)
+        .where(col(IssuedInvoice.paid_on) >= date(year, 1, 1))
+        .where(col(IssuedInvoice.paid_on) <= date(year, 12, 31))
+    ).all()
     if not records:
         raise HTTPException(
             status_code=404,
             detail=f"keine bezahlte Rechnung mit Zahlungseingang in {year}",
         )
-    return _zip_response(session, records, f"Rechnungen-{year}.zip")
+    return _zip_response(session, list(records), f"Rechnungen-{year}.zip")
 
 
 @router.get("/kunden/{customer_id}/rechnungen.zip")
@@ -135,18 +131,17 @@ def customer_zip(customer_id: int, session: Session = Depends(database)) -> Resp
     ).all()
     if not records:
         raise HTTPException(status_code=404, detail="keine Rechnung für diesen Kunden")
-    name = _customer(session, customer_id).name
+    name = customer_of(session, customer_id).name
     return _zip_response(session, list(records), f"Rechnungen {name}.zip")
 
 
 def _zip_response(
     session: Session, records: list[IssuedInvoice], file_name: str
 ) -> Response:
-    names = customer_names(session)
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for record in records:
-            pdf = find_pdf(session, record, names.get(record.customer_id, ""))
+            pdf = find_pdf(session, record, record.customer.name)
             if pdf is None:
                 continue
             archive.write(pdf, arcname=pdf.name)
@@ -170,7 +165,7 @@ def release_manual_invoice(
         return notice_redirect(
             request, "/rechnungen", "Das „Bis“-Datum liegt vor dem „Von“-Datum."
         )
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     run = manual_draft(session, customer, first_day, last_day, date.today())
     if run.is_blocked:
         return notice_redirect(
@@ -233,8 +228,7 @@ def _stored_pdf(session: Session, number: int) -> Path | None:
     ).first()
     if record is None:
         return None
-    name = customer_names(session)[record.customer_id]
-    return find_pdf(session, record, name)
+    return find_pdf(session, record, record.customer.name)
 
 
 @router.get("/rechnungen/vorschau-ansicht")
@@ -242,7 +236,6 @@ def view_due_preview(
     customer_id: int,
     closing_day: date,
     request: Request,
-    session: Session = Depends(database),
 ) -> Response:
     return templates.TemplateResponse(
         request,
@@ -268,7 +261,6 @@ def view_manual_preview(
     first_day: date,
     last_day: date,
     request: Request,
-    session: Session = Depends(database),
 ) -> Response:
     return templates.TemplateResponse(
         request,
@@ -293,7 +285,9 @@ def preview_due_invoice(
     customer_id: int, closing_day: date, session: Session = Depends(database)
 ) -> Response:
     """The draft as PDF, exactly as releasing would print it — nothing is written."""
-    run = draft_for(session, _customer(session, customer_id), closing_day, date.today())
+    run = draft_for(
+        session, customer_of(session, customer_id), closing_day, date.today()
+    )
     return _draft_pdf(run)
 
 
@@ -304,7 +298,7 @@ def preview_manual_invoice(
     last_day: date,
     session: Session = Depends(database),
 ) -> Response:
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     run = manual_draft(session, customer, first_day, last_day, date.today())
     return _draft_pdf(run)
 
@@ -314,7 +308,9 @@ def preview_due_html(
     customer_id: int, closing_day: date, session: Session = Depends(database)
 ) -> Response:
     """The same draft as HTML: the phone can zoom it with two fingers."""
-    run = draft_for(session, _customer(session, customer_id), closing_day, date.today())
+    run = draft_for(
+        session, customer_of(session, customer_id), closing_day, date.today()
+    )
     return _draft_html(run)
 
 
@@ -325,7 +321,7 @@ def preview_manual_html(
     last_day: date,
     session: Session = Depends(database),
 ) -> Response:
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     run = manual_draft(session, customer, first_day, last_day, date.today())
     return _draft_html(run)
 
@@ -363,7 +359,7 @@ def release_invoice(
     closing_day: date = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    customer = _customer(session, customer_id)
+    customer = customer_of(session, customer_id)
     run = draft_for(session, customer, closing_day, date.today())
     released = release(session, run)
     session.flush()
@@ -432,8 +428,13 @@ def issuer_name(session: Session) -> str:
     return issuer.name if issuer else ""
 
 
-def invoice_mail_body(session: Session, record: IssuedInvoice) -> str:
-    signature = issuer_name(session)
+def invoice_mail_body(
+    session: Session, record: IssuedInvoice, signature: str | None = None
+) -> str:
+    """The letter accompanying the invoice; ``signature`` may be preloaded
+    so a page listing many invoices asks for the sender only once."""
+    if signature is None:
+        signature = issuer_name(session)
     customer = session.get(Customer, record.customer_id)
     if customer is not None and customer.mail_text:
         return _filled_in(customer.mail_text, record, customer, signature)
@@ -461,7 +462,7 @@ def _filled_in(
             f"{german_date(record.period_printed_to)}"
         ),
         "NAME": customer.name,
-        "SCHUELER": customer.student_name or customer.name,
+        "SCHUELER": customer.pupil_name,
         "ABSENDER": signature,
     }
     for key, value in values.items():
@@ -607,20 +608,6 @@ def _whatsapp_number(phone: str | None) -> str:
     if digits.startswith("0"):
         return f"49{digits[1:]}"
     return digits
-
-
-def _customer(session: Session, customer_id: int) -> Customer:
-    customer = session.get(Customer, customer_id)
-    if customer is None:
-        raise ValueError(f"no customer with id {customer_id}")
-    return customer
-
-
-def customer_names(session: Session) -> dict[int, str]:
-    return {
-        customer.id or 0: customer.name
-        for customer in session.exec(select(Customer)).all()
-    }
 
 
 def pdf_path(session: Session, record: IssuedInvoice, customer_name: str) -> Path:

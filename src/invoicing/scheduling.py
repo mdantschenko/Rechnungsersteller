@@ -7,12 +7,17 @@ rule says when a lesson should happen; the row says what actually did.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from dateutil.rrule import rrulestr
 from sqlmodel import Session, col, select
 
-from invoicing.storage.models import Lesson, LessonSeries, LessonStatus
+from invoicing.storage.models import AppSettings, Lesson, LessonSeries, LessonStatus
+
+
+def planning_horizon(settings: AppSettings, today: date) -> date:
+    """How far ahead the series are written out as individual lessons."""
+    return today + timedelta(days=settings.lesson_horizon_days)
 
 
 def materialise_series(session: Session, until: date) -> tuple[Lesson, ...]:
