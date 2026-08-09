@@ -1,0 +1,34 @@
+{# The one rendering of the monthly earnings, shared by the invoices page
+   and the customer page so their figures and labels can never drift apart. #}
+{% macro earnings_block(earnings, earnings_total) %}
+<div class="block">
+  <div class="simple-list">
+    <ul>
+      {% for row in earnings %}
+      <li>
+        <span>{{ row.label }}</span>
+        <span class="amount">
+          {{ row.received | euro }}{% if row.outstanding %} (+{{ row.outstanding | euro }} noch zu erwarten){% endif %}{% if row.uninvoiced %} (+{{ row.uninvoiced | euro }} ohne Rechnung){% endif %}
+        </span>
+      </li>
+      {% endfor %}
+      <li>
+        <span><strong>Gesamt erhalten</strong></span>
+        <span class="amount"><strong>{{ earnings_total.received | euro }}</strong></span>
+      </li>
+      {% if earnings_total.outstanding %}
+      <li>
+        <span>Noch zu erwarten</span>
+        <span class="amount">{{ earnings_total.outstanding | euro }}</span>
+      </li>
+      {% endif %}
+      {% if earnings_total.uninvoiced %}
+      <li>
+        <span><strong>Gesamt inkl. ohne Rechnung</strong></span>
+        <span class="amount"><strong>{{ earnings_total.total | euro }}</strong></span>
+      </li>
+      {% endif %}
+    </ul>
+  </div>
+</div>
+{% endmacro %}

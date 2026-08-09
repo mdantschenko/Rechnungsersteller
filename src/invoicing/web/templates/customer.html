@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "earnings_block.html" import earnings_block %}
 {% set tab = "customers" %}
 {% set rhythms = [
   ("RRULE:FREQ=WEEKLY;BYDAY=MO", "jeden Montag"),
@@ -48,7 +49,7 @@
           <li><span>{NUMMER}</span><span>118</span></li>
           <li><span>{ZEITRAUM}</span><span>01.10.2026 bis 31.10.2026</span></li>
           <li><span>{NAME}</span><span>{{ customer.name }}</span></li>
-          <li><span>{SCHUELER}</span><span>{{ customer.student_name or customer.name }}</span></li>
+          <li><span>{SCHUELER}</span><span>{{ customer.pupil_name }}</span></li>
           <li><span>{ABSENDER}</span><span>dein Name aus den Einstellungen</span></li>
           <li><span>{ANZAHL}</span><span>2 — nur im Erinnerungstext</span></li>
         </ul>
@@ -199,7 +200,7 @@
         </div>
         <div class="reminder-meta">
           <span>ab {{ entry.starts_on | german_date }}</span>
-          {% if entry.starts_at %}<span>{{ "%02d:%02d"|format(entry.starts_at.hour, entry.starts_at.minute) }}</span>{% endif %}
+          {% if entry.starts_at %}<span>{{ entry.starts_at | clock }}</span>{% endif %}
           <span>{{ entry.quantity | quantity }} h</span>
           <span>{{ 'läuft' if entry.active else 'beendet' }}</span>
         </div>
@@ -216,10 +217,10 @@
               </select>
             </label>
             <label>Uhrzeit<input type="time" name="starts_at"
-              value="{% if entry.starts_at %}{{ '%02d:%02d'|format(entry.starts_at.hour, entry.starts_at.minute) }}{% endif %}"></label>
+              value="{{ entry.starts_at | clock if entry.starts_at }}"></label>
             <label>Erinnerung am Termintag um (optional, sonst gilt die Einstellung)
               <input type="time" name="reminder_at"
-                value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}"></label>
+                value="{{ customer.reminder_at | clock if customer.reminder_at }}"></label>
             <label>Stunden<input type="number" name="quantity" value="{{ entry.quantity }}"
               step="0.25" min="0.25" max="12" required></label>
             <button class="button button-small" type="submit">Speichern — gilt ab heute</button>
@@ -251,7 +252,7 @@
     <label>Uhrzeit<input type="time" name="starts_at"></label>
     <label>Erinnerung am Termintag um (optional, sonst gilt die Einstellung)
       <input type="time" name="reminder_at"
-        value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}"></label>
+        value="{{ customer.reminder_at | clock if customer.reminder_at }}"></label>
     <label>Stunden<input type="number" name="quantity" value="1" step="0.25" min="0.25" max="12" required></label>
     <button class="button button-fill" type="submit">Serie anlegen</button>
   </form>
@@ -287,30 +288,7 @@
 
 {% if earnings %}
 <div class="section-title">Einnahmen</div>
-<div class="block">
-  <div class="simple-list">
-    <ul>
-      {% for row in earnings %}
-      <li>
-        <span>{{ row.label }}</span>
-        <span class="amount">
-          {{ row.received | euro }}{% if row.outstanding %} (+{{ row.outstanding | euro }} noch zu erwarten){% endif %}{% if row.uninvoiced %} (+{{ row.uninvoiced | euro }} ohne Rechnung){% endif %}
-        </span>
-      </li>
-      {% endfor %}
-      <li>
-        <span><strong>Gesamt erhalten</strong></span>
-        <span class="amount"><strong>{{ earnings_total.total | euro }}</strong></span>
-      </li>
-      {% if earnings_total.outstanding %}
-      <li>
-        <span>Noch zu erwarten</span>
-        <span class="amount">{{ earnings_total.outstanding | euro }}</span>
-      </li>
-      {% endif %}
-    </ul>
-  </div>
-</div>
+{{ earnings_block(earnings, earnings_total) }}
 {% endif %}
 
 <div class="section-title">Statistik</div>
@@ -368,7 +346,7 @@
         {% for lesson in entries %}
         <li>
           <span>{{ lesson.taught_on | german_date }}
-            {% if lesson.starts_at %}· {{ "%02d:%02d"|format(lesson.starts_at.hour, lesson.starts_at.minute) }}{% endif %}
+            {% if lesson.starts_at %}· {{ lesson.starts_at | clock }}{% endif %}
             · {{ lesson.quantity | quantity }} h</span>
           <span class="{{ 'warn' if lesson.status.value == 'cancelled' }}">
             {{ 'ausgefallen' if lesson.status.value == 'cancelled' else 'stattgefunden' }}
