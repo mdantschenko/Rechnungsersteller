@@ -40,12 +40,18 @@ def month_name(day: date) -> str:
     return format_date(day, "LLLL", locale=GERMAN)
 
 
+def _static_version() -> int:
+    """Changes whenever a static file changes, so phones drop stale caches."""
+    return max(int(entry.stat().st_mtime) for entry in STATIC_FOLDER.iterdir())
+
+
 templates = Jinja2Templates(directory=TEMPLATES_FOLDER)
 templates.env.filters["euro"] = format_euro
 templates.env.filters["quantity"] = format_quantity
 templates.env.filters["german_date"] = german_date
 templates.env.filters["short_date"] = short_date
 templates.env.filters["long_weekday"] = long_weekday
+templates.env.globals["static_version"] = _static_version()
 
 
 def database(request: Request) -> Iterator[Session]:

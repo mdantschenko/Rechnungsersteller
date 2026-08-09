@@ -12,7 +12,7 @@
 {% endblock %}
 
 {% block content %}
-<script src="/static/share-pdf.js"></script>
+<script src="/static/share-pdf.js?v={{ static_version }}"></script>
 <div class="pdf-shell" id="shell" data-kind="{{ kind }}" data-pdf="{{ pdf_url }}?ansicht=1">
   <div class="pdf-zoom" id="zoom">
     {% if kind == 'pdf' %}
