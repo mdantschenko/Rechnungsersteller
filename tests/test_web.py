@@ -615,6 +615,26 @@ def test_the_reminder_letter_can_be_the_customers_own(
     assert sent["body"] == "Rechnung 115: 1. Mahnung über 33,33\xa0€."
 
 
+def test_exam_grades_and_stats_live_on_the_customer_page(client: TestClient) -> None:
+    customer_id = _add_customer(client)
+    _set_terms(client, customer_id)
+    _add_lesson(client, customer_id, date(2026, 5, 20))
+    client.post("/termine/1/erledigt")
+    _add_lesson(client, customer_id, date(2026, 5, 27))
+    client.post("/termine/2/ausgefallen")
+    client.post(
+        f"/kunden/{customer_id}/klausur",
+        data={"written_on": "2026-06-01", "label": "Mathe Klausur Q1", "grade": "2+"},
+    )
+
+    page = client.get(f"/kunden/{customer_id}").text
+
+    assert "Mathe Klausur Q1" in page
+    assert "2+" in page
+    assert "Gehaltene Stunden" in page
+    assert "1 (50 %)" in page
+
+
 def test_a_customer_without_invoices_can_be_deleted(
     client: TestClient, location: Path
 ) -> None:

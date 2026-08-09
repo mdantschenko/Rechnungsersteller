@@ -313,6 +313,50 @@
 </div>
 {% endif %}
 
+<div class="section-title">Statistik</div>
+<div class="block">
+  <div class="simple-list">
+    <ul>
+      <li><span>Gehaltene Stunden</span><span class="amount">{{ stats.taught_hours | quantity }} h</span></li>
+      <li><span>Termine stattgefunden</span><span class="amount">{{ stats.taught_count }}</span></li>
+      <li><span>Ausgefallen</span><span class="amount">{{ stats.cancelled_count }} ({{ stats.cancelled_share }} %)</span></li>
+    </ul>
+  </div>
+</div>
+
+<div class="section-title">Klausuren</div>
+{% if grades %}
+<div class="block">
+  <div class="simple-list">
+    <ul>
+      {% for exam in grades %}
+      <li>
+        <span>{{ exam.written_on | german_date }} · {{ exam.label }}</span>
+        <span>
+          <strong>{{ exam.grade }}</strong>
+          <form method="post" action="/kunden/{{ customer.id }}/klausur/{{ exam.id }}/entfernen"
+                style="display: inline">
+            <button class="button button-small color-red" type="submit">×</button>
+          </form>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+<div class="block">
+  <details class="reminder-actions">
+    <summary>Klausur eintragen</summary>
+    <form method="post" action="/kunden/{{ customer.id }}/klausur" class="stack" style="margin-top: 0.5rem">
+      <label>Datum<input type="date" name="written_on" required></label>
+      <label>Bezeichnung<input type="text" name="label" placeholder="Mathe Klausur Q1" required></label>
+      <label>Note<input type="text" name="grade" placeholder="2+" required></label>
+      <button class="button button-fill" type="submit">Eintragen</button>
+    </form>
+  </details>
+</div>
+
 {% if history %}
 <div class="section-title">Termine</div>
 {% for label, entries in history %}

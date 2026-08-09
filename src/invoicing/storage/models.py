@@ -325,6 +325,18 @@ class AppSettings(SQLModel, table=True):
     last_daily_round: date | None = None
 
 
+class ExamGrade(SQLModel, table=True):
+    """One exam a pupil wrote, and what came of it."""
+
+    __tablename__ = "exam_grade"  # type: ignore[assignment]
+
+    id: int | None = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id", index=True)
+    written_on: date
+    label: str
+    grade: str
+
+
 class PushSubscription(SQLModel, table=True):
     """One device that asked to be woken before its lessons."""
 

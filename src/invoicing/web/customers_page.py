@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, time, timedelta
 from decimal import Decimal
 
@@ -17,6 +18,7 @@ from invoicing.storage.models import (
     BillingTemplate,
     Customer,
     CustomerStatus,
+    ExamGrade,
     InvoiceDelivery,
     IssuedInvoice,
     Lesson,
@@ -86,6 +88,12 @@ def customer_detail(
         "customer.html",
         {
             "customer": customer,
+            "grades": session.exec(
+                select(ExamGrade)
+                .where(ExamGrade.customer_id == customer_id)
+                .order_by(col(ExamGrade.written_on).desc())
+            ).all(),
+            "stats": _lesson_stats(session, customer_id),
             "terms": _terms(session, customer_id),
             "series": session.exec(
                 select(LessonSeries).where(LessonSeries.customer_id == customer_id)
@@ -104,6 +112,66 @@ def customer_detail(
             "rules": list(TotalRule),
         },
     )
+
+
+@dataclass(frozen=True, slots=True)
+class LessonStats:
+    """What the past lessons of one pupil add up to."""
+
+    taught_hours: Decimal
+    taught_count: int
+    cancelled_count: int
+
+    @property
+    def cancelled_share(self) -> int:
+        answered = self.taught_count + self.cancelled_count
+        if not answered:
+            return 0
+        return round(100 * self.cancelled_count / answered)
+
+
+def _lesson_stats(session: Session, customer_id: int) -> LessonStats:
+    lessons = session.exec(
+        select(Lesson).where(Lesson.customer_id == customer_id)
+    ).all()
+    taught = [lesson for lesson in lessons if lesson.status is LessonStatus.DONE]
+    cancelled = [
+        lesson for lesson in lessons if lesson.status is LessonStatus.CANCELLED
+    ]
+    return LessonStats(
+        taught_hours=sum((lesson.quantity for lesson in taught), Decimal("0")),
+        taught_count=len(taught),
+        cancelled_count=len(cancelled),
+    )
+
+
+@router.post("/kunden/{customer_id}/klausur")
+def add_exam_grade(
+    customer_id: int,
+    written_on: date = Form(...),
+    label: str = Form(...),
+    grade: str = Form(...),
+    session: Session = Depends(database),
+) -> Response:
+    session.add(
+        ExamGrade(
+            customer_id=customer_id,
+            written_on=written_on,
+            label=label.strip(),
+            grade=grade.strip(),
+        )
+    )
+    return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
+
+
+@router.post("/kunden/{customer_id}/klausur/{grade_id}/entfernen")
+def remove_exam_grade(
+    customer_id: int, grade_id: int, session: Session = Depends(database)
+) -> Response:
+    stored = session.get(ExamGrade, grade_id)
+    if stored is not None and stored.customer_id == customer_id:
+        session.delete(stored)
+    return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
 def _lesson_history(
