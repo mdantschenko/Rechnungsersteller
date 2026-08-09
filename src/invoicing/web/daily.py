@@ -8,8 +8,14 @@ an invoice that crossed its due date overnight announces itself once.
 
 from __future__ import annotations
 
+import io
+import secrets
+import sqlite3
 from datetime import date, datetime, time
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+import pyzipper
 from sqlmodel import Session, select
 
 from invoicing import mail
@@ -45,6 +51,8 @@ def morning_round(
         f"Nr. {record.number} ({name}) ist seit heute überfällig"
         for record, name in _newly_overdue(session, settings, now.date())
     )
+    if _mail_weekly_backup(session, settings, now.date()):
+        lines.append("Backup der Datenbank ans Postfach gemailt")
     if lines:
         deliver(
             {
@@ -95,6 +103,60 @@ def _send_due_invoices(
         session.add(released.record)
         sent += 1
     return sent, waiting
+
+
+def _mail_weekly_backup(session: Session, settings: AppSettings, today: date) -> bool:
+    """Mail the sealed database home every Monday; losing the server must
+    never mean losing the books."""
+    if today.weekday() != 0 or settings.last_backup_mailed == today:
+        return False
+    if not mail.is_configured(settings):
+        return False
+    database = Path(str(session.get_bind().engine.url.database or ""))
+    if not database.exists():
+        return False
+    settings.last_backup_mailed = today
+    if not settings.backup_passphrase:
+        settings.backup_passphrase = secrets.token_urlsafe(12)
+    session.add(settings)
+    try:
+        mail.send_attachment(
+            settings,
+            to=settings.smtp_from or settings.smtp_user or "",
+            subject=f"Datenbank-Backup {today:%d.%m.%Y}",
+            body=(
+                "Guten Tag,\n\n"
+                "anbei die wöchentliche Kopie der Rechnungsdatenbank. Entpacken "
+                "mit dem Backup-Passwort aus den Einstellungen.\n"
+            ),
+            content=_sealed_copy(database, settings.backup_passphrase),
+            file_name=f"invoicing-{today}.zip",
+            subtype="zip",
+        )
+    except mail.MailError:
+        return False
+    return True
+
+
+def _sealed_copy(database: Path, passphrase: str) -> bytes:
+    with TemporaryDirectory() as folder:
+        snapshot = Path(folder) / database.name
+        source = sqlite3.connect(database)
+        try:
+            copy = sqlite3.connect(snapshot)
+            try:
+                source.backup(copy)
+            finally:
+                copy.close()
+        finally:
+            source.close()
+        buffer = io.BytesIO()
+        with pyzipper.AESZipFile(
+            buffer, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES
+        ) as archive:
+            archive.setpassword(passphrase.encode())
+            archive.write(snapshot, arcname=database.name)
+        return buffer.getvalue()
 
 
 def _newly_overdue(

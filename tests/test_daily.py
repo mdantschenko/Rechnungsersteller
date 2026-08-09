@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import io
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+import pyzipper
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
@@ -99,6 +101,40 @@ def test_the_round_respects_the_clock_and_runs_once(
 
     morning_round(session, _settings(session), datetime(2026, 6, 16, 9, 0), rung.append)
     assert len(rung) == 1
+
+
+def test_monday_mails_a_sealed_backup(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parcels: dict[str, object] = {}
+
+    def capture(settings: object, **parts: object) -> None:
+        parcels.update(parts)
+
+    monkeypatch.setattr(mail, "send_attachment", capture)
+    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: None)
+    settings = _settings(session)
+
+    morning_round(session, settings, datetime(2026, 6, 15, 7, 30), lambda m: None)
+
+    assert str(parcels["file_name"]).endswith(".zip")
+    sealed = pyzipper.AESZipFile(io.BytesIO(bytes(parcels["content"])))  # type: ignore[arg-type]
+    sealed.setpassword((settings.backup_passphrase or "").encode())
+    assert sealed.read("invoicing.db")
+    assert settings.last_backup_mailed == date(2026, 6, 15)
+
+
+def test_other_days_mail_no_backup(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        mail, "send_attachment", lambda *a, **k: pytest.fail("Backup am Dienstag")
+    )
+    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: None)
+
+    morning_round(session, _settings(session), MORNING, lambda m: None)
+
+    assert _settings(session).last_backup_mailed is None
 
 
 def test_a_freshly_overdue_invoice_announces_itself(

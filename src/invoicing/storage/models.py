@@ -324,6 +324,10 @@ class AppSettings(SQLModel, table=True):
     """Whether the morning round mails due invoices out by itself."""
     last_daily_round: date | None = None
 
+    backup_passphrase: str | None = None
+    """Opens the weekly database backup that is mailed to the own mailbox."""
+    last_backup_mailed: date | None = None
+
 
 class ExamGrade(SQLModel, table=True):
     """One exam a pupil wrote, and what came of it."""

@@ -17,6 +17,7 @@ dependencies = [
     "python-dateutil",
     "python-multipart>=0.0.32",
     "pywebpush>=2.4.0",
+    "pyzipper>=0.4.0",
     "sqlmodel",
     "uvicorn>=0.52.0",
     "weasyprint",

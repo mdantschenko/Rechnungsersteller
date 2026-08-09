@@ -74,6 +74,43 @@ def send_pdf(
     _copy_into_sent(settings, message)
 
 
+def send_attachment(
+    settings: AppSettings,
+    to: str,
+    subject: str,
+    body: str,
+    content: bytes,
+    file_name: str,
+    subtype: str = "octet-stream",
+    sender_name: str = "",
+) -> None:
+    """Send raw bytes as an attachment, without a copy into the Sent folder.
+
+    Raises:
+        MailError: if the settings are incomplete or the server refuses.
+    """
+    if not is_configured(settings):
+        raise MailError(
+            "Der E-Mail-Versand ist noch nicht eingerichtet. Trage Server, "
+            "Benutzername und Passwort in den Einstellungen ein."
+        )
+    try:
+        message = build_message(
+            sender=from_header(
+                sender_name, settings.smtp_from or settings.smtp_user or ""
+            ),
+            to=to,
+            subject=subject,
+            body=body,
+            pdf_content=content,
+            file_name=file_name,
+            subtype=subtype,
+        )
+    except ValueError as error:
+        raise MailError("Die Empfängeradresse enthält unzulässige Zeichen.") from error
+    _deliver(settings, message)
+
+
 def send_text(
     settings: AppSettings, to: str, subject: str, body: str, sender_name: str = ""
 ) -> None:
@@ -109,16 +146,22 @@ def from_header(name: str, address: str) -> str:
 
 
 def build_message(
-    sender: str, to: str, subject: str, body: str, pdf_content: bytes, file_name: str
+    sender: str,
+    to: str,
+    subject: str,
+    body: str,
+    pdf_content: bytes,
+    file_name: str,
+    subtype: str = "pdf",
 ) -> EmailMessage:
-    """One plain-text message with the PDF attached."""
+    """One plain-text message with a single file attached."""
     message = EmailMessage()
     message["From"] = sender
     message["To"] = to
     message["Subject"] = subject
     message.set_content(body)
     message.add_attachment(
-        pdf_content, maintype="application", subtype="pdf", filename=file_name
+        pdf_content, maintype="application", subtype=subtype, filename=file_name
     )
     return message
 
