@@ -147,6 +147,23 @@
 })();
 </script>
 
+<div class="section-title">Automatik</div>
+<div class="block">
+  <form method="post" action="/einstellungen/automatik" class="stack">
+    <label class="check">
+      <input type="checkbox" name="auto_send_invoices" {{ 'checked' if settings.auto_send_invoices }}>
+      Fällige Rechnungen automatisch per E-Mail verschicken
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+  <p class="hint">
+    Ab 7 Uhr morgens verschickt der Server fällige Rechnungen an
+    E-Mail-Kunden von selbst und meldet aufs Handy: was rausging, was auf
+    dich wartet und was seit heute überfällig ist. WhatsApp- und
+    Papier-Rechnungen bleiben Handarbeit.
+  </p>
+</div>
+
 <div class="section-title">Feiertage und Ferien</div>
 <div class="block">
   <form method="post" action="/einstellungen/feiertage" class="stack">

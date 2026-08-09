@@ -26,6 +26,7 @@ from invoicing.storage.database import DEFAULT_LOCATION, open_database
 from invoicing.web import (
     calendar_page,
     customers_page,
+    daily,
     invoices_page,
     lessons_page,
     pwa,
@@ -91,12 +92,13 @@ async def _ring_forever(engine: Engine) -> None:
 def _ring_once(engine: Engine) -> None:
     with Session(engine) as session:
         settings = settings_of(session)
-        alarms.ring_due(
-            session,
-            settings,
-            datetime.now(),
-            lambda message: push.send_to_all(session, settings, message),
-        )
+        now = datetime.now()
+
+        def send(message: dict[str, str]) -> int:
+            return push.send_to_all(session, settings, message)
+
+        alarms.ring_due(session, settings, now, send)
+        daily.morning_round(session, settings, now, send)
         session.commit()
 
 

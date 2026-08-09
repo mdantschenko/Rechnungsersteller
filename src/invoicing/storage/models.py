@@ -320,6 +320,10 @@ class AppSettings(SQLModel, table=True):
     payment_days: int = 14
     """How many days after issuing a payment is due; later is overdue."""
 
+    auto_send_invoices: bool = False
+    """Whether the morning round mails due invoices out by itself."""
+    last_daily_round: date | None = None
+
 
 class PushSubscription(SQLModel, table=True):
     """One device that asked to be woken before its lessons."""

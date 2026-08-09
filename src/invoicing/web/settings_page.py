@@ -72,6 +72,18 @@ def save_holidays(
     )
 
 
+@router.post("/einstellungen/automatik")
+def save_automation(
+    request: Request,
+    auto_send_invoices: str = Form(""),
+    session: Session = Depends(database),
+) -> Response:
+    settings = settings_of(session)
+    settings.auto_send_invoices = bool(auto_send_invoices)
+    session.add(settings)
+    return notice_redirect(request, "/einstellungen", "Automatik gespeichert.")
+
+
 @router.post("/einstellungen/zahlungsziel")
 def save_payment_terms(
     request: Request,

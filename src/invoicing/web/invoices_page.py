@@ -55,7 +55,7 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
         "invoices.html",
         {
             "today": date.today(),
-            "due": _due_runs(session, date.today()),
+            "due": due_runs(session, date.today()),
             "issued": [record for record in issued if record.paid_on is None],
             "paid": [record for record in issued if record.paid_on is not None],
             "reminders": _reminder_days(session),
@@ -585,7 +585,7 @@ def invoice_pdf(
     )
 
 
-def _due_runs(session: Session, today: date) -> list[BillingRun]:
+def due_runs(session: Session, today: date) -> list[BillingRun]:
     active = (
         select(Customer)
         .where(Customer.status == CustomerStatus.ACTIVE)
