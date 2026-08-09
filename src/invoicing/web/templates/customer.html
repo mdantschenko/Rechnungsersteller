@@ -49,7 +49,7 @@
           <li><span>{ZEITRAUM}</span><span>01.10.2026 bis 31.10.2026</span></li>
           <li><span>{NAME}</span><span>{{ customer.name }}</span></li>
           <li><span>{SCHUELER}</span><span>{{ customer.student_name or customer.name }}</span></li>
-          <li><span>{ABSENDER}</span><span>dein Name aus „Mehr“</span></li>
+          <li><span>{ABSENDER}</span><span>dein Name aus den Einstellungen</span></li>
           <li><span>{ANZAHL}</span><span>2 — nur im Erinnerungstext</span></li>
         </ul>
       </div>
@@ -217,7 +217,7 @@
             </label>
             <label>Uhrzeit<input type="time" name="starts_at"
               value="{% if entry.starts_at %}{{ '%02d:%02d'|format(entry.starts_at.hour, entry.starts_at.minute) }}{% endif %}"></label>
-            <label>Erinnerung am Termintag um (optional, sonst gilt „Mehr“)
+            <label>Erinnerung am Termintag um (optional, sonst gilt die Einstellung)
               <input type="time" name="reminder_at"
                 value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}"></label>
             <label>Stunden<input type="number" name="quantity" value="{{ entry.quantity }}"
@@ -249,7 +249,7 @@
     </label>
     <label>Beginn<input type="date" name="starts_on" required></label>
     <label>Uhrzeit<input type="time" name="starts_at"></label>
-    <label>Erinnerung am Termintag um (optional, sonst gilt „Mehr“)
+    <label>Erinnerung am Termintag um (optional, sonst gilt die Einstellung)
       <input type="time" name="reminder_at"
         value="{% if customer.reminder_at %}{{ '%02d:%02d'|format(customer.reminder_at.hour, customer.reminder_at.minute) }}{% endif %}"></label>
     <label>Stunden<input type="number" name="quantity" value="1" step="0.25" min="0.25" max="12" required></label>
@@ -382,11 +382,9 @@
 {% endfor %}
 {% endif %}
 
-<div class="block">
-  <form method="post" action="/kunden/{{ customer.id }}/loeschen"
-        onsubmit="return confirm('{{ customer.name }} endgültig löschen? Alle Termine und Serien werden mit entfernt.')">
-    <button class="button button-fill color-red" type="submit">Kunde löschen</button>
-  </form>
-  <p class="hint">Geht nur ohne ausgestellte Rechnungen — sonst archivieren.</p>
-</div>
+<form method="post" action="/kunden/{{ customer.id }}/loeschen" style="margin: 1rem 1rem 0"
+      onsubmit="return confirm('{{ customer.name }} endgültig löschen? Alle Termine und Serien werden mit entfernt.')">
+  <button class="button button-fill color-red" type="submit">Kunde löschen</button>
+</form>
+<p class="hint">Geht nur ohne ausgestellte Rechnungen — sonst archivieren.</p>
 {% endblock %}

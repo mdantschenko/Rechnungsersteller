@@ -1,7 +1,7 @@
 """The morning round: what the server does by itself once a day.
 
 From seven o'clock on, due invoices for e-mail customers leave on their own
-when the switch in "Mehr" is on — WhatsApp and paper stay a human decision.
+when the switch in the settings is on — WhatsApp and paper stay a human decision.
 Whatever cannot leave by itself is announced on the lock screen instead, and
 an invoice that crossed its due date overnight announces itself once.
 """
