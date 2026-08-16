@@ -19,6 +19,7 @@ from invoicing.constant import (
     INVOICE_DOCUMENT_TEMPLATES_DIRECTORY,
     PDF_RENDERER_AUTOMATIC,
 )
+from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.domain.invoice import Invoice
 from invoicing.pdf.renderers import select_renderer
 from invoicing.templating import install_german_filters
@@ -29,10 +30,23 @@ def to_html(invoice: Invoice) -> str:
     template = _jinja_environment().get_template("invoice.html.j2")
     return template.render(
         invoice=invoice,
+        printed_column_values=_printed_column_values(invoice),
         font_faces=_font_face_rules(),
         stylesheet=(INVOICE_DOCUMENT_TEMPLATES_DIRECTORY / "invoice.css").read_text(
             encoding="utf-8"
         ),
+    )
+
+
+def _printed_column_values(invoice: Invoice) -> tuple[tuple[str, ...], ...]:
+    """The extra column cells of every row, formatted so the template stays dumb."""
+    rules = tuple(ExtraColumnRules(column) for column in invoice.columns)
+    return tuple(
+        tuple(
+            rule.display(value)
+            for rule, value in zip(rules, item.column_values, strict=True)
+        )
+        for item in invoice.line_items
     )
 
 

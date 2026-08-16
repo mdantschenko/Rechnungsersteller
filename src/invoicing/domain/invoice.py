@@ -19,6 +19,7 @@ from invoicing.constant import (
 )
 from invoicing.domain.billing_period import BillingPeriod
 from invoicing.domain.columns import Column, ColumnValue
+from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.domain.money import round_to_cents
 
 
@@ -117,8 +118,9 @@ def column_shares(
     """
     shares = []
     for column in template.columns:
-        value = column.value_for(lesson.column_values)
-        shares.append((column, value, column.contribution(value, lesson.quantity)))
+        rules = ExtraColumnRules(column)
+        value = rules.value_for(lesson.column_values)
+        shares.append((column, value, rules.contribution(value, lesson.quantity)))
     return tuple(shares)
 
 

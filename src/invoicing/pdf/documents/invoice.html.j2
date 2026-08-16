@@ -52,8 +52,8 @@
           <td>{{ item.unit }}</td>
           <td class="description">{{ item.label }}</td>
           <td>{{ item.unit_price | euro }}</td>
-          {% for column in invoice.columns %}
-          <td>{{ column.display(item.column_values[loop.index0]) }}</td>
+          {% for cell in printed_column_values[loop.index0] %}
+          <td>{{ cell }}</td>
           {% endfor %}
           <td>{{ item.total | euro }}</td>
         </tr>

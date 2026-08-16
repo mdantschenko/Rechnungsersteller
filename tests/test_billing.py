@@ -8,6 +8,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session, select
 
 from invoicing.billing import draft_for, release
+from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.storage.models import (
     Customer,
     IssuedInvoice,
@@ -124,7 +125,8 @@ def test_the_extra_column_reaches_the_document(
         assert run.invoice is not None
         (column,) = run.invoice.columns
         assert column.label == "Anfahrtskosten"
-        assert column.display(run.invoice.line_items[0].column_values[0]) == "0 €"
+        first_cell = run.invoice.line_items[0].column_values[0]
+        assert ExtraColumnRules(column).display(first_cell) == "0 €"
 
 
 def test_a_draft_only_peeks_at_the_next_number(

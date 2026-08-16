@@ -26,6 +26,7 @@ from invoicing.domain.billing_period import (
     period_containing,
 )
 from invoicing.domain.columns import Column, ColumnValue
+from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.domain.invoice_numbers import NumberSequence
 from invoicing.domain.money import parse_user_amount, round_quantity
 from invoicing.storage import models
@@ -408,7 +409,7 @@ def _printed_extras(
     columns: tuple[Column, ...], values: tuple[ColumnValue, ...]
 ) -> dict[str, str]:
     return {
-        column.label: column.display(value)
+        column.label: ExtraColumnRules(column).display(value)
         for column, value in zip(columns, values, strict=True)
     }
 

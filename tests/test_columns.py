@@ -4,23 +4,28 @@ from decimal import Decimal
 
 from invoicing.constant import TotalRule, ValueKind, ValueSource
 from invoicing.domain.columns import Column
+from invoicing.domain.extra_column_rules import ExtraColumnRules
 
 ONE_HOUR = Decimal("1")
 TWO_HOURS = Decimal("2")
 
-TRAVEL_COST_PRINTED_AS_ZERO = Column(
-    label="Anfahrtskosten",
-    total_rule=TotalRule.ADD_PER_ROW,
-    placeholder="0 €",
+TRAVEL_COST_PRINTED_AS_ZERO = ExtraColumnRules(
+    Column(
+        label="Anfahrtskosten",
+        total_rule=TotalRule.ADD_PER_ROW,
+        placeholder="0 €",
+    )
 )
 
-TRAVEL_COST_NOT_APPLICABLE = Column(label="Anfahrtskosten")
+TRAVEL_COST_NOT_APPLICABLE = ExtraColumnRules(Column(label="Anfahrtskosten"))
 
-EXERCISE_SHEETS = Column(
-    label="Übungsaufgaben",
-    source=ValueSource.PER_LESSON,
-    total_rule=TotalRule.ADD_PER_ROW,
-    default_value=Decimal("20"),
+EXERCISE_SHEETS = ExtraColumnRules(
+    Column(
+        label="Übungsaufgaben",
+        source=ValueSource.PER_LESSON,
+        total_rule=TotalRule.ADD_PER_ROW,
+        default_value=Decimal("20"),
+    )
 )
 
 
@@ -56,10 +61,12 @@ def test_added_per_row_does_not_scale_with_the_hours() -> None:
 
 
 def test_multiplied_by_quantity_scales_with_the_hours() -> None:
-    per_hour_surcharge = Column(
-        label="Materialzuschlag",
-        total_rule=TotalRule.MULTIPLY_BY_QUANTITY,
-        default_value=Decimal("2.50"),
+    per_hour_surcharge = ExtraColumnRules(
+        Column(
+            label="Materialzuschlag",
+            total_rule=TotalRule.MULTIPLY_BY_QUANTITY,
+            default_value=Decimal("2.50"),
+        )
     )
 
     assert per_hour_surcharge.contribution(Decimal("2.50"), TWO_HOURS) == Decimal(
@@ -68,14 +75,16 @@ def test_multiplied_by_quantity_scales_with_the_hours() -> None:
 
 
 def test_an_excluded_column_never_touches_the_total() -> None:
-    note = Column(label="Notiz", kind=ValueKind.TEXT, default_value="online")
+    note = ExtraColumnRules(
+        Column(label="Notiz", kind=ValueKind.TEXT, default_value="online")
+    )
 
     assert note.contribution("online", ONE_HOUR) == Decimal("0.00")
     assert note.display("online") == "online"
 
 
 def test_money_is_formatted_german_and_quantities_lose_trailing_zeros() -> None:
-    hours = Column(label="Fahrtzeit", kind=ValueKind.QUANTITY)
+    hours = ExtraColumnRules(Column(label="Fahrtzeit", kind=ValueKind.QUANTITY))
 
     assert TRAVEL_COST_PRINTED_AS_ZERO.display(Decimal("20")) == "20,00\xa0€"
     assert hours.display(Decimal("0.50")) == "0,5"
