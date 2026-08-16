@@ -300,11 +300,9 @@ DATEV_FILE_MARKER = "EXTF"
 DATEV_INTERFACE_VERSION = 700
 DATEV_FORMAT_CATEGORY_BOOKING_BATCH = 21
 DATEV_FORMAT_NAME_BOOKING_BATCH = "Buchungsstapel"
-DATEV_FORMAT_VERSION = 13
+DATEV_FORMAT_VERSION = 12
 DATEV_ORIGIN_MARK = "RE"
 DATEV_EXPORTING_APPLICATION = "Rechnungsersteller"
-DATEV_ADVISOR_NUMBER = 1001
-DATEV_CLIENT_NUMBER = 1
 DATEV_GENERAL_LEDGER_ACCOUNT_LENGTH = 4
 DATEV_BOOKING_TYPE_FINANCIAL_ACCOUNTING = 1
 DATEV_ACCOUNTING_PURPOSE_INDEPENDENT = 0
@@ -313,12 +311,15 @@ DATEV_CURRENCY = "EUR"
 DATEV_CHART_OF_ACCOUNTS_SKR03 = "03"
 DATEV_BATCH_LABEL_PATTERN = "Rechnungsausgang {year}"
 
-DATEV_SMALL_BUSINESS_REVENUE_ACCOUNT_SKR03 = 8192
-DATEV_COLLECTIVE_DEBTOR_ACCOUNT = 10001
+DATEV_SMALL_BUSINESS_REVENUE_ACCOUNT_BEFORE_2025 = 8195
+DATEV_SMALL_BUSINESS_REVENUE_ACCOUNT_SINCE_2025 = 8192
+DATEV_SMALL_BUSINESS_REVENUE_ACCOUNT_CHANGE_YEAR = 2025
+DATEV_RECEIVABLE_ACCOUNT_SKR03 = 1410
 DATEV_DEBIT_MARK = "S"
-DATEV_CREDIT_MARK = "H"
 
-DATEV_CREATED_AT_FORMAT = "%Y%m%d%H%M%S000"
+DATEV_CREATED_AT_FORMAT = "%Y%m%d%H%M%S"
+DATEV_MILLISECOND_FORMAT = "{:03d}"
+MICROSECONDS_PER_MILLISECOND = 1000
 DATEV_DAY_FORMAT = "%Y%m%d"
 DATEV_VOUCHER_DAY_FORMAT = "%d%m"
 DATEV_AMOUNT_FORMAT = ".2f"
@@ -334,12 +335,27 @@ DATEV_FILE_NAME_PATTERN = "EXTF_Buchungsstapel_{year}.csv"
 
 DATEV_BOOKING_TEXT_PATTERN = "Rechnung {number} {customer}"
 DATEV_BOOKING_TEXT_MAX_LENGTH = 60
-DATEV_VOUCHER_NUMBER_MAX_LENGTH = 36
-DATEV_VOUCHER_NUMBER_FORBIDDEN_PATTERN = re.compile(r"[^0-9A-Za-z_$&%*+\-/]")
-DATEV_VOUCHER_NUMBER_REPLACEMENT = "-"
 DATEV_CONTROL_CHARACTER_PATTERN = re.compile(r"[\x00-\x1f]")
+DATEV_TEXT_SEPARATOR_REPLACEMENT = " "
 
-DATEV_BOOKING_FIELD_COUNT = 125
+DATEV_NUMBERS_MISSING_MESSAGE = (
+    "Berater- und Mandantennummer fehlen. Trage sie in den Einstellungen "
+    "unter „DATEV-Export“ ein — sonst ordnet Lexware die Datei keinem "
+    "Mandanten zu."
+)
+DATEV_NO_INVOICES_MESSAGE = (
+    "Für {year} gibt es keine gestellte Rechnung — es gibt nichts zu buchen."
+)
+DATEV_NON_POSITIVE_AMOUNT_MESSAGE = (
+    "Rechnung Nr. {number} steht auf {amount} €. DATEV nimmt nur Beträge "
+    "über null, deshalb wurde keine Datei erzeugt."
+)
+DATEV_FIELD_COUNT_MESSAGE = (
+    "Eine Zeile hätte {counted} statt {expected} Felder bekommen. Die Datei "
+    "wurde nicht erzeugt, weil Lexware sie nicht einlesen könnte."
+)
+
+DATEV_HEADER_FIELD_COUNT = 31
 DATEV_COLUMN_AMOUNT = 0
 DATEV_COLUMN_DEBIT_CREDIT_MARK = 1
 DATEV_COLUMN_CURRENCY = 2
@@ -352,7 +368,7 @@ DATEV_COLUMN_VOUCHER_NUMBER = 10
 DATEV_COLUMN_BOOKING_TEXT = 13
 DATEV_COLUMN_LOCKED = 113
 
-DATEV_BOOKING_COLUMN_HEADER_LINE = (
+DATEV_BOOKING_COLUMNS_UP_TO_FORMAT_VERSION_12 = (
     "Umsatz (ohne Soll/Haben-Kz);Soll/Haben-Kennzeichen;WKZ Umsatz;Kurs;"
     "Basis-Umsatz;WKZ Basis-Umsatz;Konto;Gegenkonto (ohne BU-Schlüssel);"
     "BU-Schlüssel;Belegdatum;Belegfeld 1;Belegfeld 2;Skonto;Buchungstext;"
@@ -399,8 +415,15 @@ DATEV_BOOKING_COLUMN_HEADER_LINE = (
     "Bezeichnung SoBil-Sachverhalt;Kennzeichen SoBil-Buchung;Festschreibung;"
     "Leistungsdatum;Datum Zuord. Steuerperiode;Fälligkeit;Generalumkehr (GU);"
     "Steuersatz;Land;Abrechnungsreferenz;BVV-Position;"
-    "EU-Land u. UStID (Ursprung);EU-Steuersatz (Ursprung);Abw. Skontokonto"
+    "EU-Land u. UStID (Ursprung);EU-Steuersatz (Ursprung)"
 )
+DATEV_SKONTO_ACCOUNT_COLUMN = "Abw. Skontokonto"
+DATEV_BOOKING_COLUMN_HEADER_LINE_BY_FORMAT_VERSION = {
+    12: DATEV_BOOKING_COLUMNS_UP_TO_FORMAT_VERSION_12,
+    13: DATEV_BOOKING_COLUMNS_UP_TO_FORMAT_VERSION_12
+    + DATEV_FIELD_SEPARATOR
+    + DATEV_SKONTO_ACCOUNT_COLUMN,
+}
 
 # --- Legacy Markdown parsing ---
 

@@ -16,6 +16,7 @@ from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import DATEV_CSV_MEDIA_TYPE
 from invoicing.datev_export import DatevBookingBatchExport
+from invoicing.datev_export_error import DatevExportError
 from invoicing.mail_error import MailError
 from invoicing.pdf import InvoiceDocumentWriter, PdfPreview
 from invoicing.storage.models import (
@@ -62,13 +63,21 @@ def tax_office_zip(year: int, session: Session = Depends(database_session)) -> R
 
 @router.get("/rechnungen/datev/{year}.csv")
 def datev_booking_batch(
-    year: int, session: Session = Depends(database_session)
+    year: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
-    """Every invoice issued in ``year`` as a DATEV booking batch for Lexware."""
+    """Every invoice issued in ``year`` as a DATEV booking batch for Lexware.
+
+    The year is the year of the invoice date, unlike the tax office ZIP,
+    which goes by the payment date.
+    """
     export = DatevBookingBatchExport(session)
+    try:
+        payload = export.csv_bytes(year)
+    except DatevExportError as error:
+        return notice_redirect(request, "/rechnungen", str(error))
     file_name = export.file_name(year)
     return Response(
-        export.csv_bytes(year),
+        payload,
         media_type=DATEV_CSV_MEDIA_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
     )

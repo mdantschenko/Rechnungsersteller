@@ -207,6 +207,19 @@ class SettingsService:
         self._session.add(state)
         return f"Die nächste Rechnung bekommt Nummer {next_number}."
 
+    def save_datev_client(self, advisor_number: str, client_number: str) -> str:
+        """Remember the Lexware client the booking batch is booked into."""
+        settings = self._store.app_settings()
+        settings.datev_advisor_number = self._whole_number_or_none(advisor_number)
+        settings.datev_client_number = self._whole_number_or_none(client_number)
+        self._session.add(settings)
+        return "DATEV-Nummern gespeichert."
+
+    @staticmethod
+    def _whole_number_or_none(text: str) -> int | None:
+        digits = text.strip()
+        return int(digits) or None if digits.isdigit() else None
+
     def save_filing(self, invoice_folder: str, lesson_horizon_days: int) -> None:
         settings = self._store.app_settings()
         settings.invoice_folder = invoice_folder

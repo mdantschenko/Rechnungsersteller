@@ -710,12 +710,20 @@ def test_the_year_can_be_downloaded_as_a_datev_booking_batch(
     year = date.today().year
     assert f"/rechnungen/datev/{year}.csv" in client.get("/rechnungen").text
 
+    without_numbers = client.get(f"/rechnungen/datev/{year}.csv")
+    assert "Berater- und Mandantennummer fehlen" in without_numbers.text
+
+    client.post(
+        "/einstellungen/datev",
+        data={"datev_advisor_number": "12345", "datev_client_number": "678"},
+    )
     answer = client.get(f"/rechnungen/datev/{year}.csv")
     assert answer.status_code == 200
     assert answer.headers["content-disposition"] == (
         f'attachment; filename="EXTF_Buchungsstapel_{year}.csv"'
     )
-    assert answer.content.startswith(b'"EXTF";700;21;"Buchungsstapel";13;')
+    assert answer.content.startswith(b'"EXTF";700;21;"Buchungsstapel";12;')
+    assert b";12345;678;" in answer.content
 
 
 def test_the_customer_page_tells_the_whole_story(client: TestClient) -> None:

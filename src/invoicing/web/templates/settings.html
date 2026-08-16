@@ -272,6 +272,23 @@
   </form>
 </div>
 
+<div class="section-title">DATEV-Export</div>
+<div class="block">
+  <form method="post" action="/einstellungen/datev" class="stack">
+    <label>Beraternummer
+      <input type="number" name="datev_advisor_number" value="{{ settings.datev_advisor_number or '' }}" min="1000" max="9999999">
+    </label>
+    <label>Mandantennummer
+      <input type="number" name="datev_client_number" value="{{ settings.datev_client_number or '' }}" min="1" max="99999">
+    </label>
+    <button class="button button-fill" type="submit">Speichern</button>
+  </form>
+  <p class="hint">
+    Beide Nummern stehen in Lexware im Firmenstamm der Firma, in die der
+    Buchungsstapel eingelesen wird. Ohne sie gibt es keine DATEV-Datei.
+  </p>
+</div>
+
 <div class="section-title">Ablage</div>
 <div class="block">
   <form method="post" action="/einstellungen/ablage" class="stack">

@@ -133,6 +133,19 @@ def save_numbering(
     return notice_redirect(request, "/einstellungen", notice)
 
 
+@router.post("/einstellungen/datev")
+def save_datev_client(
+    request: Request,
+    datev_advisor_number: str = Form(""),
+    datev_client_number: str = Form(""),
+    session: Session = Depends(database_session),
+) -> Response:
+    notice = SettingsService(session).save_datev_client(
+        datev_advisor_number, datev_client_number
+    )
+    return notice_redirect(request, "/einstellungen", notice)
+
+
 @router.post("/einstellungen/ablage")
 def save_filing(
     invoice_folder: str = Form(...),

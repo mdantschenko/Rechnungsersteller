@@ -357,6 +357,12 @@ class AppSettings(SQLModel, table=True):
     """Whether the morning round mails due invoices out by itself."""
     last_daily_round: date | None = None
 
+    datev_advisor_number: int | None = None
+    """Beraternummer of the Lexware client the booking batch belongs to.
+    Empty stops the DATEV export instead of inventing a number."""
+    datev_client_number: int | None = None
+    """Mandantennummer of that same Lexware client."""
+
     backup_passphrase: str | None = None
     """Opens the weekly database backup that is mailed to the own mailbox."""
     last_backup_mailed: date | None = None

@@ -251,7 +251,12 @@
   </div>
   <p class="hint">
     Eine Buchungsstapel-Datei je Rechnungsjahr, zum Einlesen in Lexware unter
-    „Datei &gt; DATEV-Schnittstelle“.
+    „Datei &gt; DATEV-Schnittstelle“. Das Jahr ist hier das Rechnungsdatum
+    (beim ZIP oben ist es der Zahlungseingang), und drin stehen nur gestellte
+    Rechnungen — Kunden ohne Rechnung fehlen. In Lexware müssen die Konten
+    1410 (Forderungen) und 8195 bzw. ab 2025 8192 (Erlöse Kleinunternehmer)
+    schon angelegt sein, sonst bricht der Import ab. Berater- und
+    Mandantennummer stehen in den Einstellungen.
   </p>
   {% endif %}
 </div>

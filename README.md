@@ -18,7 +18,8 @@ interface is German, as are the invoices it produces.
   WhatsApp, payment reminders with a per-customer letter
 - **Earnings** by month: received, still expected, and never invoiced —
   plus a ZIP per year for the tax office and a DATEV booking batch per year
-  for Lexware
+  for Lexware. The ZIP goes by the year the money arrived, the booking batch
+  by the year on the invoice, because it is the outgoing invoice ledger
 - **Import** of old Word invoices as history
 
 Everything lives in a single SQLite file on your own server, behind one
