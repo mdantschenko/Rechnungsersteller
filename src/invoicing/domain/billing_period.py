@@ -26,6 +26,7 @@ from dateutil.relativedelta import relativedelta
 
 from invoicing.constant import CLOSING_DAY_OF_MONTH, ONE_DAY, BillingCycle
 from invoicing.data_classes import BillingPeriod
+from invoicing.german_formatter import german_formatter
 
 
 def is_closing_day(cycle: BillingCycle, day: date) -> bool:
@@ -48,7 +49,10 @@ def period_closing_on(cycle: BillingCycle, closing_day: date) -> BillingPeriod:
         ValueError: if no period of this cycle closes on that day.
     """
     if not is_closing_day(cycle, closing_day):
-        raise ValueError(f"{closing_day:%d.%m.%Y} does not close a {cycle} period")
+        raise ValueError(
+            f"{german_formatter.format_german_date(closing_day)} "
+            f"does not close a {cycle} period"
+        )
     printed_from = closing_day - relativedelta(months=1)
     if cycle is BillingCycle.MONTH_MIDPOINT:
         return BillingPeriod(

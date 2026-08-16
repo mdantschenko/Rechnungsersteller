@@ -14,11 +14,18 @@ from invoicing.constant import (
     TEMPLATE_FILTER_GERMAN_DATE,
     TEMPLATE_FILTER_QUANTITY,
 )
-from invoicing.domain.dates import german_date
-from invoicing.domain.money import format_euro, format_quantity
+from invoicing.german_formatter import GermanFormatter
 
 
-def install_german_filters(environment: Environment) -> None:
-    environment.filters[TEMPLATE_FILTER_EURO] = format_euro
-    environment.filters[TEMPLATE_FILTER_QUANTITY] = format_quantity
-    environment.filters[TEMPLATE_FILTER_GERMAN_DATE] = german_date
+class GermanTemplateFilters:
+    """Puts one formatter's methods behind the shared template filter names."""
+
+    def __init__(self, formatter: GermanFormatter) -> None:
+        self.formatter = formatter
+
+    def install_into(self, environment: Environment) -> None:
+        environment.filters[TEMPLATE_FILTER_EURO] = self.formatter.format_euro
+        environment.filters[TEMPLATE_FILTER_QUANTITY] = self.formatter.format_quantity
+        environment.filters[TEMPLATE_FILTER_GERMAN_DATE] = (
+            self.formatter.format_german_date
+        )

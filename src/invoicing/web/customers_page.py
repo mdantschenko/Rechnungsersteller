@@ -17,6 +17,7 @@ from invoicing.constant import (
     ValueSource,
 )
 from invoicing.data_classes import LessonStats
+from invoicing.german_formatter import german_formatter
 from invoicing.scheduling import materialise_series
 from invoicing.storage.models import (
     BillingTemplate,
@@ -40,7 +41,6 @@ from invoicing.web.earnings import monthly_earnings
 from invoicing.web.page import (
     customer_of,
     database,
-    month_name,
     settings_of,
     templates,
 )
@@ -183,7 +183,9 @@ def _lesson_history(
     ).all()
     months: list[tuple[str, list[Lesson]]] = []
     for lesson in lessons:
-        label = f"{month_name(lesson.taught_on)} {lesson.taught_on.year}"
+        label = (
+            f"{german_formatter.month_name(lesson.taught_on)} {lesson.taught_on.year}"
+        )
         if not months or months[-1][0] != label:
             months.append((label, []))
         months[-1][1].append(lesson)

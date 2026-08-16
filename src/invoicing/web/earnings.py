@@ -17,6 +17,7 @@ from sqlmodel import Session, col, select
 from invoicing.billing import priced_line
 from invoicing.constant import ZERO
 from invoicing.data_classes import EarningsRow
+from invoicing.german_formatter import german_formatter
 from invoicing.storage.models import (
     Customer,
     InvoiceDelivery,
@@ -25,7 +26,6 @@ from invoicing.storage.models import (
     LessonStatus,
 )
 from invoicing.utils import billing_templates_by_customer, sum_of_cents
-from invoicing.web.page import month_name
 
 
 def monthly_earnings(
@@ -40,7 +40,7 @@ def monthly_earnings(
     keys = sorted(set(received) | set(outstanding) | set(uninvoiced), reverse=True)
     rows = [
         EarningsRow(
-            label=f"{month_name(date(year, month, 1))} {year}",
+            label=f"{german_formatter.month_name(date(year, month, 1))} {year}",
             received=received.get((year, month), ZERO),
             outstanding=outstanding.get((year, month), ZERO),
             uninvoiced=uninvoiced.get((year, month), ZERO),

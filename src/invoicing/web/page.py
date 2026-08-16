@@ -3,39 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date, time
 
-from babel.dates import format_date
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, col, select
 
-from invoicing.constant import (
-    GERMAN_LOCALE,
-    WEB_STATIC_DIRECTORY,
-    WEB_TEMPLATES_DIRECTORY,
-)
+from invoicing.constant import WEB_STATIC_DIRECTORY, WEB_TEMPLATES_DIRECTORY
+from invoicing.german_formatter import german_formatter
 from invoicing.storage.database import session_for
 from invoicing.storage.models import AppSettings, Customer, CustomerStatus, LessonSeries
-from invoicing.templating import install_german_filters
+from invoicing.templating import GermanTemplateFilters
 from invoicing.utils import recurrence_label, recurrence_words
-
-
-def short_date(day: date) -> str:
-    return format_date(day, "EE d.M.", locale=GERMAN_LOCALE)
-
-
-def long_weekday(day: date) -> str:
-    return format_date(day, "EEEE, d. MMMM", locale=GERMAN_LOCALE)
-
-
-def month_name(day: date) -> str:
-    return format_date(day, "LLLL", locale=GERMAN_LOCALE)
-
-
-def clock(moment: time) -> str:
-    """A clock time the way the calendar prints it: ``14:30``."""
-    return f"{moment:%H:%M}"
 
 
 def _static_version() -> int:
@@ -48,10 +26,10 @@ def _static_version() -> int:
 
 
 templates = Jinja2Templates(directory=WEB_TEMPLATES_DIRECTORY)
-install_german_filters(templates.env)
-templates.env.filters["short_date"] = short_date
-templates.env.filters["long_weekday"] = long_weekday
-templates.env.filters["clock"] = clock
+GermanTemplateFilters(german_formatter).install_into(templates.env)
+templates.env.filters["short_date"] = german_formatter.short_date
+templates.env.filters["long_weekday"] = german_formatter.long_weekday
+templates.env.filters["clock"] = german_formatter.clock
 templates.env.globals["static_version"] = _static_version()
 
 

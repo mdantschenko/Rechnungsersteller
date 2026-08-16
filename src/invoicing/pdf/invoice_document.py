@@ -21,8 +21,9 @@ from invoicing.constant import (
 )
 from invoicing.data_classes import Invoice
 from invoicing.domain.extra_column_rules import ExtraColumnRules
+from invoicing.german_formatter import german_formatter
 from invoicing.pdf.renderers import select_renderer
-from invoicing.templating import install_german_filters
+from invoicing.templating import GermanTemplateFilters
 
 
 def to_html(invoice: Invoice) -> str:
@@ -82,5 +83,5 @@ def _jinja_environment() -> Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    install_german_filters(environment)
+    GermanTemplateFilters(german_formatter).install_into(environment)
     return environment

@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from invoicing.constant import ZERO, TotalRule, ValueKind, ValueSource
 from invoicing.data_classes import ExtraColumn, ExtraColumnValue
-from invoicing.domain.money import format_euro, format_quantity
+from invoicing.german_formatter import german_formatter
 from invoicing.utils import round_to_cents
 
 
@@ -37,9 +37,9 @@ class ExtraColumnRules:
         if value is None:
             return self.column.placeholder
         if self.column.kind is ValueKind.MONEY:
-            return format_euro(round_to_cents(value))
+            return german_formatter.euro_rounded(value)
         if self.column.kind is ValueKind.QUANTITY:
-            return format_quantity(Decimal(value))
+            return german_formatter.format_quantity(Decimal(value))
         return str(value)
 
     def contribution(self, value: ExtraColumnValue, quantity: Decimal) -> Decimal:

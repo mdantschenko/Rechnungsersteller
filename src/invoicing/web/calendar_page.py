@@ -27,7 +27,7 @@ from invoicing.constant import (
     ValueSource,
 )
 from invoicing.data_classes import CalendarDay
-from invoicing.domain.money import format_euro, format_quantity
+from invoicing.german_formatter import german_formatter
 from invoicing.scheduling import materialise_series
 from invoicing.storage.models import Customer, Lesson, LessonStatus
 from invoicing.utils import billing_templates_by_customer, planning_horizon
@@ -76,7 +76,7 @@ def _week_page(request: Request, session: Session, on: date) -> Response:
         request,
         "week.html",
         {
-            "heading": _week_heading(monday, sunday),
+            "heading": german_formatter.week_heading(monday, sunday),
             "monday": monday,
             "days": [
                 _cell(
@@ -132,17 +132,6 @@ def a_day(on: date, request: Request, session: Session = Depends(database)) -> R
     )
 
 
-def _week_heading(monday: date, sunday: date) -> str:
-    if monday.month == sunday.month:
-        return (
-            f"{monday.day}.–{sunday.day}. {format_date(monday, 'LLLL', GERMAN_LOCALE)}"
-        )
-    return (
-        f"{format_date(monday, 'd. MMM', GERMAN_LOCALE)} – "
-        f"{format_date(sunday, 'd. MMM y', GERMAN_LOCALE)}"
-    )
-
-
 def _month_page(request: Request, session: Session, year: int, month: int) -> Response:
     today = date.today()
     first_of_month = date(year, month, 1)
@@ -158,7 +147,7 @@ def _month_page(request: Request, session: Session, year: int, month: int) -> Re
         "calendar.html",
         {
             "heading": format_date(first_of_month, "LLLL y", locale=GERMAN_LOCALE),
-            "weekday_names": _weekday_names(),
+            "weekday_names": german_formatter.weekday_names(),
             "weeks": [
                 [
                     _cell(day, month, today, lessons, public, school, names)
@@ -212,7 +201,7 @@ def _summary(lessons: tuple[Lesson, ...], names: dict[int, str]) -> str:
         extra = f", {state}" if state else ""
         pieces.append(
             f"{clock}{names.get(lesson.customer_id, '?')} "
-            f"({format_quantity(lesson.quantity)} h{extra})"
+            f"({german_formatter.format_quantity(lesson.quantity)} h{extra})"
         )
     return "\n".join(pieces)
 
@@ -292,7 +281,11 @@ def _lesson_extras(
             {
                 "label": column.label,
                 "active": value is not None,
-                "amount": format_euro(contribution) if contribution > 0 else "",
+                "amount": (
+                    german_formatter.format_euro(contribution)
+                    if contribution > 0
+                    else ""
+                ),
                 "toggleable": column.source is ValueSource.PER_LESSON,
             }
             for column, value, contribution in shares
@@ -306,11 +299,3 @@ def _lesson_places(session: Session) -> dict[int, str]:
         customer.id or 0: customer.lesson_place
         for customer in session.exec(select(Customer)).all()
     }
-
-
-def _weekday_names() -> list[str]:
-    monday = date(2024, 1, 1)
-    return [
-        format_date(monday + timedelta(days=offset), "EEEEEE", locale=GERMAN_LOCALE)
-        for offset in range(7)
-    ]

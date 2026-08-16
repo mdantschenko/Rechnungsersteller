@@ -22,7 +22,7 @@ from sqlmodel import Session, select
 
 from invoicing.constant import REVENUE_CSV_HEADER, ZERO
 from invoicing.data_classes import RevenueRow
-from invoicing.domain.money import format_euro
+from invoicing.german_formatter import german_formatter
 from invoicing.storage.models import Customer, IssuedInvoice
 
 
@@ -63,6 +63,11 @@ def write_csv(rows: Sequence[RevenueRow], destination: Path) -> Path:
         writer.writerow(REVENUE_CSV_HEADER)
         for row in rows:
             writer.writerow(
-                [row.year, row.customer, row.invoice_count, format_euro(row.total)]
+                [
+                    row.year,
+                    row.customer,
+                    row.invoice_count,
+                    german_formatter.format_euro(row.total),
+                ]
             )
     return destination

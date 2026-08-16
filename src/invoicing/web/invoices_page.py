@@ -21,8 +21,7 @@ from invoicing import mail
 from invoicing.billing import draft_for, manual_draft, open_runs, release
 from invoicing.constant import INVOICE_PDF_FILE_NAME_PATTERN
 from invoicing.data_classes import BillingRun
-from invoicing.domain.dates import german_date
-from invoicing.domain.money import format_euro
+from invoicing.german_formatter import german_formatter
 from invoicing.pdf import preview
 from invoicing.pdf.invoice_document import to_html, write_pdf
 from invoicing.storage.models import (
@@ -39,7 +38,6 @@ from invoicing.web.page import (
     active_customers,
     customer_of,
     database,
-    month_name,
     settings_of,
     templates,
 )
@@ -443,9 +441,9 @@ def invoice_mail_body(
     return (
         f"Guten Tag,\n\n"
         f"anbei die Rechnung Nr. {record.number} über "
-        f"{format_euro(record.printed_total)} für den Zeitraum "
-        f"{german_date(record.period_printed_from)} bis "
-        f"{german_date(record.period_printed_to)}.\n\n"
+        f"{german_formatter.format_euro(record.printed_total)} für den Zeitraum "
+        f"{german_formatter.format_german_date(record.period_printed_from)} bis "
+        f"{german_formatter.format_german_date(record.period_printed_to)}.\n\n"
         f"Mit freundlichen Grüßen\n{signature}\n"
     )
 
@@ -455,13 +453,13 @@ def _filled_in(
 ) -> str:
     """The customer's own letter, its placeholders replaced with the facts."""
     values = {
-        "MONAT": month_name(record.period_printed_from),
+        "MONAT": german_formatter.month_name(record.period_printed_from),
         "JAHR": str(record.period_printed_from.year),
-        "BETRAG": format_euro(record.printed_total),
+        "BETRAG": german_formatter.format_euro(record.printed_total),
         "NUMMER": str(record.number),
         "ZEITRAUM": (
-            f"{german_date(record.period_printed_from)} bis "
-            f"{german_date(record.period_printed_to)}"
+            f"{german_formatter.format_german_date(record.period_printed_from)} bis "
+            f"{german_formatter.format_german_date(record.period_printed_to)}"
         ),
         "NAME": customer.name,
         "SCHUELER": customer.pupil_name,
@@ -562,8 +560,9 @@ def _reminder_mail_body(session: Session, record: IssuedInvoice, count: int) -> 
     return (
         f"Guten Tag,\n\n"
         f"dies ist die {count}. Zahlungserinnerung zur Rechnung Nr. "
-        f"{record.number} über {format_euro(record.printed_total)} vom "
-        f"{german_date(record.issued_on)} — anbei noch einmal als PDF. "
+        f"{record.number} über {german_formatter.format_euro(record.printed_total)} "
+        f"vom {german_formatter.format_german_date(record.issued_on)} — anbei noch "
+        f"einmal als PDF. "
         f"Falls die Zahlung schon unterwegs ist, betrachte diese Nachricht "
         f"bitte als gegenstandslos.\n\n"
         f"Mit freundlichen Grüßen\n{signature}\n"

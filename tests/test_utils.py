@@ -9,7 +9,27 @@ from invoicing.utils import (
     parse_german_amount,
     parse_german_date,
     parse_optional_clock_time,
+    round_to_cents,
 )
+
+
+@pytest.mark.parametrize(
+    ("amount", "expected"),
+    [
+        ("13.335", "13.34"),
+        ("13.334", "13.33"),
+        ("0.005", "0.01"),
+        ("0.015", "0.02"),
+        ("66.66", "66.66"),
+    ],
+)
+def test_rounds_half_away_from_zero(amount: str, expected: str) -> None:
+    assert round_to_cents(Decimal(amount)) == Decimal(expected)
+
+
+def test_rounds_up_where_pythons_default_rounds_down() -> None:
+    assert Decimal("0.025").quantize(Decimal("0.01")) == Decimal("0.02")
+    assert round_to_cents(Decimal("0.025")) == Decimal("0.03")
 
 
 @pytest.mark.parametrize(

@@ -14,7 +14,7 @@ from invoicing.constant import (
     PDF_RENDERER_AUTOMATIC,
 )
 from invoicing.data_classes import ImportReport, RevenueRow
-from invoicing.domain.money import format_euro
+from invoicing.german_formatter import german_formatter
 from invoicing.legacy.import_history import import_history
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.reports import revenue_rows, write_csv, yearly_totals
@@ -81,11 +81,14 @@ def _describe_revenue(rows: Sequence[RevenueRow]) -> None:
     for row in rows:
         _report(
             f"{row.year}  {row.customer:<{width}}  {row.invoice_count:>3}x  "
-            f"{format_euro(row.total):>12}"
+            f"{german_formatter.format_euro(row.total):>12}"
         )
     _report("")
     for year, total in sorted(yearly_totals(rows).items()):
-        _report(f"{year}  {'total':<{width}}  {'':>3}   {format_euro(total):>12}")
+        _report(
+            f"{year}  {'total':<{width}}  {'':>3}   "
+            f"{german_formatter.format_euro(total):>12}"
+        )
 
 
 def _set_password(arguments: argparse.Namespace) -> None:
