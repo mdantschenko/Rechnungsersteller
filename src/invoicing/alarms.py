@@ -9,11 +9,16 @@ hour stays quiet instead of startling anyone at night.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import date, datetime, timedelta
 
 from sqlmodel import Session, col, select
 
+from invoicing.constant import (
+    ALARM_CATCH_UP_WINDOW,
+    ALARM_RING_EVERY,
+    ALARM_RINGS_AT_MOST,
+    DeliverPushMessage,
+)
 from invoicing.storage.models import (
     AppSettings,
     Customer,
@@ -21,12 +26,6 @@ from invoicing.storage.models import (
     LessonAlarm,
     LessonStatus,
 )
-
-RING_EVERY = timedelta(minutes=2)
-RINGS_AT_MOST = 8
-CATCH_UP = timedelta(hours=1)
-
-Deliver = Callable[[dict[str, str]], object]
 
 
 def ring_time(
@@ -42,7 +41,7 @@ def ring_time(
 
 
 def ring_due(
-    session: Session, settings: AppSettings, now: datetime, deliver: Deliver
+    session: Session, settings: AppSettings, now: datetime, deliver: DeliverPushMessage
 ) -> int:
     """Ring every lesson whose time has come, and return how often it rang."""
     rung = 0
@@ -54,12 +53,15 @@ def ring_due(
             select(LessonAlarm).where(LessonAlarm.lesson_id == lesson.id)
         ).first()
         if alarm is None:
-            if now > moment + CATCH_UP:
+            if now > moment + ALARM_CATCH_UP_WINDOW:
                 continue
             alarm = LessonAlarm(lesson_id=lesson.id or 0)
-        if alarm.acknowledged or alarm.rings >= RINGS_AT_MOST:
+        if alarm.acknowledged or alarm.rings >= ALARM_RINGS_AT_MOST:
             continue
-        if alarm.last_rung_at is not None and now < alarm.last_rung_at + RING_EVERY:
+        if (
+            alarm.last_rung_at is not None
+            and now < alarm.last_rung_at + ALARM_RING_EVERY
+        ):
             continue
         deliver(_message(lesson, customer, alarm.rings + 1))
         alarm.rings += 1

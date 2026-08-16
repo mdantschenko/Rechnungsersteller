@@ -7,7 +7,8 @@ import pytest
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
-from invoicing.alarms import RING_EVERY, RINGS_AT_MOST, acknowledge_day, ring_due
+from invoicing.alarms import acknowledge_day, ring_due
+from invoicing.constant import ALARM_RING_EVERY, ALARM_RINGS_AT_MOST
 from invoicing.storage.models import (
     AppSettings,
     Customer,
@@ -109,12 +110,12 @@ def test_it_keeps_ringing_until_acknowledged(
     ring_due(session, settings, RING_MOMENT + timedelta(seconds=30), rung.append)
     assert len(rung) == 1
 
-    ring_due(session, settings, RING_MOMENT + RING_EVERY, rung.append)
+    ring_due(session, settings, RING_MOMENT + ALARM_RING_EVERY, rung.append)
     assert len(rung) == 2
     assert rung[1]["body"].startswith("2. Weckruf")
 
     acknowledge_day(session, LESSON_DAY)
-    ring_due(session, settings, RING_MOMENT + 2 * RING_EVERY, rung.append)
+    ring_due(session, settings, RING_MOMENT + 2 * ALARM_RING_EVERY, rung.append)
     assert len(rung) == 2
 
 
@@ -125,11 +126,11 @@ def test_the_ringing_gives_up_eventually(
     rung: list[dict[str, str]] = []
 
     moment = RING_MOMENT
-    for _ in range(RINGS_AT_MOST + 3):
+    for _ in range(ALARM_RINGS_AT_MOST + 3):
         ring_due(session, settings, moment, rung.append)
-        moment += RING_EVERY
+        moment += ALARM_RING_EVERY
 
-    assert len(rung) == RINGS_AT_MOST
+    assert len(rung) == ALARM_RINGS_AT_MOST
 
 
 def test_a_long_missed_alarm_stays_quiet(

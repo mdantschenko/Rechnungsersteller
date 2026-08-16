@@ -17,22 +17,18 @@ from email.message import EmailMessage
 from email.utils import formataddr
 from pathlib import Path
 
+from invoicing.constant import (
+    IMAP_SSL_PORT,
+    MAIL_NOT_CONFIGURED_MESSAGE,
+    SENT_FOLDER_CANDIDATES,
+    SMTP_SSL_PORT,
+    SMTP_TIMEOUT_SECONDS,
+)
 from invoicing.storage.models import AppSettings
-
-SSL_PORT = 465
-IMAP_PORT = 993
-TIMEOUT_SECONDS = 30
-SENT_FOLDER_CANDIDATES = ("Sent", "Sent Items", "Gesendete Objekte", "INBOX.Sent")
 
 
 class MailError(Exception):
     """Sending failed for a reason the user can read and act on."""
-
-
-NOT_CONFIGURED = (
-    "Der E-Mail-Versand ist noch nicht eingerichtet. Trage Server, "
-    "Benutzername und Passwort in den Einstellungen ein."
-)
 
 
 def is_configured(settings: AppSettings) -> bool:
@@ -114,7 +110,7 @@ def _outgoing(
         MailError: if the settings are incomplete or the address is unusable.
     """
     if not is_configured(settings):
-        raise MailError(NOT_CONFIGURED)
+        raise MailError(MAIL_NOT_CONFIGURED_MESSAGE)
     try:
         return build_message(
             sender=from_header(
@@ -182,11 +178,11 @@ def _verified_connection(settings: AppSettings) -> smtplib.SMTP:
     """
     tls = ssl.create_default_context()
     host = settings.smtp_host or ""
-    if settings.smtp_port == SSL_PORT:
+    if settings.smtp_port == SMTP_SSL_PORT:
         return smtplib.SMTP_SSL(
-            host, settings.smtp_port, timeout=TIMEOUT_SECONDS, context=tls
+            host, settings.smtp_port, timeout=SMTP_TIMEOUT_SECONDS, context=tls
         )
-    server = smtplib.SMTP(host, settings.smtp_port, timeout=TIMEOUT_SECONDS)
+    server = smtplib.SMTP(host, settings.smtp_port, timeout=SMTP_TIMEOUT_SECONDS)
     server.starttls(context=tls)
     return server
 
@@ -200,7 +196,9 @@ def _copy_into_sent(settings: AppSettings, message: EmailMessage) -> None:
     """
     host = (settings.smtp_host or "").replace("smtp.", "imap.", 1)
     try:
-        with imaplib.IMAP4_SSL(host, IMAP_PORT, timeout=TIMEOUT_SECONDS) as archive:
+        with imaplib.IMAP4_SSL(
+            host, IMAP_SSL_PORT, timeout=SMTP_TIMEOUT_SECONDS
+        ) as archive:
             archive.login(settings.smtp_user or "", settings.smtp_password or "")
             answer, listing = archive.list()
             folder = pick_sent_folder(listing if answer == "OK" else [])

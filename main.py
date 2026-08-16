@@ -7,17 +7,19 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from invoicing.constant import (
+    DEFAULT_DATABASE_LOCATION,
+    DEFAULT_SAMPLE_PDF_PATH,
+    DEFAULT_WEB_PORT,
+    PDF_RENDERER_AUTOMATIC,
+)
 from invoicing.domain.money import format_euro
 from invoicing.legacy.import_history import ImportReport, import_history
 from invoicing.pdf.invoice_document import write_pdf
-from invoicing.pdf.renderers import AUTOMATIC
 from invoicing.reports import RevenueRow, revenue_rows, write_csv, yearly_totals
 from invoicing.sample import sample_invoice
-from invoicing.storage.database import DEFAULT_LOCATION, open_database, session_for
+from invoicing.storage.database import open_database, session_for
 from invoicing.web.security import is_configured, set_password
-
-DEFAULT_SAMPLE = Path("data/sample-invoice.pdf")
-DEFAULT_PORT = 8000
 
 
 def main() -> None:
@@ -116,9 +118,13 @@ def _parse_arguments() -> argparse.Namespace:
     commands = parser.add_subparsers(required=True)
 
     sample = commands.add_parser("sample", help="render a sample invoice as PDF")
-    sample.add_argument("destination", type=Path, nargs="?", default=DEFAULT_SAMPLE)
     sample.add_argument(
-        "--renderer", default=AUTOMATIC, choices=(AUTOMATIC, "weasyprint", "chromium")
+        "destination", type=Path, nargs="?", default=DEFAULT_SAMPLE_PDF_PATH
+    )
+    sample.add_argument(
+        "--renderer",
+        default=PDF_RENDERER_AUTOMATIC,
+        choices=(PDF_RENDERER_AUTOMATIC, "weasyprint", "chromium"),
     )
     sample.set_defaults(run=_render_sample)
 
@@ -126,7 +132,7 @@ def _parse_arguments() -> argparse.Namespace:
         "import-history", help="read old Markdown invoices into the database"
     )
     history.add_argument("directory", type=Path)
-    history.add_argument("--database", type=Path, default=DEFAULT_LOCATION)
+    history.add_argument("--database", type=Path, default=DEFAULT_DATABASE_LOCATION)
     history.add_argument(
         "--next-number",
         type=int,
@@ -136,7 +142,7 @@ def _parse_arguments() -> argparse.Namespace:
     history.set_defaults(run=_import_history)
 
     summary = commands.add_parser("summary", help="show revenue per year and customer")
-    summary.add_argument("--database", type=Path, default=DEFAULT_LOCATION)
+    summary.add_argument("--database", type=Path, default=DEFAULT_DATABASE_LOCATION)
     summary.add_argument("--csv", type=Path, default=None)
     summary.set_defaults(run=_show_summary)
 
@@ -144,13 +150,13 @@ def _parse_arguments() -> argparse.Namespace:
         "set-password", help="set the password guarding the web interface"
     )
     password.add_argument("password")
-    password.add_argument("--database", type=Path, default=DEFAULT_LOCATION)
+    password.add_argument("--database", type=Path, default=DEFAULT_DATABASE_LOCATION)
     password.set_defaults(run=_set_password)
 
     serve = commands.add_parser("serve", help="run the web interface")
-    serve.add_argument("--database", type=Path, default=DEFAULT_LOCATION)
+    serve.add_argument("--database", type=Path, default=DEFAULT_DATABASE_LOCATION)
     serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=DEFAULT_PORT)
+    serve.add_argument("--port", type=int, default=DEFAULT_WEB_PORT)
     serve.set_defaults(run=_serve)
 
     return parser.parse_args()

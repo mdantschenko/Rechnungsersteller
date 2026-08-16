@@ -16,9 +16,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from pywebpush import WebPushException, webpush
 from sqlmodel import Session, select
 
+from invoicing.constant import PUSH_SUBSCRIPTION_GONE_STATUS_CODES
 from invoicing.storage.models import AppSettings, PushSubscription
-
-GONE = (404, 410)
 
 
 def application_server_key(session: Session, settings: AppSettings) -> str:
@@ -80,7 +79,10 @@ def send_to_all(
             )
             delivered += 1
         except WebPushException as error:
-            if error.response is not None and error.response.status_code in GONE:
+            if (
+                error.response is not None
+                and error.response.status_code in PUSH_SUBSCRIPTION_GONE_STATUS_CODES
+            ):
                 session.delete(subscription)
     return delivered
 

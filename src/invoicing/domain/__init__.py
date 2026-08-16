@@ -5,21 +5,15 @@ individual module paths, and so that the dependency graph shows the domain as
 a whole.
 """
 
+from invoicing.constant import BillingCycle, TotalRule, ValueKind, ValueSource
 from invoicing.domain.billing_period import (
-    BillingCycle,
     BillingPeriod,
     is_closing_day,
     next_closing_day,
     period_closing_on,
     period_containing,
 )
-from invoicing.domain.columns import (
-    Column,
-    ColumnValue,
-    TotalRule,
-    ValueKind,
-    ValueSource,
-)
+from invoicing.domain.columns import Column, ColumnValue
 from invoicing.domain.invoice import (
     Address,
     BillingTemplate,

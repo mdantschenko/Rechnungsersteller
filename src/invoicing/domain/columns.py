@@ -15,34 +15,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
-from enum import StrEnum
 
-from invoicing.domain.money import ZERO, format_euro, format_quantity, round_to_cents
+from invoicing.constant import (
+    EXTRA_COLUMN_PLACEHOLDER,
+    ZERO,
+    TotalRule,
+    ValueKind,
+    ValueSource,
+)
+from invoicing.domain.money import format_euro, format_quantity, round_to_cents
 
 ColumnValue = Decimal | str | None
-
-
-class ValueSource(StrEnum):
-    """Where a column takes its value from."""
-
-    FIXED = "fixed"
-    PER_LESSON = "per_lesson"
-
-
-class ValueKind(StrEnum):
-    """How a value is rendered, and whether it can count towards a total."""
-
-    MONEY = "money"
-    QUANTITY = "quantity"
-    TEXT = "text"
-
-
-class TotalRule(StrEnum):
-    """How a column enters the row total."""
-
-    EXCLUDED = "excluded"
-    ADD_PER_ROW = "add_per_row"
-    MULTIPLY_BY_QUANTITY = "multiply_by_quantity"
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +37,7 @@ class Column:
     kind: ValueKind = ValueKind.MONEY
     total_rule: TotalRule = TotalRule.EXCLUDED
     default_value: ColumnValue = None
-    placeholder: str = "/"
+    placeholder: str = EXTRA_COLUMN_PLACEHOLDER
 
     def value_for(self, lesson_values: Mapping[str, ColumnValue]) -> ColumnValue:
         """The value for one row; what the lesson carries beats the default."""

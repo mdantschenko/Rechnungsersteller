@@ -5,9 +5,9 @@ from pathlib import Path
 import pdfplumber
 import pytest
 
+from invoicing.constant import PDF_RENDERER_AUTOMATIC
 from invoicing.pdf.invoice_document import to_html
 from invoicing.pdf.renderers import (
-    AUTOMATIC,
     ChromiumRenderer,
     WeasyPrintRenderer,
     select_renderer,
@@ -48,4 +48,6 @@ def test_a_named_renderer_is_honoured(name: str, expected: type) -> None:
 
 
 def test_automatic_falls_back_to_a_usable_renderer() -> None:
-    assert isinstance(select_renderer(AUTOMATIC), WeasyPrintRenderer | ChromiumRenderer)
+    assert isinstance(
+        select_renderer(PDF_RENDERER_AUTOMATIC), WeasyPrintRenderer | ChromiumRenderer
+    )

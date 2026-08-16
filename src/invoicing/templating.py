@@ -9,11 +9,16 @@ from __future__ import annotations
 
 from jinja2 import Environment
 
+from invoicing.constant import (
+    TEMPLATE_FILTER_EURO,
+    TEMPLATE_FILTER_GERMAN_DATE,
+    TEMPLATE_FILTER_QUANTITY,
+)
 from invoicing.domain.dates import german_date
 from invoicing.domain.money import format_euro, format_quantity
 
 
 def install_german_filters(environment: Environment) -> None:
-    environment.filters["euro"] = format_euro
-    environment.filters["quantity"] = format_quantity
-    environment.filters["german_date"] = german_date
+    environment.filters[TEMPLATE_FILTER_EURO] = format_euro
+    environment.filters[TEMPLATE_FILTER_QUANTITY] = format_quantity
+    environment.filters[TEMPLATE_FILTER_GERMAN_DATE] = german_date

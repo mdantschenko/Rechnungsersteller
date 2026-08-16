@@ -4,8 +4,8 @@ from datetime import date
 
 import pytest
 
+from invoicing.constant import BillingCycle
 from invoicing.domain.billing_period import (
-    BillingCycle,
     is_closing_day,
     next_closing_day,
     period_closing_on,

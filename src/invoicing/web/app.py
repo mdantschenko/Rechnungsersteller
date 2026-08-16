@@ -22,7 +22,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
 from invoicing import alarms, push
-from invoicing.storage.database import DEFAULT_LOCATION, open_database
+from invoicing.constant import (
+    ALARM_CHECK_INTERVAL_SECONDS,
+    DEFAULT_DATABASE_LOCATION,
+    SIGN_IN_EXEMPT_PATHS,
+    SIGNED_IN_SESSION_KEY,
+    WEB_STATIC_DIRECTORY,
+)
+from invoicing.storage.database import open_database
 from invoicing.web import (
     calendar_page,
     customers_page,
@@ -33,14 +40,11 @@ from invoicing.web import (
     settings_page,
     sign_in,
 )
-from invoicing.web.page import STATIC_FOLDER, settings_of
-from invoicing.web.security import SESSION_KEY, signing_key
-
-OPEN_PATHS = ("/anmelden", "/static", "/manifest.webmanifest", "/sw.js")
-RING_CHECK_SECONDS = 30
+from invoicing.web.page import settings_of
+from invoicing.web.security import signing_key
 
 
-def create_app(location: Path = DEFAULT_LOCATION) -> FastAPI:
+def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
     """Build the application against the database at ``location``."""
     engine = open_database(location)
     with Session(engine) as session:
@@ -57,7 +61,7 @@ def create_app(location: Path = DEFAULT_LOCATION) -> FastAPI:
     # registered first in order to run inside the session cookie handling.
     app.middleware("http")(_send_strangers_to_the_sign_in_page)
     app.add_middleware(SessionMiddleware, secret_key=secret, same_site="lax")
-    app.mount("/static", StaticFiles(directory=STATIC_FOLDER), name="static")
+    app.mount("/static", StaticFiles(directory=WEB_STATIC_DIRECTORY), name="static")
     for page in (
         sign_in,
         pwa,
@@ -86,7 +90,7 @@ async def _ring_forever(engine: Engine) -> None:
             await asyncio.to_thread(_ring_once, engine)
         except Exception:
             logging.getLogger(__name__).exception("Weckrunde fehlgeschlagen")
-        await asyncio.sleep(RING_CHECK_SECONDS)
+        await asyncio.sleep(ALARM_CHECK_INTERVAL_SECONDS)
 
 
 def _ring_once(engine: Engine) -> None:
@@ -105,6 +109,8 @@ def _ring_once(engine: Engine) -> None:
 async def _send_strangers_to_the_sign_in_page(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    if request.url.path.startswith(OPEN_PATHS) or request.session.get(SESSION_KEY):
+    if request.url.path.startswith(SIGN_IN_EXEMPT_PATHS) or request.session.get(
+        SIGNED_IN_SESSION_KEY
+    ):
         return await call_next(request)
     return RedirectResponse("/anmelden", status_code=303)

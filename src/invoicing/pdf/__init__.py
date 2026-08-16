@@ -2,7 +2,6 @@
 
 from invoicing.pdf.invoice_document import to_html, write_pdf
 from invoicing.pdf.renderers import (
-    AUTOMATIC,
     ChromiumRenderer,
     PdfRenderer,
     WeasyPrintRenderer,
@@ -10,7 +9,6 @@ from invoicing.pdf.renderers import (
 )
 
 __all__ = [
-    "AUTOMATIC",
     "ChromiumRenderer",
     "PdfRenderer",
     "WeasyPrintRenderer",

@@ -10,8 +10,13 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlmodel import Session, col, select
 from starlette.responses import RedirectResponse, Response
 
-from invoicing.domain.billing_period import BillingCycle
-from invoicing.domain.columns import TotalRule, ValueKind, ValueSource
+from invoicing.constant import (
+    DEFAULT_LESSON_UNIT_PRICE,
+    BillingCycle,
+    TotalRule,
+    ValueKind,
+    ValueSource,
+)
 from invoicing.domain.money import parse_user_amount
 from invoicing.scheduling import materialise_series, planning_horizon
 from invoicing.storage.models import (
@@ -37,8 +42,6 @@ from invoicing.web.page import (
 )
 
 router = APIRouter()
-
-DEFAULT_UNIT_PRICE = Decimal("30.00")
 
 
 @router.get("/kunden")
@@ -75,7 +78,9 @@ def add_customer(
     session.add(customer)
     session.flush()
     session.add(
-        BillingTemplate(customer_id=customer.id or 0, unit_price=DEFAULT_UNIT_PRICE)
+        BillingTemplate(
+            customer_id=customer.id or 0, unit_price=DEFAULT_LESSON_UNIT_PRICE
+        )
     )
     return RedirectResponse(f"/kunden/{customer.id}", status_code=303)
 
@@ -456,7 +461,9 @@ def _terms(session: Session, customer_id: int) -> BillingTemplate:
         select(BillingTemplate).where(BillingTemplate.customer_id == customer_id)
     ).first()
     if terms is None:
-        terms = BillingTemplate(customer_id=customer_id, unit_price=DEFAULT_UNIT_PRICE)
+        terms = BillingTemplate(
+            customer_id=customer_id, unit_price=DEFAULT_LESSON_UNIT_PRICE
+        )
         session.add(terms)
         session.flush()
     return terms

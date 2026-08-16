@@ -6,8 +6,9 @@ from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 
-from invoicing.domain.billing_period import BillingCycle, period_closing_on
-from invoicing.domain.columns import Column, TotalRule, ValueSource
+from invoicing.constant import BillingCycle, TotalRule, ValueSource
+from invoicing.domain.billing_period import period_closing_on
+from invoicing.domain.columns import Column
 from invoicing.domain.invoice import (
     Address,
     BillingTemplate,

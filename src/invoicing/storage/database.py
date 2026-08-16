@@ -16,11 +16,10 @@ from alembic.config import Config
 from sqlalchemy import Engine
 from sqlmodel import Session, create_engine
 
-MIGRATIONS = Path(__file__).resolve().parents[3] / "migrations"
-DEFAULT_LOCATION = Path("data/invoicing.db")
+from invoicing.constant import DATABASE_MIGRATIONS_DIRECTORY, DEFAULT_DATABASE_LOCATION
 
 
-def open_database(location: Path = DEFAULT_LOCATION) -> Engine:
+def open_database(location: Path = DEFAULT_DATABASE_LOCATION) -> Engine:
     """Open the database, creating and migrating the file when necessary."""
     location.parent.mkdir(parents=True, exist_ok=True)
     url = f"sqlite:///{location}"
@@ -42,6 +41,6 @@ def session_for(engine: Engine) -> Iterator[Session]:
 
 def _alembic_config(url: str) -> Config:
     config = Config()
-    config.set_main_option("script_location", str(MIGRATIONS))
+    config.set_main_option("script_location", str(DATABASE_MIGRATIONS_DIRECTORY))
     config.set_main_option("sqlalchemy.url", url)
     return config

@@ -21,10 +21,9 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
-from invoicing.domain.money import ZERO, format_euro
+from invoicing.constant import REVENUE_CSV_HEADER, ZERO
+from invoicing.domain.money import format_euro
 from invoicing.storage.models import Customer, IssuedInvoice
-
-CSV_HEADER = ("Jahr", "Kunde", "Rechnungen", "Summe")
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +70,7 @@ def write_csv(rows: Sequence[RevenueRow], destination: Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle, delimiter=";")
-        writer.writerow(CSV_HEADER)
+        writer.writerow(REVENUE_CSV_HEADER)
         for row in rows:
             writer.writerow(
                 [row.year, row.customer, row.invoice_count, format_euro(row.total)]

@@ -16,7 +16,7 @@ from decimal import Decimal
 from sqlmodel import Session, col, select
 
 from invoicing.billing import priced_line
-from invoicing.domain.money import ZERO
+from invoicing.constant import ZERO
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,

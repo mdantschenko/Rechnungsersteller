@@ -19,25 +19,21 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from invoicing.constant import (
+    EN_DASH,
+    LEGACY_AMOUNT_PATTERN,
+    LEGACY_EXTRA_COLUMN_PATTERN,
+    LEGACY_INVOICE_NUMBER_PATTERN,
+    LEGACY_ISSUE_DATE_PATTERN,
+    LEGACY_LINE_ITEM_PATTERN,
+    LEGACY_PERIOD_PATTERN,
+    LEGACY_PRINTED_TOTAL_PATTERN,
+    LEGACY_RECIPIENT_LINE_COUNT,
+    LEGACY_SETTLED_PATTERN,
+    ZERO,
+)
 from invoicing.domain.invoice import Address
-from invoicing.domain.money import ZERO, round_to_cents
-
-EN_DASH = "–"
-RECIPIENT_LINE_COUNT = 3
-
-INVOICE_NUMBER = re.compile(r"Rechnung\s+Nr\.?\s*(\d+)")
-ISSUE_DATE = re.compile(r"Datum:\s*(\d{2}\.\d{2}\.\d{4})")
-PERIOD = re.compile(r"vom\s+(\d{2}\.\d{2}\.\d{4})\s+bis zum\s+(\d{2}\.\d{2}\.\d{4})")
-EXTRA_COLUMN = re.compile(
-    r"Anzahl\s+Einheit\s+Bezeichnung\s*/\s*Datum\s+Einzelpreis\s+(.*?)\s+Gesamtpreis"
-)
-LINE_ITEM = re.compile(
-    r"^(\d+(?:,\d+)?)\s+(\w+)\s+(.*?)\s*/\s*(\d{2}\.\d{2}\.\d{4})\s+"
-    r"([\d.,]+)\s*€\s+(.*?)\s+([\d.,]+)\s*€$"
-)
-PRINTED_TOTAL = re.compile(r"Gesamtbetrag\s+([\d.,]+)\s*€")
-SETTLED = re.compile(r"wurde bereits am\s+(\d{2}\.\d{2}\.\d{4})")
-AMOUNT = re.compile(r"^([\d.]+,\d{2}|\d+)\s*€$")
+from invoicing.domain.money import round_to_cents
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,7 +137,11 @@ def _record_invoice(
 def read_document(document: Path) -> Iterator[ParsedInvoice]:
     """Read every invoice contained in one Markdown file."""
     lines = [_flatten(raw) for raw in document.read_text(encoding="utf-8").splitlines()]
-    anchors = [index for index, line in enumerate(lines) if INVOICE_NUMBER.search(line)]
+    anchors = [
+        index
+        for index, line in enumerate(lines)
+        if LEGACY_INVOICE_NUMBER_PATTERN.search(line)
+    ]
     for position, anchor in enumerate(anchors):
         end = anchors[position + 1] if position + 1 < len(anchors) else len(lines)
         yield _read_invoice(lines, anchor, end, document.name)
@@ -150,12 +150,16 @@ def read_document(document: Path) -> Iterator[ParsedInvoice]:
 def _read_invoice(
     lines: Sequence[str], anchor: int, end: int, source: str
 ) -> ParsedInvoice:
-    number = int(_require(INVOICE_NUMBER.search(lines[anchor]), source).group(1))
+    number = int(
+        _require(LEGACY_INVOICE_NUMBER_PATTERN.search(lines[anchor]), source).group(1)
+    )
     body = "\n".join(lines[anchor:end])
-    period = _require(PERIOD.search(body), f"{source}, invoice {number}")
-    extra_column = EXTRA_COLUMN.search(body)
-    total = _require(PRINTED_TOTAL.search(body), f"{source}, invoice {number}")
-    settled = SETTLED.search(body)
+    period = _require(LEGACY_PERIOD_PATTERN.search(body), f"{source}, invoice {number}")
+    extra_column = LEGACY_EXTRA_COLUMN_PATTERN.search(body)
+    total = _require(
+        LEGACY_PRINTED_TOTAL_PATTERN.search(body), f"{source}, invoice {number}"
+    )
+    settled = LEGACY_SETTLED_PATTERN.search(body)
     return ParsedInvoice(
         number=number,
         issued_on=_issue_date_above(lines, anchor, number, source),
@@ -172,7 +176,7 @@ def _read_invoice(
 
 def _read_lines(block: Sequence[str]) -> Iterator[ParsedLine]:
     for line in block:
-        match = LINE_ITEM.match(line)
+        match = LEGACY_LINE_ITEM_PATTERN.match(line)
         if match is None:
             continue
         extra_printed = match.group(6).strip()
@@ -192,7 +196,7 @@ def _issue_date_above(
     lines: Sequence[str], anchor: int, number: int, source: str
 ) -> date:
     for index in range(anchor, -1, -1):
-        found = ISSUE_DATE.search(lines[index])
+        found = LEGACY_ISSUE_DATE_PATTERN.search(lines[index])
         if found:
             return _german_date(found.group(1))
         if EN_DASH in lines[index]:
@@ -208,12 +212,12 @@ def _recipient_above(
         line = lines[index]
         if EN_DASH in line:
             break
-        if not line or _is_rule(line) or ISSUE_DATE.search(line):
+        if not line or _is_rule(line) or LEGACY_ISSUE_DATE_PATTERN.search(line):
             continue
         collected.append(line)
-    if len(collected) != RECIPIENT_LINE_COUNT:
+    if len(collected) != LEGACY_RECIPIENT_LINE_COUNT:
         raise ValueError(
-            f"expected {RECIPIENT_LINE_COUNT} address lines above invoice "
+            f"expected {LEGACY_RECIPIENT_LINE_COUNT} address lines above invoice "
             f"{number} in {source}, found {collected}"
         )
     city, street, name = collected
@@ -231,7 +235,7 @@ def _describe_same_invoice(one: ParsedInvoice, other: ParsedInvoice) -> bool:
 
 
 def _extra_amount(printed: str) -> Decimal | None:
-    match = AMOUNT.match(printed)
+    match = LEGACY_AMOUNT_PATTERN.match(printed)
     return _amount(match.group(1)) if match else None
 
 

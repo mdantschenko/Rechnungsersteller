@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlmodel import Session
 from starlette.responses import RedirectResponse, Response
 
+from invoicing.constant import SIGNED_IN_SESSION_KEY
 from invoicing.web.page import database, templates
-from invoicing.web.security import SESSION_KEY, password_matches
+from invoicing.web.security import password_matches
 
 router = APIRouter()
 
@@ -27,7 +28,7 @@ def sign_in(
         return templates.TemplateResponse(
             request, "sign_in.html", {"failed": True}, status_code=401
         )
-    request.session[SESSION_KEY] = True
+    request.session[SIGNED_IN_SESSION_KEY] = True
     return RedirectResponse("/", status_code=303)
 
 

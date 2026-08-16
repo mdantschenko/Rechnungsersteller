@@ -9,39 +9,20 @@ from sqlmodel import Session
 from starlette.responses import FileResponse, JSONResponse, Response
 
 from invoicing import push
-from invoicing.web.page import STATIC_FOLDER, database, notice_redirect, settings_of
+from invoicing.constant import PWA_MANIFEST, WEB_STATIC_DIRECTORY
+from invoicing.web.page import database, notice_redirect, settings_of
 
 router = APIRouter()
-
-MANIFEST = {
-    "name": "Rechnungsersteller",
-    "short_name": "Rechnungen",
-    "start_url": "/",
-    "scope": "/",
-    "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#ffffff",
-    "lang": "de",
-    "icons": [
-        {"src": "/static/icon-180.png", "sizes": "180x180", "type": "image/png"},
-        {
-            "src": "/static/icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any maskable",
-        },
-    ],
-}
 
 
 @router.get("/manifest.webmanifest")
 def manifest() -> Response:
-    return JSONResponse(MANIFEST, media_type="application/manifest+json")
+    return JSONResponse(PWA_MANIFEST, media_type="application/manifest+json")
 
 
 @router.get("/sw.js")
 def service_worker() -> Response:
-    return FileResponse(STATIC_FOLDER / "sw.js", media_type="text/javascript")
+    return FileResponse(WEB_STATIC_DIRECTORY / "sw.js", media_type="text/javascript")
 
 
 class Subscription(BaseModel):

@@ -19,12 +19,12 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from sqlmodel import Session, select
 
+from invoicing.constant import (
+    PASSWORD_CODE_DIGITS,
+    PASSWORD_CODE_MINUTES,
+    SESSION_SECRET_BYTES,
+)
 from invoicing.storage.models import AppSettings
-
-SESSION_KEY = "signed_in"
-SECRET_BYTES = 32
-CODE_DIGITS = 6
-CODE_MINUTES = 15
 
 _hasher = PasswordHasher()
 
@@ -36,7 +36,7 @@ def set_password(session: Session, password: str) -> None:
         session.add(
             AppSettings(
                 password_hash=_hasher.hash(password),
-                session_secret=secrets.token_urlsafe(SECRET_BYTES),
+                session_secret=secrets.token_urlsafe(SESSION_SECRET_BYTES),
             )
         )
         return
@@ -55,9 +55,11 @@ def request_password_change(session: Session, password: str) -> str:
         raise ValueError("no password set yet")
     access.pending_password_hash = _hasher.hash(password)
     access.pending_password_code = (
-        f"{secrets.randbelow(10**CODE_DIGITS):0{CODE_DIGITS}d}"
+        f"{secrets.randbelow(10**PASSWORD_CODE_DIGITS):0{PASSWORD_CODE_DIGITS}d}"
     )
-    access.pending_password_until = datetime.now() + timedelta(minutes=CODE_MINUTES)
+    access.pending_password_until = datetime.now() + timedelta(
+        minutes=PASSWORD_CODE_MINUTES
+    )
     session.add(access)
     return access.pending_password_code
 

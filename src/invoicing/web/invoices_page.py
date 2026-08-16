@@ -19,6 +19,7 @@ from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
 from invoicing.billing import BillingRun, draft_for, manual_draft, open_runs, release
+from invoicing.constant import INVOICE_PDF_FILE_NAME_PATTERN
 from invoicing.domain.dates import german_date
 from invoicing.domain.money import format_euro
 from invoicing.pdf import preview
@@ -612,7 +613,8 @@ def _whatsapp_number(phone: str | None) -> str:
 
 def pdf_path(session: Session, record: IssuedInvoice, customer_name: str) -> Path:
     folder = Path(settings_of(session).invoice_folder) / str(record.issued_on.year)
-    return folder / f"Rechnung Nr {record.number} {customer_name}.pdf"
+    stem = INVOICE_PDF_FILE_NAME_PATTERN.format(number=record.number)
+    return folder / f"{stem} {customer_name}.pdf"
 
 
 def find_pdf(
@@ -626,7 +628,8 @@ def find_pdf(
     exact = pdf_path(session, record, customer_name)
     if exact.exists():
         return exact
+    stem = INVOICE_PDF_FILE_NAME_PATTERN.format(number=record.number)
     return next(
-        exact.parent.glob(f"Rechnung Nr {record.number} *.pdf"),
+        exact.parent.glob(f"{stem} *.pdf"),
         None,
     )

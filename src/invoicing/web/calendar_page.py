@@ -21,7 +21,12 @@ from starlette.responses import Response
 
 from invoicing import alarms, feiertage
 from invoicing.billing import priced_columns
-from invoicing.domain.columns import ValueSource
+from invoicing.constant import (
+    FEDERAL_STATE_COLORS,
+    GERMAN_LOCALE,
+    WEEK_STARTS_ON_MONDAY,
+    ValueSource,
+)
 from invoicing.domain.money import format_euro, format_quantity
 from invoicing.scheduling import materialise_series, planning_horizon
 from invoicing.storage.models import (
@@ -39,9 +44,6 @@ from invoicing.web.page import (
 )
 
 router = APIRouter()
-
-GERMAN = "de_DE"
-WEEK_STARTS_ON_MONDAY = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +127,7 @@ def _week_page(request: Request, session: Session, on: date) -> Response:
             "extras": _lesson_extras(session, lessons),
             "series": series_labels(session),
             "overdue": _open_lessons_before(session, today),
-            "colors": feiertage.STATE_COLORS,
+            "colors": FEDERAL_STATE_COLORS,
             "back": f"/woche/{monday}",
         },
     )
@@ -141,7 +143,7 @@ def a_day(on: date, request: Request, session: Session = Depends(database)) -> R
         "day.html",
         {
             "on": on,
-            "heading": format_date(on, "EEEE, d. MMMM y", locale=GERMAN),
+            "heading": format_date(on, "EEEE, d. MMMM y", locale=GERMAN_LOCALE),
             "previous": on - timedelta(days=1),
             "next": on + timedelta(days=1),
             "today": date.today(),
@@ -153,7 +155,7 @@ def a_day(on: date, request: Request, session: Session = Depends(database)) -> R
             "customers": active_customers(session),
             "holiday": public.get(on),
             "vacations": school.get(on, []),
-            "colors": feiertage.STATE_COLORS,
+            "colors": FEDERAL_STATE_COLORS,
             "back": f"/tag/{on}",
         },
     )
@@ -161,10 +163,12 @@ def a_day(on: date, request: Request, session: Session = Depends(database)) -> R
 
 def _week_heading(monday: date, sunday: date) -> str:
     if monday.month == sunday.month:
-        return f"{monday.day}.–{sunday.day}. {format_date(monday, 'LLLL', GERMAN)}"
+        return (
+            f"{monday.day}.–{sunday.day}. {format_date(monday, 'LLLL', GERMAN_LOCALE)}"
+        )
     return (
-        f"{format_date(monday, 'd. MMM', GERMAN)} – "
-        f"{format_date(sunday, 'd. MMM y', GERMAN)}"
+        f"{format_date(monday, 'd. MMM', GERMAN_LOCALE)} – "
+        f"{format_date(sunday, 'd. MMM y', GERMAN_LOCALE)}"
     )
 
 
@@ -182,7 +186,7 @@ def _month_page(request: Request, session: Session, year: int, month: int) -> Re
         request,
         "calendar.html",
         {
-            "heading": format_date(first_of_month, "LLLL y", locale=GERMAN),
+            "heading": format_date(first_of_month, "LLLL y", locale=GERMAN_LOCALE),
             "weekday_names": _weekday_names(),
             "weeks": [
                 [
@@ -196,7 +200,7 @@ def _month_page(request: Request, session: Session, year: int, month: int) -> Re
             "today": today,
             "reference": today if today.month == month else first_of_month,
             "names": names,
-            "colors": feiertage.STATE_COLORS,
+            "colors": FEDERAL_STATE_COLORS,
             "school_states": _school_states(session),
             "overdue": [
                 lesson
@@ -343,6 +347,6 @@ def _lesson_places(session: Session) -> dict[int, str]:
 def _weekday_names() -> list[str]:
     monday = date(2024, 1, 1)
     return [
-        format_date(monday + timedelta(days=offset), "EEEEEE", locale=GERMAN)
+        format_date(monday + timedelta(days=offset), "EEEEEE", locale=GERMAN_LOCALE)
         for offset in range(7)
     ]

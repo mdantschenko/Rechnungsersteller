@@ -12,10 +12,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from babel.numbers import format_currency, format_decimal
 
-CENT = Decimal("0.01")
-TEN_THOUSANDTH = Decimal("0.0001")
-ZERO = Decimal("0.00")
-GERMAN_LOCALE = "de_DE"
+from invoicing.constant import CENT, GERMAN_LOCALE, TEN_THOUSANDTH
 
 
 def round_to_cents(amount: Decimal | int | str) -> Decimal:

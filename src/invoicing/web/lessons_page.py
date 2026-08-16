@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Form
 from sqlmodel import Session, select
 from starlette.responses import RedirectResponse, Response
 
-from invoicing.domain.columns import ValueSource
+from invoicing.constant import ValueSource
 from invoicing.storage.models import BillingTemplate, Lesson, LessonStatus
 from invoicing.web.page import database
 

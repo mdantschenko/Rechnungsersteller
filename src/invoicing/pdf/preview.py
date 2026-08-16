@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pypdfium2 as pdfium
 
-SCALE = 2
+from invoicing.constant import PDF_PREVIEW_RENDER_SCALE
 
 
 def page_count(path: Path) -> int:
@@ -29,7 +29,7 @@ def page_png(path: Path, index: int) -> bytes | None:
     try:
         if index < 0 or index >= len(document):
             return None
-        image = document[index].render(scale=SCALE).to_pil()
+        image = document[index].render(scale=PDF_PREVIEW_RENDER_SCALE).to_pil()
         buffer = io.BytesIO()
         image.save(buffer, "PNG")
         return buffer.getvalue()

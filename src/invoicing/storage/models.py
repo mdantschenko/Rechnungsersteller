@@ -18,8 +18,21 @@ from typing import Any
 from sqlalchemy import JSON, Dialect, String, TypeDecorator
 from sqlmodel import Column, Field, Relationship, SQLModel
 
-from invoicing.domain.billing_period import BillingCycle
-from invoicing.domain.columns import TotalRule, ValueKind, ValueSource
+from invoicing.constant import (
+    DEFAULT_BILLING_UNIT,
+    DEFAULT_INVOICE_FOLDER,
+    DEFAULT_ISSUER_COUNTRY,
+    DEFAULT_LESSON_DESCRIPTION,
+    DEFAULT_LESSON_HORIZON_DAYS,
+    DEFAULT_PAYMENT_DAYS,
+    DEFAULT_REMINDER_MINUTES,
+    DEFAULT_SMTP_PORT,
+    EXTRA_COLUMN_PLACEHOLDER,
+    BillingCycle,
+    TotalRule,
+    ValueKind,
+    ValueSource,
+)
 
 
 class ExactDecimal(TypeDecorator[Decimal]):
@@ -197,7 +210,7 @@ class Issuer(SQLModel, table=True):
     name: str
     street: str
     city: str
-    country: str = "Deutschland"
+    country: str = DEFAULT_ISSUER_COUNTRY
     bank: str
     iban: str
     bic: str
@@ -214,8 +227,8 @@ class BillingTemplate(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     customer_id: int = Field(foreign_key="customer.id", unique=True, index=True)
     unit_price: Decimal = money_field()
-    unit: str = "h"
-    description: str = "Mathe Nachhilfe"
+    unit: str = DEFAULT_BILLING_UNIT
+    description: str = DEFAULT_LESSON_DESCRIPTION
     cycle: BillingCycle = Field(default=BillingCycle.MONTH_START)
 
     columns: list["TemplateColumn"] = Relationship(
@@ -239,7 +252,7 @@ class TemplateColumn(SQLModel, table=True):
     kind: ValueKind = ValueKind.MONEY
     total_rule: TotalRule = TotalRule.EXCLUDED
     default_value: str | None = None
-    placeholder: str = "/"
+    placeholder: str = EXTRA_COLUMN_PLACEHOLDER
 
     template: BillingTemplate = Relationship(back_populates="columns")
 
@@ -311,18 +324,18 @@ class AppSettings(SQLModel, table=True):
     pending_password_code: str | None = None
     pending_password_until: datetime | None = None
 
-    invoice_folder: str = "data/invoices"
-    lesson_horizon_days: int = 60
+    invoice_folder: str = DEFAULT_INVOICE_FOLDER
+    lesson_horizon_days: int = DEFAULT_LESSON_HORIZON_DAYS
     """How far ahead recurring series are written out as individual lessons."""
 
     smtp_host: str | None = None
-    smtp_port: int = 587
+    smtp_port: int = DEFAULT_SMTP_PORT
     smtp_user: str | None = None
     smtp_password: str | None = None
     smtp_from: str | None = None
     """Where invoices are sent from. Empty means the user name is the sender."""
 
-    reminder_minutes: int = 60
+    reminder_minutes: int = DEFAULT_REMINDER_MINUTES
     """How long before a lesson the phone should speak up."""
 
     vapid_private_key: str | None = None
@@ -334,7 +347,7 @@ class AppSettings(SQLModel, table=True):
     holiday_states: str = ""
     """Comma-separated federal state codes such as "NW,BY". Empty shows none."""
 
-    payment_days: int = 14
+    payment_days: int = DEFAULT_PAYMENT_DAYS
     """How many days after issuing a payment is due; later is overdue."""
 
     auto_send_invoices: bool = False

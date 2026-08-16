@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
-AUTOMATIC = "auto"
+from invoicing.constant import PDF_RENDERER_AUTOMATIC
 
 
 class PdfRenderer(Protocol):
@@ -54,7 +54,7 @@ class ChromiumRenderer:
                 browser.close()
 
 
-def select_renderer(name: str = AUTOMATIC) -> PdfRenderer:
+def select_renderer(name: str = PDF_RENDERER_AUTOMATIC) -> PdfRenderer:
     """Pick a renderer by name, or the best one available for ``auto``."""
     if name == "weasyprint":
         return WeasyPrintRenderer()

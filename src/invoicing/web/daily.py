@@ -11,7 +11,7 @@ from __future__ import annotations
 import io
 import secrets
 import sqlite3
-from datetime import date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -19,8 +19,12 @@ import pyzipper
 from sqlmodel import Session, select
 
 from invoicing import mail
-from invoicing.alarms import Deliver
 from invoicing.billing import release
+from invoicing.constant import (
+    BACKUP_PASSPHRASE_LENGTH,
+    MORNING_ROUND_STARTS_AT,
+    DeliverPushMessage,
+)
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
 from invoicing.web.invoices_page import (
@@ -30,13 +34,11 @@ from invoicing.web.invoices_page import (
     pdf_path,
 )
 
-STARTS_AT = time(7, 0)
-
 
 def morning_round(
-    session: Session, settings: AppSettings, now: datetime, deliver: Deliver
+    session: Session, settings: AppSettings, now: datetime, deliver: DeliverPushMessage
 ) -> None:
-    if now.time() < STARTS_AT or settings.last_daily_round == now.date():
+    if now.time() < MORNING_ROUND_STARTS_AT or settings.last_daily_round == now.date():
         return
     settings.last_daily_round = now.date()
     session.add(settings)
@@ -116,7 +118,7 @@ def _mail_weekly_backup(session: Session, settings: AppSettings, today: date) ->
         return False
     settings.last_backup_mailed = today
     if not settings.backup_passphrase:
-        settings.backup_passphrase = secrets.token_urlsafe(12)
+        settings.backup_passphrase = secrets.token_urlsafe(BACKUP_PASSPHRASE_LENGTH)
     session.add(settings)
     try:
         mail.send_attachment(

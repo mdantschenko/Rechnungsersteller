@@ -15,8 +15,7 @@ import pytest
 from sqlalchemy import Engine
 from sqlmodel import Session
 
-from invoicing.domain.billing_period import BillingCycle
-from invoicing.domain.columns import TotalRule, ValueSource
+from invoicing.constant import BillingCycle, TotalRule, ValueSource
 from invoicing.storage.database import open_database
 from invoicing.storage.models import (
     BillingTemplate,

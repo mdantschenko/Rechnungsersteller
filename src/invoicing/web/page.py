@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import date, time
-from pathlib import Path
 
 from babel.dates import format_date
 from fastapi import Request
@@ -12,28 +11,28 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, col, select
 from starlette.responses import RedirectResponse
 
+from invoicing.constant import (
+    GERMAN_LOCALE,
+    GERMAN_WEEKDAY_NAMES,
+    NOTICE_SESSION_KEY,
+    WEB_STATIC_DIRECTORY,
+    WEB_TEMPLATES_DIRECTORY,
+)
 from invoicing.storage.database import session_for
 from invoicing.storage.models import AppSettings, Customer, CustomerStatus, LessonSeries
 from invoicing.templating import install_german_filters
 
-NOTICE_KEY = "hinweis"
-
-TEMPLATES_FOLDER = Path(__file__).parent / "templates"
-STATIC_FOLDER = Path(__file__).parent / "static"
-
-GERMAN = "de_DE"
-
 
 def short_date(day: date) -> str:
-    return format_date(day, "EE d.M.", locale=GERMAN)
+    return format_date(day, "EE d.M.", locale=GERMAN_LOCALE)
 
 
 def long_weekday(day: date) -> str:
-    return format_date(day, "EEEE, d. MMMM", locale=GERMAN)
+    return format_date(day, "EEEE, d. MMMM", locale=GERMAN_LOCALE)
 
 
 def month_name(day: date) -> str:
-    return format_date(day, "LLLL", locale=GERMAN)
+    return format_date(day, "LLLL", locale=GERMAN_LOCALE)
 
 
 def clock(moment: time) -> str:
@@ -47,10 +46,10 @@ def _static_version() -> int:
     Read once at import; every deploy restarts the server, and that restart
     is what makes the phones drop their stale caches.
     """
-    return max(int(entry.stat().st_mtime) for entry in STATIC_FOLDER.iterdir())
+    return max(int(entry.stat().st_mtime) for entry in WEB_STATIC_DIRECTORY.iterdir())
 
 
-templates = Jinja2Templates(directory=TEMPLATES_FOLDER)
+templates = Jinja2Templates(directory=WEB_TEMPLATES_DIRECTORY)
 install_german_filters(templates.env)
 templates.env.filters["short_date"] = short_date
 templates.env.filters["long_weekday"] = long_weekday
@@ -104,7 +103,7 @@ def notice_redirect(request: Request, path: str, message: str) -> RedirectRespon
     The message travels in the session rather than in the URL, so a crafted
     link cannot place its own words inside the application's chrome.
     """
-    request.session[NOTICE_KEY] = message
+    request.session[NOTICE_SESSION_KEY] = message
     return RedirectResponse(path, status_code=303)
 
 
@@ -122,23 +121,16 @@ def _recurrence_label(recurrence: str) -> str:
     return "Serie"
 
 
-WEEKDAY_NAMES = {
-    "MO": "Montag",
-    "TU": "Dienstag",
-    "WE": "Mittwoch",
-    "TH": "Donnerstag",
-    "FR": "Freitag",
-    "SA": "Samstag",
-    "SU": "Sonntag",
-}
-
-
 def recurrence_words(recurrence: str) -> str:
     """The recurrence rule as a German sentence: "Jeden zweiten Dienstag"."""
     if "FREQ=WEEKLY" not in recurrence:
         return recurrence
     day = next(
-        (name for code, name in WEEKDAY_NAMES.items() if f"BYDAY={code}" in recurrence),
+        (
+            name
+            for code, name in GERMAN_WEEKDAY_NAMES.items()
+            if f"BYDAY={code}" in recurrence
+        ),
         None,
     )
     if day is None:

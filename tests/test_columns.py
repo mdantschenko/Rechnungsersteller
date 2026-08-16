@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from invoicing.domain.columns import Column, TotalRule, ValueKind, ValueSource
+from invoicing.constant import TotalRule, ValueKind, ValueSource
+from invoicing.domain.columns import Column
 
 ONE_HOUR = Decimal("1")
 TWO_HOURS = Decimal("2")

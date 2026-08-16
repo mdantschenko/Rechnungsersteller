@@ -11,57 +11,19 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from datetime import date, timedelta
 
 import holidays as holiday_calendars
 from sqlmodel import Session, col, select
 
+from invoicing.constant import (
+    GERMAN_FEDERAL_STATES,
+    HOLIDAY_API_TIMEOUT_SECONDS,
+    OPENHOLIDAYS_SCHOOL_HOLIDAYS_URL,
+    FetchSchoolHolidays,
+)
 from invoicing.storage.models import AppSettings, SchoolHoliday
-
-STATES = {
-    "BW": "Baden-Württemberg",
-    "BY": "Bayern",
-    "BE": "Berlin",
-    "BB": "Brandenburg",
-    "HB": "Bremen",
-    "HH": "Hamburg",
-    "HE": "Hessen",
-    "MV": "Mecklenburg-Vorpommern",
-    "NI": "Niedersachsen",
-    "NW": "Nordrhein-Westfalen",
-    "RP": "Rheinland-Pfalz",
-    "SL": "Saarland",
-    "SN": "Sachsen",
-    "ST": "Sachsen-Anhalt",
-    "SH": "Schleswig-Holstein",
-    "TH": "Thüringen",
-}
-
-# One colour per federal state, so overlapping school holidays stay apart.
-STATE_COLORS = {
-    "BW": "#e6550d",
-    "BY": "#3182bd",
-    "BE": "#31a354",
-    "BB": "#756bb1",
-    "HB": "#dd1c77",
-    "HH": "#fd8d3c",
-    "HE": "#e6ab02",
-    "MV": "#6baed6",
-    "NI": "#74c476",
-    "NW": "#2563eb",
-    "RP": "#9e9ac8",
-    "SL": "#a6761d",
-    "SN": "#66a61e",
-    "ST": "#e7298a",
-    "SH": "#7570b3",
-    "TH": "#1b9e77",
-}
-
-OPENHOLIDAYS = "https://openholidaysapi.org/SchoolHolidays"
-TIMEOUT_SECONDS = 20
-
-Fetch = Callable[[str, date, date], list[dict]]
 
 
 class HolidayFetchError(Exception):
@@ -71,7 +33,9 @@ class HolidayFetchError(Exception):
 def chosen_states(settings: AppSettings) -> list[str]:
     """The federal states picked on the settings screen, invalid codes dropped."""
     return [
-        code for code in (settings.holiday_states or "").split(",") if code in STATES
+        code
+        for code in (settings.holiday_states or "").split(",")
+        if code in GERMAN_FEDERAL_STATES
     ]
 
 
@@ -125,7 +89,10 @@ def _mark_holiday_days(
 
 
 def refresh_school_holidays(
-    session: Session, states: Sequence[str], today: date, fetch: Fetch | None = None
+    session: Session,
+    states: Sequence[str],
+    today: date,
+    fetch: FetchSchoolHolidays | None = None,
 ) -> int:
     """Replace the cache with fresh data for the chosen states.
 
@@ -163,16 +130,17 @@ def _german_name(entry: dict) -> str:
 
 def _download(state: str, first: date, last: date) -> list[dict]:
     url = (
-        f"{OPENHOLIDAYS}?countryIsoCode=DE&subdivisionCode=DE-{state}"
+        f"{OPENHOLIDAYS_SCHOOL_HOLIDAYS_URL}?countryIsoCode=DE"
+        f"&subdivisionCode=DE-{state}"
         f"&languageIsoCode=DE&validFrom={first}&validTo={last}"
     )
     try:
-        with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as answer:
+        with urllib.request.urlopen(url, timeout=HOLIDAY_API_TIMEOUT_SECONDS) as answer:
             payload = json.load(answer)
     except (urllib.error.URLError, TimeoutError, ValueError) as error:
         raise HolidayFetchError(
-            f"Die Ferien für {STATES.get(state, state)} ließen sich nicht "
-            f"laden: {error}"
+            f"Die Ferien für {GERMAN_FEDERAL_STATES.get(state, state)} ließen "
+            f"sich nicht laden: {error}"
         ) from error
     if not isinstance(payload, list):
         raise HolidayFetchError("Die Ferien-Antwort hatte eine unerwartete Form.")

@@ -21,25 +21,11 @@ belongs to the invoice before it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
-from enum import StrEnum
+from datetime import date
 
 from dateutil.relativedelta import relativedelta
 
-ONE_DAY = timedelta(days=1)
-
-
-class BillingCycle(StrEnum):
-    """Which day of the month a customer's invoice is drawn up on."""
-
-    MONTH_START = "month_start"
-    MONTH_MIDPOINT = "month_midpoint"
-
-
-CLOSING_DAY_OF_MONTH = {
-    BillingCycle.MONTH_START: 1,
-    BillingCycle.MONTH_MIDPOINT: 15,
-}
+from invoicing.constant import CLOSING_DAY_OF_MONTH, ONE_DAY, BillingCycle
 
 
 @dataclass(frozen=True, slots=True)

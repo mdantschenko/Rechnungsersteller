@@ -13,6 +13,12 @@ from starlette.responses import RedirectResponse, Response
 
 from invoicing import feiertage, mail
 from invoicing.billing import domain_issuer, sequence_of
+from invoicing.constant import (
+    BACKUP_PASSPHRASE_LENGTH,
+    GERMAN_FEDERAL_STATES,
+    PAYMENT_DAYS_MAXIMUM,
+    REMINDER_MINUTES_MAXIMUM,
+)
 from invoicing.domain import invoice as document
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.sample import sample_invoice
@@ -27,7 +33,7 @@ router = APIRouter()
 def settings_form(request: Request, session: Session = Depends(database)) -> Response:
     settings = settings_of(session)
     if not settings.backup_passphrase:
-        settings.backup_passphrase = secrets.token_urlsafe(12)
+        settings.backup_passphrase = secrets.token_urlsafe(BACKUP_PASSPHRASE_LENGTH)
         session.add(settings)
     numbering = session.exec(select(NumberState)).first()
     return templates.TemplateResponse(
@@ -38,7 +44,7 @@ def settings_form(request: Request, session: Session = Depends(database)) -> Res
             "numbering": numbering,
             "next_number": sequence_of(numbering).peek(),
             "settings": settings,
-            "states": feiertage.STATES,
+            "states": GERMAN_FEDERAL_STATES,
             "chosen_states": feiertage.chosen_states(settings),
             "pending_password": security.has_pending_password(session),
         },
@@ -56,7 +62,7 @@ def save_holidays(
     settings = settings_of(session)
     settings.show_public_holidays = bool(show_public_holidays)
     settings.show_school_holidays = bool(show_school_holidays)
-    chosen = [code for code in states if code in feiertage.STATES]
+    chosen = [code for code in states if code in GERMAN_FEDERAL_STATES]
     settings.holiday_states = ",".join(chosen)
     session.add(settings)
     if not (settings.show_school_holidays and chosen):
@@ -89,7 +95,7 @@ def save_payment_terms(
     session: Session = Depends(database),
 ) -> Response:
     settings = settings_of(session)
-    settings.payment_days = max(0, min(payment_days, 90))
+    settings.payment_days = max(0, min(payment_days, PAYMENT_DAYS_MAXIMUM))
     session.add(settings)
     return notice_redirect(request, "/einstellungen", "Zahlungsziel gespeichert.")
 
@@ -101,7 +107,7 @@ def save_reminders(
     session: Session = Depends(database),
 ) -> Response:
     settings = settings_of(session)
-    settings.reminder_minutes = max(0, min(reminder_minutes, 24 * 60))
+    settings.reminder_minutes = max(0, min(reminder_minutes, REMINDER_MINUTES_MAXIMUM))
     session.add(settings)
     return notice_redirect(request, "/einstellungen", "Erinnerungen gespeichert.")
 

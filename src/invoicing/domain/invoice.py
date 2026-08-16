@@ -12,9 +12,14 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
+from invoicing.constant import (
+    DEFAULT_BILLING_UNIT,
+    DEFAULT_LESSON_DESCRIPTION,
+    ZERO,
+)
 from invoicing.domain.billing_period import BillingPeriod
 from invoicing.domain.columns import Column, ColumnValue
-from invoicing.domain.money import ZERO, round_to_cents
+from invoicing.domain.money import round_to_cents
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,8 +64,8 @@ class BillingTemplate:
     """A customer's invoicing settings: price, wording and extra columns."""
 
     unit_price: Decimal
-    unit: str = "h"
-    description: str = "Mathe Nachhilfe"
+    unit: str = DEFAULT_BILLING_UNIT
+    description: str = DEFAULT_LESSON_DESCRIPTION
     columns: Sequence[Column] = ()
 
 
