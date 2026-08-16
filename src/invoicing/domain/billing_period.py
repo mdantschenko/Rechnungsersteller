@@ -20,29 +20,12 @@ belongs to the invoice before it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
 
 from invoicing.constant import CLOSING_DAY_OF_MONTH, ONE_DAY, BillingCycle
-
-
-@dataclass(frozen=True, slots=True)
-class BillingPeriod:
-    """A closed billing stretch, ready to be invoiced.
-
-    ``printed_from`` and ``last_day`` are what the document says. ``first_day``
-    is where the period really begins, which for a mid-month cycle is the day
-    after the printed start because that day was already billed.
-    """
-
-    printed_from: date
-    first_day: date
-    last_day: date
-
-    def covers(self, day: date) -> bool:
-        return self.first_day <= day <= self.last_day
+from invoicing.data_classes import BillingPeriod
 
 
 def is_closing_day(cycle: BillingCycle, day: date) -> bool:

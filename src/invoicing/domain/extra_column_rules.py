@@ -10,17 +10,19 @@ from collections.abc import Mapping
 from decimal import Decimal
 
 from invoicing.constant import ZERO, TotalRule, ValueKind, ValueSource
-from invoicing.domain.columns import Column, ColumnValue
+from invoicing.data_classes import ExtraColumn, ExtraColumnValue
 from invoicing.domain.money import format_euro, format_quantity, round_to_cents
 
 
 class ExtraColumnRules:
     """The behaviour of one configured column, applied row by row."""
 
-    def __init__(self, column: Column) -> None:
+    def __init__(self, column: ExtraColumn) -> None:
         self.column = column
 
-    def value_for(self, lesson_values: Mapping[str, ColumnValue]) -> ColumnValue:
+    def value_for(
+        self, lesson_values: Mapping[str, ExtraColumnValue]
+    ) -> ExtraColumnValue:
         """The value for one row; what the lesson carries beats the default."""
         if (
             self.column.source is ValueSource.PER_LESSON
@@ -29,7 +31,7 @@ class ExtraColumnRules:
             return lesson_values[self.column.label]
         return self.column.default_value
 
-    def display(self, value: ColumnValue) -> str:
+    def display(self, value: ExtraColumnValue) -> str:
         """The text printed in this column's cell."""
         if value is None:
             return self.column.placeholder
@@ -39,7 +41,7 @@ class ExtraColumnRules:
             return format_quantity(Decimal(value))
         return str(value)
 
-    def contribution(self, value: ColumnValue, quantity: Decimal) -> Decimal:
+    def contribution(self, value: ExtraColumnValue, quantity: Decimal) -> Decimal:
         """What this column adds to the row total."""
         if value is None or self.column.kind is not ValueKind.MONEY:
             return ZERO

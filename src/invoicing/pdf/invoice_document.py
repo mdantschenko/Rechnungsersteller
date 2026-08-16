@@ -19,8 +19,8 @@ from invoicing.constant import (
     INVOICE_DOCUMENT_TEMPLATES_DIRECTORY,
     PDF_RENDERER_AUTOMATIC,
 )
+from invoicing.data_classes import Invoice
 from invoicing.domain.extra_column_rules import ExtraColumnRules
-from invoicing.domain.invoice import Invoice
 from invoicing.pdf.renderers import select_renderer
 from invoicing.templating import install_german_filters
 

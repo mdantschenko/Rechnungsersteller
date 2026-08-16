@@ -7,16 +7,16 @@ from datetime import date
 from decimal import Decimal
 
 from invoicing.constant import BillingCycle, TotalRule, ValueSource
-from invoicing.domain.billing_period import period_closing_on
-from invoicing.domain.columns import Column
-from invoicing.domain.invoice import (
+from invoicing.data_classes import (
     Address,
-    BillingTemplate,
+    ExtraColumn,
     Invoice,
+    InvoiceTerms,
     Issuer,
-    Lesson,
-    build_invoice,
+    TaughtLesson,
 )
+from invoicing.domain.billing_period import period_closing_on
+from invoicing.domain.invoice import build_invoice
 
 ISSUER = Issuer(
     address=Address(name="Max Mustermann", street="Musterstraße 1", city="12345 Ort"),
@@ -31,13 +31,13 @@ ISSUER = Issuer(
 
 RECIPIENT = Address(name="Erika Beispiel", street="Beispielweg 2", city="54321 Stadt")
 
-TRAVEL_COST = Column(
+TRAVEL_COST = ExtraColumn(
     label="Anfahrtskosten",
     total_rule=TotalRule.ADD_PER_ROW,
     placeholder="0 €",
 )
 
-EXERCISE_SHEETS = Column(
+EXERCISE_SHEETS = ExtraColumn(
     label="Übungsaufgaben",
     source=ValueSource.PER_LESSON,
     total_rule=TotalRule.ADD_PER_ROW,
@@ -46,9 +46,9 @@ EXERCISE_SHEETS = Column(
 
 
 def invoice_for(
-    template: BillingTemplate,
+    template: InvoiceTerms,
     period_closes_on: date,
-    lessons: Sequence[Lesson],
+    lessons: Sequence[TaughtLesson],
     cycle: BillingCycle,
 ) -> Invoice:
     return build_invoice(
@@ -64,11 +64,11 @@ def invoice_for(
 
 def test_reproduces_invoice_114() -> None:
     invoice = invoice_for(
-        BillingTemplate(unit_price=Decimal("33.33"), columns=(TRAVEL_COST,)),
+        InvoiceTerms(unit_price=Decimal("33.33"), columns=(TRAVEL_COST,)),
         date(2026, 6, 15),
         [
-            Lesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
-            Lesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
         ],
         BillingCycle.MONTH_MIDPOINT,
     )
@@ -82,18 +82,18 @@ def test_reproduces_invoice_114() -> None:
 
 def test_reproduces_invoice_70_with_its_per_lesson_surcharges() -> None:
     invoice = invoice_for(
-        BillingTemplate(unit_price=Decimal("26.67"), columns=(EXERCISE_SHEETS,)),
+        InvoiceTerms(unit_price=Decimal("26.67"), columns=(EXERCISE_SHEETS,)),
         date(2025, 6, 1),
         [
-            Lesson(taught_on=date(2025, 5, 5), quantity=Decimal("2")),
-            Lesson(
+            TaughtLesson(taught_on=date(2025, 5, 5), quantity=Decimal("2")),
+            TaughtLesson(
                 taught_on=date(2025, 5, 7),
                 quantity=Decimal("1"),
                 column_values={"Übungsaufgaben": None},
             ),
-            Lesson(taught_on=date(2025, 5, 12), quantity=Decimal("1")),
-            Lesson(taught_on=date(2025, 5, 19), quantity=Decimal("1")),
-            Lesson(
+            TaughtLesson(taught_on=date(2025, 5, 12), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2025, 5, 19), quantity=Decimal("1")),
+            TaughtLesson(
                 taught_on=date(2025, 5, 19),
                 quantity=Decimal("0.5"),
                 column_values={"Übungsaufgaben": None},
@@ -114,11 +114,11 @@ def test_reproduces_invoice_70_with_its_per_lesson_surcharges() -> None:
 
 def test_rounding_per_row_beats_rounding_the_exact_sum() -> None:
     invoice = invoice_for(
-        BillingTemplate(unit_price=Decimal("33.333"), columns=()),
+        InvoiceTerms(unit_price=Decimal("33.333"), columns=()),
         date(2026, 6, 15),
         [
-            Lesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
-            Lesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
         ],
         BillingCycle.MONTH_MIDPOINT,
     )
@@ -129,13 +129,13 @@ def test_rounding_per_row_beats_rounding_the_exact_sum() -> None:
 
 def test_lessons_outside_the_period_are_left_out() -> None:
     invoice = invoice_for(
-        BillingTemplate(unit_price=Decimal("25.00"), columns=()),
+        InvoiceTerms(unit_price=Decimal("25.00"), columns=()),
         date(2026, 6, 15),
         [
-            Lesson(taught_on=date(2026, 5, 15), quantity=Decimal("1")),
-            Lesson(taught_on=date(2026, 5, 16), quantity=Decimal("1")),
-            Lesson(taught_on=date(2026, 6, 15), quantity=Decimal("1")),
-            Lesson(taught_on=date(2026, 6, 16), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 5, 15), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 5, 16), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 6, 15), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 6, 16), quantity=Decimal("1")),
         ],
         BillingCycle.MONTH_MIDPOINT,
     )
@@ -148,11 +148,11 @@ def test_lessons_outside_the_period_are_left_out() -> None:
 
 def test_rows_come_out_in_date_order() -> None:
     invoice = invoice_for(
-        BillingTemplate(unit_price=Decimal("25.00"), columns=()),
+        InvoiceTerms(unit_price=Decimal("25.00"), columns=()),
         date(2026, 6, 15),
         [
-            Lesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
-            Lesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
+            TaughtLesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
         ],
         BillingCycle.MONTH_MIDPOINT,
     )
@@ -165,7 +165,7 @@ def test_rows_come_out_in_date_order() -> None:
 
 def test_an_empty_period_yields_an_invoice_without_rows() -> None:
     invoice = invoice_for(
-        BillingTemplate(unit_price=Decimal("25.00"), columns=()),
+        InvoiceTerms(unit_price=Decimal("25.00"), columns=()),
         date(2026, 6, 15),
         [],
         BillingCycle.MONTH_MIDPOINT,
@@ -177,9 +177,9 @@ def test_an_empty_period_yields_an_invoice_without_rows() -> None:
 
 def test_the_row_label_carries_description_and_date() -> None:
     invoice = invoice_for(
-        BillingTemplate(unit_price=Decimal("25.00"), columns=()),
+        InvoiceTerms(unit_price=Decimal("25.00"), columns=()),
         date(2026, 6, 15),
-        [Lesson(taught_on=date(2026, 5, 20), quantity=Decimal("1"))],
+        [TaughtLesson(taught_on=date(2026, 5, 20), quantity=Decimal("1"))],
         BillingCycle.MONTH_MIDPOINT,
     )
 

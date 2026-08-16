@@ -18,7 +18,7 @@ import pdfplumber
 import pytest
 from pdfplumber.page import Page
 
-from invoicing.domain.invoice import Address
+from invoicing.data_classes import Address
 from invoicing.pdf.invoice_document import to_html, write_pdf
 from invoicing.sample import sample_invoice
 

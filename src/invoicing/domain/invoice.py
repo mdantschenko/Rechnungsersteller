@@ -7,110 +7,29 @@ the exact sum instead would occasionally differ by a cent from that addition.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 
-from invoicing.constant import (
-    DEFAULT_BILLING_UNIT,
-    DEFAULT_LESSON_DESCRIPTION,
-    ZERO,
+from invoicing.constant import ZERO
+from invoicing.data_classes import (
+    Address,
+    BillingPeriod,
+    ExtraColumn,
+    ExtraColumnValue,
+    Invoice,
+    InvoiceTerms,
+    Issuer,
+    LineItem,
+    TaughtLesson,
 )
-from invoicing.domain.billing_period import BillingPeriod
-from invoicing.domain.columns import Column, ColumnValue
 from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.domain.money import round_to_cents
 
 
-@dataclass(frozen=True, slots=True)
-class Address:
-    """A postal address as it appears in the address field."""
-
-    name: str
-    street: str
-    city: str
-
-
-@dataclass(frozen=True, slots=True)
-class Issuer:
-    """Everything about the sender that appears on the letterhead and footer."""
-
-    address: Address
-    country: str
-    bank: str
-    iban: str
-    bic: str
-    tax_number: str
-    email: str
-    paypal: str
-
-    @property
-    def return_address_line(self) -> str:
-        """The small underlined line above the recipient's address."""
-        return f"{self.address.name} – {self.address.street} - {self.address.city}"
-
-
-@dataclass(frozen=True, slots=True)
-class Lesson:
-    """A lesson that was taught and is therefore billable."""
-
-    taught_on: date
-    quantity: Decimal
-    column_values: Mapping[str, ColumnValue] = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True)
-class BillingTemplate:
-    """A customer's invoicing settings: price, wording and extra columns."""
-
-    unit_price: Decimal
-    unit: str = DEFAULT_BILLING_UNIT
-    description: str = DEFAULT_LESSON_DESCRIPTION
-    columns: Sequence[Column] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class LineItem:
-    """One row of the line item table, with its total already computed."""
-
-    taught_on: date
-    quantity: Decimal
-    unit: str
-    description: str
-    unit_price: Decimal
-    column_values: tuple[ColumnValue, ...]
-    total: Decimal
-
-    @property
-    def label(self) -> str:
-        """The text of the "Bezeichnung / Datum" column."""
-        return f"{self.description} / {self.taught_on:%d.%m.%Y}"
-
-
-@dataclass(frozen=True, slots=True)
-class Invoice:
-    """A fully computed invoice, ready to be rendered.
-
-    Everything needed for the document is held here by value. Once released,
-    an invoice must not change when the customer, template or lessons behind
-    it are edited later.
-    """
-
-    number: int
-    issued_on: date
-    issuer: Issuer
-    recipient: Address
-    period: BillingPeriod
-    columns: tuple[Column, ...]
-    line_items: tuple[LineItem, ...]
-    total: Decimal
-    paid_on: date | None = None
-
-
 def column_shares(
-    template: BillingTemplate, lesson: Lesson
-) -> tuple[tuple[Column, ColumnValue, Decimal], ...]:
+    template: InvoiceTerms, lesson: TaughtLesson
+) -> tuple[tuple[ExtraColumn, ExtraColumnValue, Decimal], ...]:
     """Each column with its resolved value and its share of the row total.
 
     This is the only place that pairs a column with what it costs; every
@@ -124,7 +43,7 @@ def column_shares(
     return tuple(shares)
 
 
-def build_line_item(template: BillingTemplate, lesson: Lesson) -> LineItem:
+def build_line_item(template: InvoiceTerms, lesson: TaughtLesson) -> LineItem:
     """Turn one taught lesson into a priced row."""
     shares = column_shares(template, lesson)
     return LineItem(
@@ -145,9 +64,9 @@ def build_invoice(
     issued_on: date,
     issuer: Issuer,
     recipient: Address,
-    template: BillingTemplate,
+    template: InvoiceTerms,
     period: BillingPeriod,
-    lessons: Sequence[Lesson],
+    lessons: Sequence[TaughtLesson],
     paid_on: date | None = None,
 ) -> Invoice:
     """Build an invoice from every lesson that falls into ``period``.

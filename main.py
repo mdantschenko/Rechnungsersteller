@@ -13,10 +13,11 @@ from invoicing.constant import (
     DEFAULT_WEB_PORT,
     PDF_RENDERER_AUTOMATIC,
 )
+from invoicing.data_classes import ImportReport, RevenueRow
 from invoicing.domain.money import format_euro
-from invoicing.legacy.import_history import ImportReport, import_history
+from invoicing.legacy.import_history import import_history
 from invoicing.pdf.invoice_document import write_pdf
-from invoicing.reports import RevenueRow, revenue_rows, write_csv, yearly_totals
+from invoicing.reports import revenue_rows, write_csv, yearly_totals
 from invoicing.sample import sample_invoice
 from invoicing.storage.database import open_database, session_for
 from invoicing.web.security import is_configured, set_password

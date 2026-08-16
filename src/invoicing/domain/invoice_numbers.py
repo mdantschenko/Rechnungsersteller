@@ -6,15 +6,16 @@ created, so discarded drafts leave no gap in the sequence.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 
-
-@dataclass(slots=True)
 class NumberSequence:
-    """Tracks which invoice number comes next."""
+    """Tracks which invoice number comes next.
 
-    start: int
-    last_assigned: int | None = None
+    Not a dataclass: assigning mutates it, so behaviour and state stay together.
+    """
+
+    def __init__(self, start: int, last_assigned: int | None = None) -> None:
+        self.start = start
+        self.last_assigned = last_assigned
 
     def peek(self) -> int:
         """The number the next release will get, without consuming it."""

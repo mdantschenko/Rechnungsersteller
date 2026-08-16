@@ -18,8 +18,9 @@ from sqlmodel import Session, col, select
 from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
-from invoicing.billing import BillingRun, draft_for, manual_draft, open_runs, release
+from invoicing.billing import draft_for, manual_draft, open_runs, release
 from invoicing.constant import INVOICE_PDF_FILE_NAME_PATTERN
+from invoicing.data_classes import BillingRun
 from invoicing.domain.dates import german_date
 from invoicing.domain.money import format_euro
 from invoicing.pdf import preview

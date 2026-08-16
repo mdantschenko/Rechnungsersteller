@@ -15,25 +15,15 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Sequence
-from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
 from sqlmodel import Session, select
 
 from invoicing.constant import REVENUE_CSV_HEADER, ZERO
+from invoicing.data_classes import RevenueRow
 from invoicing.domain.money import format_euro
 from invoicing.storage.models import Customer, IssuedInvoice
-
-
-@dataclass(frozen=True, slots=True)
-class RevenueRow:
-    """What one customer was invoiced in one year."""
-
-    year: int
-    customer: str
-    invoice_count: int
-    total: Decimal
 
 
 def revenue_rows(session: Session) -> tuple[RevenueRow, ...]:

@@ -12,16 +12,16 @@ from datetime import date
 from decimal import Decimal
 
 from invoicing.constant import BillingCycle, TotalRule
-from invoicing.domain.billing_period import period_closing_on
-from invoicing.domain.columns import Column
-from invoicing.domain.invoice import (
+from invoicing.data_classes import (
     Address,
-    BillingTemplate,
+    ExtraColumn,
     Invoice,
+    InvoiceTerms,
     Issuer,
-    Lesson,
-    build_invoice,
+    TaughtLesson,
 )
+from invoicing.domain.billing_period import period_closing_on
+from invoicing.domain.invoice import build_invoice
 
 ISSUER = Issuer(
     address=Address(
@@ -44,10 +44,10 @@ RECIPIENT = Address(
     city="54321 Beispielstadt",
 )
 
-TEMPLATE = BillingTemplate(
+TEMPLATE = InvoiceTerms(
     unit_price=Decimal("33.33"),
     columns=(
-        Column(
+        ExtraColumn(
             label="Anfahrtskosten",
             total_rule=TotalRule.ADD_PER_ROW,
             placeholder="0 €",
@@ -56,8 +56,8 @@ TEMPLATE = BillingTemplate(
 )
 
 LESSONS = (
-    Lesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
-    Lesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
+    TaughtLesson(taught_on=date(2026, 5, 20), quantity=Decimal("1")),
+    TaughtLesson(taught_on=date(2026, 6, 5), quantity=Decimal("1")),
 )
 
 

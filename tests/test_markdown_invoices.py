@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from invoicing.domain.invoice import Address
+from invoicing.data_classes import Address
 from invoicing.legacy.markdown_invoices import read_archive, read_document
 
 

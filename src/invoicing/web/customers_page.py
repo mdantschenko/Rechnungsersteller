@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date, time
 from decimal import Decimal
 
@@ -17,6 +16,7 @@ from invoicing.constant import (
     ValueKind,
     ValueSource,
 )
+from invoicing.data_classes import LessonStats
 from invoicing.domain.money import parse_user_amount
 from invoicing.scheduling import materialise_series, planning_horizon
 from invoicing.storage.models import (
@@ -120,22 +120,6 @@ def customer_detail(
             "rules": list(TotalRule),
         },
     )
-
-
-@dataclass(frozen=True, slots=True)
-class LessonStats:
-    """What the past lessons of one pupil add up to."""
-
-    taught_hours: Decimal
-    taught_count: int
-    cancelled_count: int
-
-    @property
-    def cancelled_share(self) -> int:
-        answered = self.taught_count + self.cancelled_count
-        if not answered:
-            return 0
-        return round(100 * self.cancelled_count / answered)
 
 
 def _lesson_stats(session: Session, customer_id: int) -> LessonStats:

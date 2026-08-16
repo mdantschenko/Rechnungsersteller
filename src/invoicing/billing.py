@@ -10,7 +10,7 @@ a draft that is thrown away leaves no gap in the numbering.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -18,44 +18,29 @@ from dateutil.relativedelta import relativedelta
 from sqlmodel import Session, col, select
 
 from invoicing.constant import CLOSING_DAY_OF_MONTH, ONE_DAY, ValueKind
-from invoicing.domain import invoice as document
-from invoicing.domain.billing_period import (
+from invoicing.data_classes import (
+    Address,
     BillingPeriod,
+    BillingRun,
+    ExtraColumn,
+    ExtraColumnValue,
+    Invoice,
+    InvoiceTerms,
+    Issuer,
+    LineItem,
+    ReleasedInvoice,
+    TaughtLesson,
+)
+from invoicing.domain.billing_period import (
     next_closing_day,
     period_closing_on,
     period_containing,
 )
-from invoicing.domain.columns import Column, ColumnValue
 from invoicing.domain.extra_column_rules import ExtraColumnRules
+from invoicing.domain.invoice import build_invoice, build_line_item, column_shares
 from invoicing.domain.invoice_numbers import NumberSequence
 from invoicing.domain.money import parse_user_amount, round_quantity
 from invoicing.storage import models
-
-
-@dataclass(frozen=True, slots=True)
-class BillingRun:
-    """What a billing run found for one customer and one period."""
-
-    customer: models.Customer
-    closing_day: date
-    period: BillingPeriod
-    invoice: document.Invoice | None
-    """The draft, or nothing when the run is blocked or there is nothing to bill."""
-
-    unanswered: tuple[models.Lesson, ...]
-    billable: tuple[models.Lesson, ...]
-
-    @property
-    def is_blocked(self) -> bool:
-        return bool(self.unanswered)
-
-
-@dataclass(frozen=True, slots=True)
-class ReleasedInvoice:
-    """A released invoice, both as a document to render and as a record."""
-
-    document: document.Invoice
-    record: models.IssuedInvoice
 
 
 def draft_for(
@@ -186,12 +171,12 @@ def _build(
     period: BillingPeriod,
     billable: tuple[models.Lesson, ...],
     issued_on: date,
-) -> document.Invoice:
-    return document.build_invoice(
+) -> Invoice:
+    return build_invoice(
         number=_peek_next_number(session),
         issued_on=issued_on,
         issuer=_issuer_of(session),
-        recipient=document.Address(
+        recipient=Address(
             name=customer.name, street=customer.street, city=customer.city
         ),
         template=domain_template(terms),
@@ -200,9 +185,9 @@ def _build(
     )
 
 
-def domain_template(terms: models.BillingTemplate) -> document.BillingTemplate:
+def domain_template(terms: models.BillingTemplate) -> InvoiceTerms:
     """The customer's stored terms as the domain template that prices rows."""
-    return document.BillingTemplate(
+    return InvoiceTerms(
         unit_price=terms.unit_price,
         unit=terms.unit,
         description=terms.description,
@@ -210,37 +195,31 @@ def domain_template(terms: models.BillingTemplate) -> document.BillingTemplate:
     )
 
 
-def domain_lesson(
-    terms: models.BillingTemplate, lesson: models.Lesson
-) -> document.Lesson:
+def domain_lesson(terms: models.BillingTemplate, lesson: models.Lesson) -> TaughtLesson:
     """The stored lesson as the domain lesson an invoice row is built from."""
     columns = stored_columns(terms)
     kinds = {column.label: column.kind for column in columns}
-    return document.Lesson(
+    return TaughtLesson(
         taught_on=lesson.taught_on,
         quantity=billable_quantity(terms, lesson),
         column_values=typed_values(kinds, lesson.column_values),
     )
 
 
-def priced_line(
-    terms: models.BillingTemplate, lesson: models.Lesson
-) -> document.LineItem:
+def priced_line(terms: models.BillingTemplate, lesson: models.Lesson) -> LineItem:
     """One stored lesson priced exactly as its invoice row will be.
 
     The earnings view and the invoice must never disagree about what a
     lesson is worth, so both go through this one function.
     """
-    return document.build_line_item(
-        domain_template(terms), domain_lesson(terms, lesson)
-    )
+    return build_line_item(domain_template(terms), domain_lesson(terms, lesson))
 
 
 def priced_columns(
     terms: models.BillingTemplate, lesson: models.Lesson
-) -> tuple[tuple[Column, ColumnValue, Decimal], ...]:
+) -> tuple[tuple[ExtraColumn, ExtraColumnValue, Decimal], ...]:
     """Each extra column with its value and its share for this stored lesson."""
-    return document.column_shares(domain_template(terms), domain_lesson(terms, lesson))
+    return column_shares(domain_template(terms), domain_lesson(terms, lesson))
 
 
 def billable_quantity(terms: models.BillingTemplate, lesson: models.Lesson) -> Decimal:
@@ -288,19 +267,17 @@ def _terms_of(session: Session, customer: models.Customer) -> models.BillingTemp
     return terms
 
 
-def _issuer_of(session: Session) -> document.Issuer:
+def _issuer_of(session: Session) -> Issuer:
     issuer = session.exec(select(models.Issuer)).first()
     if issuer is None:
         raise ValueError("the sender details have not been filled in yet")
     return domain_issuer(issuer)
 
 
-def domain_issuer(stored: models.Issuer) -> document.Issuer:
+def domain_issuer(stored: models.Issuer) -> Issuer:
     """The stored sender details as the domain issuer a document prints."""
-    return document.Issuer(
-        address=document.Address(
-            name=stored.name, street=stored.street, city=stored.city
-        ),
+    return Issuer(
+        address=Address(name=stored.name, street=stored.street, city=stored.city),
         country=stored.country,
         bank=stored.bank,
         iban=stored.iban,
@@ -311,10 +288,10 @@ def domain_issuer(stored: models.Issuer) -> document.Issuer:
     )
 
 
-def stored_columns(terms: models.BillingTemplate) -> tuple[Column, ...]:
+def stored_columns(terms: models.BillingTemplate) -> tuple[ExtraColumn, ...]:
     """The customer's extra columns as domain objects, defaults parsed."""
     return tuple(
-        Column(
+        ExtraColumn(
             label=stored.label,
             source=stored.source,
             kind=stored.kind,
@@ -328,7 +305,7 @@ def stored_columns(terms: models.BillingTemplate) -> tuple[Column, ...]:
 
 def typed_values(
     kinds: dict[str, ValueKind], raw: dict[str, str | None]
-) -> dict[str, ColumnValue]:
+) -> dict[str, ExtraColumnValue]:
     return {
         label: _typed(kinds[label], value)
         for label, value in raw.items()
@@ -336,7 +313,7 @@ def typed_values(
     }
 
 
-def _typed(kind: ValueKind, value: str | None) -> ColumnValue:
+def _typed(kind: ValueKind, value: str | None) -> ExtraColumnValue:
     if value is None:
         return None
     if kind is ValueKind.TEXT:
@@ -376,9 +353,7 @@ def _take_next_number(session: Session) -> int:
     return number
 
 
-def _as_record(
-    issued: document.Invoice, customer: models.Customer
-) -> models.IssuedInvoice:
+def _as_record(issued: Invoice, customer: models.Customer) -> models.IssuedInvoice:
     return models.IssuedInvoice(
         number=issued.number,
         customer_id=_identity_of(customer),
@@ -406,7 +381,7 @@ def _as_record(
 
 
 def _printed_extras(
-    columns: tuple[Column, ...], values: tuple[ColumnValue, ...]
+    columns: tuple[ExtraColumn, ...], values: tuple[ExtraColumnValue, ...]
 ) -> dict[str, str]:
     return {
         column.label: ExtraColumnRules(column).display(value)

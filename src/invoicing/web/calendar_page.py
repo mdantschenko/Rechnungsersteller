@@ -10,7 +10,6 @@ lets you page forward and still see what is planned.
 from __future__ import annotations
 
 from calendar import Calendar
-from dataclasses import dataclass
 from datetime import date, timedelta
 
 from babel.dates import format_date
@@ -27,6 +26,7 @@ from invoicing.constant import (
     WEEK_STARTS_ON_MONDAY,
     ValueSource,
 )
+from invoicing.data_classes import CalendarDay
 from invoicing.domain.money import format_euro, format_quantity
 from invoicing.scheduling import materialise_series, planning_horizon
 from invoicing.storage.models import (
@@ -44,31 +44,6 @@ from invoicing.web.page import (
 )
 
 router = APIRouter()
-
-
-@dataclass(frozen=True, slots=True)
-class CalendarDay:
-    """One cell of the grid."""
-
-    on: date
-    inside_month: bool
-    is_today: bool
-    lessons: tuple[Lesson, ...]
-    holiday: str | None = None
-    vacations: tuple[tuple[str, str], ...] = ()
-    """(state, name) pairs, one per federal state on holiday that day."""
-    summary: str = ""
-    """One line naming the day's lessons, for the long-press peek."""
-
-    @property
-    def peek(self) -> str:
-        """What the long press shows: holidays first, then the lessons,
-        one per line."""
-        parts = [self.holiday] if self.holiday else []
-        parts.extend(f"{name} ({state})" for state, name in self.vacations)
-        if self.summary:
-            parts.append(self.summary)
-        return "\n".join(parts)
 
 
 @router.get("/")

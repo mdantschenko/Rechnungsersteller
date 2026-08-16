@@ -9,7 +9,6 @@ their price.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
@@ -17,6 +16,7 @@ from sqlmodel import Session, col, select
 
 from invoicing.billing import priced_line
 from invoicing.constant import ZERO
+from invoicing.data_classes import EarningsRow
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -26,20 +26,6 @@ from invoicing.storage.models import (
     LessonStatus,
 )
 from invoicing.web.page import month_name
-
-
-@dataclass(frozen=True, slots=True)
-class EarningsRow:
-    """One month's take: arrived, still expected, and never invoiced."""
-
-    label: str
-    received: Decimal
-    outstanding: Decimal
-    uninvoiced: Decimal
-
-    @property
-    def total(self) -> Decimal:
-        return self.received + self.uninvoiced
 
 
 def monthly_earnings(

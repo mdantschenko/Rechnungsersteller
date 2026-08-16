@@ -3,24 +3,24 @@ from __future__ import annotations
 from decimal import Decimal
 
 from invoicing.constant import TotalRule, ValueKind, ValueSource
-from invoicing.domain.columns import Column
+from invoicing.data_classes import ExtraColumn
 from invoicing.domain.extra_column_rules import ExtraColumnRules
 
 ONE_HOUR = Decimal("1")
 TWO_HOURS = Decimal("2")
 
 TRAVEL_COST_PRINTED_AS_ZERO = ExtraColumnRules(
-    Column(
+    ExtraColumn(
         label="Anfahrtskosten",
         total_rule=TotalRule.ADD_PER_ROW,
         placeholder="0 €",
     )
 )
 
-TRAVEL_COST_NOT_APPLICABLE = ExtraColumnRules(Column(label="Anfahrtskosten"))
+TRAVEL_COST_NOT_APPLICABLE = ExtraColumnRules(ExtraColumn(label="Anfahrtskosten"))
 
 EXERCISE_SHEETS = ExtraColumnRules(
-    Column(
+    ExtraColumn(
         label="Übungsaufgaben",
         source=ValueSource.PER_LESSON,
         total_rule=TotalRule.ADD_PER_ROW,
@@ -62,7 +62,7 @@ def test_added_per_row_does_not_scale_with_the_hours() -> None:
 
 def test_multiplied_by_quantity_scales_with_the_hours() -> None:
     per_hour_surcharge = ExtraColumnRules(
-        Column(
+        ExtraColumn(
             label="Materialzuschlag",
             total_rule=TotalRule.MULTIPLY_BY_QUANTITY,
             default_value=Decimal("2.50"),
@@ -76,7 +76,7 @@ def test_multiplied_by_quantity_scales_with_the_hours() -> None:
 
 def test_an_excluded_column_never_touches_the_total() -> None:
     note = ExtraColumnRules(
-        Column(label="Notiz", kind=ValueKind.TEXT, default_value="online")
+        ExtraColumn(label="Notiz", kind=ValueKind.TEXT, default_value="online")
     )
 
     assert note.contribution("online", ONE_HOUR) == Decimal("0.00")
@@ -84,7 +84,7 @@ def test_an_excluded_column_never_touches_the_total() -> None:
 
 
 def test_money_is_formatted_german_and_quantities_lose_trailing_zeros() -> None:
-    hours = ExtraColumnRules(Column(label="Fahrtzeit", kind=ValueKind.QUANTITY))
+    hours = ExtraColumnRules(ExtraColumn(label="Fahrtzeit", kind=ValueKind.QUANTITY))
 
     assert TRAVEL_COST_PRINTED_AS_ZERO.display(Decimal("20")) == "20,00\xa0€"
     assert hours.display(Decimal("0.50")) == "0,5"

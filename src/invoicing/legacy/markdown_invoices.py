@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -30,75 +29,15 @@ from invoicing.constant import (
     LEGACY_PRINTED_TOTAL_PATTERN,
     LEGACY_RECIPIENT_LINE_COUNT,
     LEGACY_SETTLED_PATTERN,
-    ZERO,
 )
-from invoicing.domain.invoice import Address
+from invoicing.data_classes import (
+    Address,
+    ArchiveReading,
+    NumberConflict,
+    ParsedInvoice,
+    ParsedLine,
+)
 from invoicing.domain.money import round_to_cents
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedLine:
-    """One row of an old invoice, exactly as it was printed."""
-
-    taught_on: date
-    quantity: Decimal
-    unit: str
-    description: str
-    unit_price: Decimal
-    extra_printed: str
-    extra_amount: Decimal | None
-    total: Decimal
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedInvoice:
-    """An old invoice, read back from its document."""
-
-    number: int
-    issued_on: date
-    recipient: Address
-    printed_from: date
-    printed_to: date
-    extra_column_label: str | None
-    lines: tuple[ParsedLine, ...]
-    printed_total: Decimal
-    paid_on: date | None
-    source_file: str
-
-    @property
-    def computed_total(self) -> Decimal:
-        """What the printed rows add up to, which is not always the printed total."""
-        return sum((line.total for line in self.lines), start=ZERO)
-
-    def lessons_outside_the_printed_period(self) -> tuple[ParsedLine, ...]:
-        """Rows whose date lies outside the range the document itself states.
-
-        Both ends count as inside. The point is to find plain mistakes, such as
-        the three lessons on invoice 40 that carry the wrong year, without
-        taking a position on which invoice a boundary day belongs to.
-        """
-        return tuple(
-            line
-            for line in self.lines
-            if not self.printed_from <= line.taught_on <= self.printed_to
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class NumberConflict:
-    """The same invoice number read differently from two documents."""
-
-    number: int
-    first_source: str
-    second_source: str
-
-
-@dataclass(frozen=True, slots=True)
-class ArchiveReading:
-    """Everything found in a folder of old invoices."""
-
-    invoices: tuple[ParsedInvoice, ...]
-    conflicts: tuple[NumberConflict, ...]
 
 
 def read_archive(directory: Path) -> ArchiveReading:

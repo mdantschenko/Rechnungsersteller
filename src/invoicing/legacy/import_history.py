@@ -10,16 +10,12 @@ database is left alone.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 from sqlmodel import Session, select
 
-from invoicing.legacy.markdown_invoices import (
-    NumberConflict,
-    ParsedInvoice,
-    read_archive,
-)
+from invoicing.data_classes import Anomaly, ImportReport, ParsedInvoice
+from invoicing.legacy.markdown_invoices import read_archive
 from invoicing.storage.models import (
     Customer,
     CustomerStatus,
@@ -27,28 +23,6 @@ from invoicing.storage.models import (
     IssuedInvoiceLine,
     NumberState,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class Anomaly:
-    """Something in an old document that does not add up."""
-
-    number: int
-    source_file: str
-    description: str
-
-
-@dataclass(frozen=True, slots=True)
-class ImportReport:
-    """What the import found and what it changed."""
-
-    imported: int
-    already_known: int
-    customers_created: int
-    lowest_number: int | None
-    highest_number: int | None
-    conflicts: tuple[NumberConflict, ...]
-    anomalies: tuple[Anomaly, ...]
 
 
 def import_history(
