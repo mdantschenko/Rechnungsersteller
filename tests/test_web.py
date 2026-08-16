@@ -696,6 +696,28 @@ def test_earnings_and_the_tax_zip_follow_the_money(client: TestClient) -> None:
     assert per_customer.content.startswith(b"PK")
 
 
+def test_the_year_can_be_downloaded_as_a_datev_booking_batch(
+    client: TestClient,
+) -> None:
+    customer_id = _add_customer(client)
+    _set_terms(client, customer_id)
+    lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
+    client.post(f"/termine/{lesson_id}/erledigt")
+    client.post(
+        f"/rechnungen/{customer_id}/freigeben", data={"closing_day": "2026-06-15"}
+    )
+
+    year = date.today().year
+    assert f"/rechnungen/datev/{year}.csv" in client.get("/rechnungen").text
+
+    answer = client.get(f"/rechnungen/datev/{year}.csv")
+    assert answer.status_code == 200
+    assert answer.headers["content-disposition"] == (
+        f'attachment; filename="EXTF_Buchungsstapel_{year}.csv"'
+    )
+    assert answer.content.startswith(b'"EXTF";700;21;"Buchungsstapel";13;')
+
+
 def test_the_customer_page_tells_the_whole_story(client: TestClient) -> None:
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)

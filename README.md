@@ -17,7 +17,8 @@ interface is German, as are the invoices it produces.
 - **Sending** by e-mail (with a copy in the mailbox's Sent folder) or
   WhatsApp, payment reminders with a per-customer letter
 - **Earnings** by month: received, still expected, and never invoiced —
-  plus a ZIP per year for the tax office
+  plus a ZIP per year for the tax office and a DATEV booking batch per year
+  for Lexware
 - **Import** of old Word invoices as history
 
 Everything lives in a single SQLite file on your own server, behind one

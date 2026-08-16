@@ -243,6 +243,17 @@
     vermerkt sind, gibt es hier das Jahres-ZIP.
   </p>
   {% endif %}
+  {% if issued_years %}
+  <div class="row-actions">
+    {% for year in issued_years %}
+    <a class="button button-small" href="/rechnungen/datev/{{ year }}.csv" download>DATEV-Export {{ year }}</a>
+    {% endfor %}
+  </div>
+  <p class="hint">
+    Eine Buchungsstapel-Datei je Rechnungsjahr, zum Einlesen in Lexware unter
+    „Datei &gt; DATEV-Schnittstelle“.
+  </p>
+  {% endif %}
 </div>
 
 <script src="/static/share-pdf.js?v={{ static_version }}"></script>

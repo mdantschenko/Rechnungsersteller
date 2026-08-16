@@ -78,6 +78,7 @@ class InvoiceListViewBuilder:
                 unpaid, self._store.app_settings().payment_days
             ),
             "paid_years": self._paid_years(issued),
+            "issued_years": self._issued_years(issued),
         }
 
     def _reminder_days(self) -> dict[int, list[date]]:
@@ -102,3 +103,8 @@ class InvoiceListViewBuilder:
     def _paid_years(issued: Sequence[IssuedInvoice]) -> list[int]:
         years = {record.paid_on.year for record in issued if record.paid_on is not None}
         return sorted(years, reverse=True)
+
+    @staticmethod
+    def _issued_years(issued: Sequence[IssuedInvoice]) -> list[int]:
+        """The years the bookkeeping export knows, by invoice date."""
+        return sorted({record.issued_on.year for record in issued}, reverse=True)

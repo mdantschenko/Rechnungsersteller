@@ -14,6 +14,8 @@ from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
+from invoicing.constant import DATEV_CSV_MEDIA_TYPE
+from invoicing.datev_export import DatevBookingBatchExport
 from invoicing.mail_error import MailError
 from invoicing.pdf import InvoiceDocumentWriter, PdfPreview
 from invoicing.storage.models import (
@@ -56,6 +58,20 @@ def tax_office_zip(year: int, session: Session = Depends(database_session)) -> R
             detail=f"keine bezahlte Rechnung mit Zahlungseingang in {year}",
         )
     return InvoicePdfArchive(session).zip_of(list(records), f"Rechnungen-{year}.zip")
+
+
+@router.get("/rechnungen/datev/{year}.csv")
+def datev_booking_batch(
+    year: int, session: Session = Depends(database_session)
+) -> Response:
+    """Every invoice issued in ``year`` as a DATEV booking batch for Lexware."""
+    export = DatevBookingBatchExport(session)
+    file_name = export.file_name(year)
+    return Response(
+        export.csv_bytes(year),
+        media_type=DATEV_CSV_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
+    )
 
 
 @router.get("/kunden/{customer_id}/rechnungen.zip")
