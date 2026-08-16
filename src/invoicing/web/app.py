@@ -21,7 +21,7 @@ from invoicing.constant import (
     SIGNED_IN_SESSION_KEY,
     WEB_STATIC_DIRECTORY,
 )
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.web import (
     calendar_page,
     customers_page,
@@ -32,7 +32,7 @@ from invoicing.web import (
     sign_in,
 )
 from invoicing.web.alarm_clock import TickingAlarmClock
-from invoicing.web.security import PasswordGate
+from invoicing.web.password_gate import PasswordGate
 
 
 def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:

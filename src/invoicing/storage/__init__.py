@@ -1,6 +1,6 @@
 """Persistence: the tables, and how the database file is opened."""
 
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,

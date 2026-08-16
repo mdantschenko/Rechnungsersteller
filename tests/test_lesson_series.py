@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
-from invoicing.scheduling import LessonSeriesMaterialiser
+from invoicing.lesson_series import LessonSeriesMaterialiser
 from invoicing.storage.models import Lesson, LessonSeries, LessonStatus
 
 EVERY_TUESDAY = "RRULE:FREQ=WEEKLY;BYDAY=TU"

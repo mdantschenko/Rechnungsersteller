@@ -27,8 +27,8 @@ from invoicing.data_classes import CalendarDay
 from invoicing.feiertage import HolidayCalendar
 from invoicing.german_formatter import german_formatter
 from invoicing.lesson_pricing import StoredLessonPricer
+from invoicing.lesson_series import LessonSeriesMaterialiser
 from invoicing.push import WebPushSender
-from invoicing.scheduling import LessonSeriesMaterialiser
 from invoicing.storage.models import Lesson, LessonStatus
 from invoicing.utils import billing_templates_by_customer, planning_horizon
 from invoicing.web.store_queries import StoreQueries

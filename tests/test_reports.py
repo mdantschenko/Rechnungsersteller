@@ -6,9 +6,9 @@ from pathlib import Path
 
 from sqlmodel import Session
 
-from invoicing.legacy.import_history import HistoryImporter
+from invoicing.legacy.history_importer import HistoryImporter
 from invoicing.reports import RevenueReport
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.storage.invoice_database import InvoiceDatabase
 
 
 def _stored(tmp_path: Path, document: str) -> Session:

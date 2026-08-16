@@ -7,8 +7,8 @@ from sqlmodel import Session
 from starlette.responses import RedirectResponse, Response
 
 from invoicing.constant import SIGNED_IN_SESSION_KEY
-from invoicing.web.page import database
-from invoicing.web.security import PasswordGate
+from invoicing.web.dependencies import database_session
+from invoicing.web.password_gate import PasswordGate
 from invoicing.web.template_renderer import template_renderer
 
 router = APIRouter()
@@ -23,7 +23,7 @@ def sign_in_form(request: Request) -> Response:
 def sign_in(
     request: Request,
     password: str = Form(...),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     if not PasswordGate(session).matches(password):
         return template_renderer.render(

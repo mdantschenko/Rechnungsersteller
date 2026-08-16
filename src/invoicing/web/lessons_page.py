@@ -14,8 +14,8 @@ from sqlmodel import Session
 from starlette.responses import Response
 
 from invoicing.utils import safe_back_redirect
+from invoicing.web.dependencies import database_session
 from invoicing.web.lesson_editor import LessonEditor
-from invoicing.web.page import database
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ def set_extra_costs(
     lesson_id: int,
     back: str = Form("/"),
     aktiv: list[str] = Form([]),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).set_extra_costs(lesson_id, aktiv)
     return safe_back_redirect(back)
@@ -35,7 +35,7 @@ def set_extra_costs(
 def mark_done(
     lesson_id: int,
     back: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).mark_done(lesson_id)
     return safe_back_redirect(back)
@@ -45,7 +45,7 @@ def mark_done(
 def mark_cancelled(
     lesson_id: int,
     back: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).mark_cancelled(lesson_id)
     return safe_back_redirect(back)
@@ -55,7 +55,7 @@ def mark_cancelled(
 def mark_planned(
     lesson_id: int,
     back: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).mark_planned(lesson_id)
     return safe_back_redirect(back)
@@ -67,7 +67,7 @@ def reschedule(
     taught_on: date = Form(...),
     starts_at: str = Form(""),
     back: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).reschedule(lesson_id, taught_on, starts_at)
     return safe_back_redirect(back)
@@ -78,7 +78,7 @@ def change_quantity(
     lesson_id: int,
     quantity: Decimal = Form(...),
     back: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).change_quantity(lesson_id, quantity)
     return safe_back_redirect(back)
@@ -88,7 +88,7 @@ def change_quantity(
 def remove_lesson(
     lesson_id: int,
     back: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).remove(lesson_id)
     return safe_back_redirect(back)
@@ -101,7 +101,7 @@ def add_lesson(
     quantity: Decimal = Form(...),
     starts_at: str = Form(""),
     back: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     LessonEditor(session).add(customer_id, taught_on, quantity, starts_at)
     return safe_back_redirect(back)

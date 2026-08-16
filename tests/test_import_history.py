@@ -6,8 +6,8 @@ from pathlib import Path
 
 from sqlmodel import Session, col, select
 
-from invoicing.legacy.import_history import HistoryImporter
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.legacy.history_importer import HistoryImporter
+from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
     Customer,
     CustomerStatus,

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from invoicing.data_classes import Address
-from invoicing.legacy.markdown_invoices import MarkdownInvoiceArchiveReader
+from invoicing.legacy.markdown_invoice_reader import MarkdownInvoiceArchiveReader
 
 ARCHIVE_READER = MarkdownInvoiceArchiveReader()
 

@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from invoicing.constant import BillingCycle
-from invoicing.domain.billing_period import BillingCalendar
+from invoicing.domain.billing_calendar import BillingCalendar
 
 
 def test_month_start_covers_the_previous_calendar_month() -> None:

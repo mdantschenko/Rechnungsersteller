@@ -16,7 +16,7 @@ from invoicing.constant import (
 )
 from invoicing.data_classes import LessonStats
 from invoicing.german_formatter import german_formatter
-from invoicing.scheduling import LessonSeriesMaterialiser
+from invoicing.lesson_series import LessonSeriesMaterialiser
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,

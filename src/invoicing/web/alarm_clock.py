@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from invoicing.alarms import LessonAlarmClock
 from invoicing.constant import ALARM_CHECK_INTERVAL_SECONDS
 from invoicing.push import WebPushSender
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.web.daily import MorningRound
 from invoicing.web.store_queries import StoreQueries
 

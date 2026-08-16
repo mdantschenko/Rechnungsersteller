@@ -11,7 +11,7 @@ from starlette.responses import FileResponse, JSONResponse, Response
 from invoicing.constant import PWA_MANIFEST, WEB_STATIC_DIRECTORY
 from invoicing.push import WebPushSender
 from invoicing.utils import notice_redirect
-from invoicing.web.page import database
+from invoicing.web.dependencies import database_session
 from invoicing.web.store_queries import StoreQueries
 
 router = APIRouter()
@@ -27,13 +27,13 @@ def service_worker() -> Response:
     return FileResponse(WEB_STATIC_DIRECTORY / "sw.js", media_type="text/javascript")
 
 
-class Subscription(BaseModel):
+class PushSubscriptionPayload(BaseModel):
     endpoint: str
     keys: dict[str, str]
 
 
 @router.get("/push/schluessel")
-def subscription_key(session: Session = Depends(database)) -> Response:
+def subscription_key(session: Session = Depends(database_session)) -> Response:
     key = WebPushSender(
         session, StoreQueries(session).app_settings()
     ).application_server_key()
@@ -42,7 +42,7 @@ def subscription_key(session: Session = Depends(database)) -> Response:
 
 @router.post("/push/abo", status_code=204)
 def store_subscription(
-    subscription: Subscription, session: Session = Depends(database)
+    subscription: PushSubscriptionPayload, session: Session = Depends(database_session)
 ) -> None:
     WebPushSender(session, StoreQueries(session).app_settings()).subscribe(
         endpoint=subscription.endpoint,
@@ -53,7 +53,7 @@ def store_subscription(
 
 @router.post("/push/abmelden", status_code=204)
 def drop_subscription(
-    subscription: Subscription, session: Session = Depends(database)
+    subscription: PushSubscriptionPayload, session: Session = Depends(database_session)
 ) -> None:
     WebPushSender(session, StoreQueries(session).app_settings()).unsubscribe(
         subscription.endpoint
@@ -61,7 +61,9 @@ def drop_subscription(
 
 
 @router.post("/push/test")
-def test_ring(request: Request, session: Session = Depends(database)) -> Response:
+def test_ring(
+    request: Request, session: Session = Depends(database_session)
+) -> Response:
     delivered = WebPushSender(
         session, StoreQueries(session).app_settings()
     ).send_to_all(

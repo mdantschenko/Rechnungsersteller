@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
     AppSettings,
     IssuedInvoice,
@@ -18,7 +18,7 @@ from invoicing.storage.models import (
     PushSubscription,
 )
 from invoicing.web import create_app
-from invoicing.web.security import PasswordGate
+from invoicing.web.password_gate import PasswordGate
 
 PASSWORD = "ein-gutes-passwort"
 

@@ -16,7 +16,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session
 
 from invoicing.constant import BillingCycle, TotalRule, ValueSource
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,

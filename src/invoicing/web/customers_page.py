@@ -22,7 +22,7 @@ from invoicing.storage.models import (
 )
 from invoicing.utils import notice_redirect
 from invoicing.web.customer_administration import CustomerAdministration
-from invoicing.web.page import database
+from invoicing.web.dependencies import database_session
 from invoicing.web.store_queries import StoreQueries
 from invoicing.web.template_renderer import template_renderer
 
@@ -30,7 +30,9 @@ router = APIRouter()
 
 
 @router.get("/kunden")
-def customer_list(request: Request, session: Session = Depends(database)) -> Response:
+def customer_list(
+    request: Request, session: Session = Depends(database_session)
+) -> Response:
     everyone = session.exec(select(Customer).order_by(col(Customer.name))).all()
     return template_renderer.render(
         request,
@@ -55,7 +57,7 @@ def add_customer(
     name: str = Form(...),
     street: str = Form(...),
     city: str = Form(...),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     customer = CustomerAdministration(session).create(name, street, city)
     return RedirectResponse(f"/kunden/{customer.id}", status_code=303)
@@ -63,7 +65,7 @@ def add_customer(
 
 @router.get("/kunden/{customer_id}")
 def customer_detail(
-    customer_id: int, request: Request, session: Session = Depends(database)
+    customer_id: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     return template_renderer.render(
         request,
@@ -78,7 +80,7 @@ def add_exam_grade(
     written_on: date = Form(...),
     label: str = Form(...),
     grade: str = Form(...),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     session.add(
         ExamGrade(
@@ -93,7 +95,7 @@ def add_exam_grade(
 
 @router.post("/kunden/{customer_id}/klausur/{grade_id}/entfernen")
 def remove_exam_grade(
-    customer_id: int, grade_id: int, session: Session = Depends(database)
+    customer_id: int, grade_id: int, session: Session = Depends(database_session)
 ) -> Response:
     stored = session.get(ExamGrade, grade_id)
     if stored is not None and stored.customer_id == customer_id:
@@ -103,7 +105,7 @@ def remove_exam_grade(
 
 @router.post("/kunden/{customer_id}/loeschen")
 def delete_customer(
-    customer_id: int, request: Request, session: Session = Depends(database)
+    customer_id: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     """Remove a customer for good — unless invoices depend on them."""
     customer = StoreQueries(session).customer(customer_id)
@@ -152,7 +154,7 @@ def save_customer(
     online: str = Form(""),
     mail_text: str = Form(""),
     reminder_text: str = Form(""),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     CustomerAdministration(session).save(
         customer_id,
@@ -180,7 +182,7 @@ def save_terms(
     unit: str = Form(...),
     description: str = Form(...),
     cycle: BillingCycle = Form(...),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     CustomerAdministration(session).save_terms(
         customer_id, unit_price, unit, description, cycle
@@ -198,7 +200,7 @@ def add_column(
     total_rule: TotalRule = Form(...),
     default_value: str = Form(""),
     placeholder: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     complaint = CustomerAdministration(session).add_column(
         customer_id, label, source, kind, total_rule, default_value, placeholder
@@ -218,7 +220,7 @@ def edit_column(
     total_rule: TotalRule = Form(...),
     default_value: str = Form(""),
     placeholder: str = Form("/"),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     complaint = CustomerAdministration(session).edit_column(
         column_id, label, source, total_rule, default_value, placeholder
@@ -230,7 +232,7 @@ def edit_column(
 
 @router.post("/kunden/{customer_id}/spalte/{column_id}/entfernen")
 def remove_column(
-    customer_id: int, column_id: int, session: Session = Depends(database)
+    customer_id: int, column_id: int, session: Session = Depends(database_session)
 ) -> Response:
     CustomerAdministration(session).remove_column(column_id)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
@@ -244,7 +246,7 @@ def add_series(
     starts_on: date = Form(...),
     starts_at: str = Form(""),
     reminder_at: str = Form(""),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     CustomerAdministration(session).add_series(
         customer_id, recurrence, quantity, starts_on, starts_at, reminder_at
@@ -260,7 +262,7 @@ def change_series(
     quantity: Decimal = Form(...),
     starts_at: str = Form(""),
     reminder_at: str = Form(""),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     CustomerAdministration(session).change_series(
         customer_id, series_id, recurrence, quantity, starts_at, reminder_at
@@ -270,7 +272,7 @@ def change_series(
 
 @router.post("/kunden/{customer_id}/serie/{series_id}/beenden")
 def stop_series(
-    customer_id: int, series_id: int, session: Session = Depends(database)
+    customer_id: int, series_id: int, session: Session = Depends(database_session)
 ) -> Response:
     CustomerAdministration(session).stop_series(series_id)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)

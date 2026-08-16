@@ -14,12 +14,12 @@ from invoicing.constant import (
 )
 from invoicing.data_classes import ImportReport, RevenueRow
 from invoicing.german_formatter import german_formatter
-from invoicing.legacy.import_history import HistoryImporter
+from invoicing.legacy.history_importer import HistoryImporter
 from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.reports import RevenueReport
 from invoicing.sample import SampleInvoice
-from invoicing.storage.database import InvoiceDatabase
-from invoicing.web.security import PasswordGate
+from invoicing.storage.invoice_database import InvoiceDatabase
+from invoicing.web.password_gate import PasswordGate
 
 
 class InvoicingCommandLine:

@@ -21,7 +21,7 @@ from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.sample import SampleInvoice
 from invoicing.storage.models import Issuer, NumberState
 from invoicing.utils import ensure_backup_passphrase
-from invoicing.web.security import PasswordGate
+from invoicing.web.password_gate import PasswordGate
 from invoicing.web.store_queries import StoreQueries
 
 

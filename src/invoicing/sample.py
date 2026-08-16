@@ -20,8 +20,8 @@ from invoicing.data_classes import (
     Issuer,
     TaughtLesson,
 )
-from invoicing.domain.billing_period import BillingCalendar
-from invoicing.domain.invoice import InvoiceBuilder
+from invoicing.domain.billing_calendar import BillingCalendar
+from invoicing.domain.invoice_builder import InvoiceBuilder
 
 
 class SampleInvoice:

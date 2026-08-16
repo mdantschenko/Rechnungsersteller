@@ -10,7 +10,7 @@ from starlette.responses import Response
 
 from invoicing.constant import WEB_STATIC_DIRECTORY, WEB_TEMPLATES_DIRECTORY
 from invoicing.german_formatter import german_formatter
-from invoicing.templating import GermanTemplateFilters
+from invoicing.german_template_filters import GermanTemplateFilters
 from invoicing.utils import recurrence_words
 
 

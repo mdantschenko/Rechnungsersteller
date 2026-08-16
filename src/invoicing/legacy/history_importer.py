@@ -15,7 +15,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from invoicing.data_classes import Anomaly, ImportReport, ParsedInvoice
-from invoicing.legacy.markdown_invoices import MarkdownInvoiceArchiveReader
+from invoicing.legacy.markdown_invoice_reader import MarkdownInvoiceArchiveReader
 from invoicing.storage.models import (
     Customer,
     CustomerStatus,

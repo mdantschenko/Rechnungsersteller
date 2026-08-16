@@ -23,10 +23,10 @@ from invoicing.storage.models import (
     PaymentReminder,
 )
 from invoicing.utils import notice_redirect
+from invoicing.web.dependencies import database_session
 from invoicing.web.invoice_list_view import InvoiceListViewBuilder
 from invoicing.web.invoice_mail_composer import InvoiceMailComposer
 from invoicing.web.invoice_pdf_archive import InvoicePdfArchive
-from invoicing.web.page import database
 from invoicing.web.store_queries import StoreQueries
 from invoicing.web.template_renderer import template_renderer
 
@@ -34,14 +34,16 @@ router = APIRouter()
 
 
 @router.get("/rechnungen")
-def invoice_list(request: Request, session: Session = Depends(database)) -> Response:
+def invoice_list(
+    request: Request, session: Session = Depends(database_session)
+) -> Response:
     return template_renderer.render(
         request, "invoices.html", InvoiceListViewBuilder(session).list_context()
     )
 
 
 @router.get("/rechnungen/finanzamt/{year}.zip")
-def tax_office_zip(year: int, session: Session = Depends(database)) -> Response:
+def tax_office_zip(year: int, session: Session = Depends(database_session)) -> Response:
     """Every invoice whose payment arrived in ``year``, as one ZIP."""
     records = session.exec(
         select(IssuedInvoice)
@@ -57,7 +59,9 @@ def tax_office_zip(year: int, session: Session = Depends(database)) -> Response:
 
 
 @router.get("/kunden/{customer_id}/rechnungen.zip")
-def customer_zip(customer_id: int, session: Session = Depends(database)) -> Response:
+def customer_zip(
+    customer_id: int, session: Session = Depends(database_session)
+) -> Response:
     """Every invoice of one customer, as one ZIP."""
     records = session.exec(
         select(IssuedInvoice).where(IssuedInvoice.customer_id == customer_id)
@@ -74,7 +78,7 @@ def release_manual_invoice(
     customer_id: int = Form(...),
     first_day: date = Form(...),
     last_day: date = Form(...),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     """Bill a hand-picked stretch of days, outside the usual cycle."""
     if last_day < first_day:
@@ -112,7 +116,7 @@ def release_manual_invoice(
 
 @router.get("/rechnungen/{number}/ansehen")
 def view_invoice(
-    number: int, request: Request, session: Session = Depends(database)
+    number: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     """The invoice's pages as images inside the app's own chrome."""
     path = InvoicePdfArchive(session).stored_pdf(number)
@@ -133,7 +137,7 @@ def view_invoice(
 
 @router.get("/rechnungen/{number}/seite/{index}.png")
 def invoice_page_image(
-    number: int, index: int, session: Session = Depends(database)
+    number: int, index: int, session: Session = Depends(database_session)
 ) -> Response:
     path = InvoicePdfArchive(session).stored_pdf(number)
     image = PdfPreview(path).page_png(index) if path else None
@@ -193,7 +197,7 @@ def view_manual_preview(
 
 @router.get("/rechnungen/vorschau")
 def preview_due_invoice(
-    customer_id: int, closing_day: date, session: Session = Depends(database)
+    customer_id: int, closing_day: date, session: Session = Depends(database_session)
 ) -> Response:
     """The draft as PDF, exactly as releasing would print it — nothing is written."""
     run = BillingRunOrchestrator(session).draft_for(
@@ -207,7 +211,7 @@ def preview_manual_invoice(
     customer_id: int,
     first_day: date,
     last_day: date,
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     customer = StoreQueries(session).customer(customer_id)
     run = BillingRunOrchestrator(session).manual_draft(
@@ -218,7 +222,7 @@ def preview_manual_invoice(
 
 @router.get("/rechnungen/vorschau.html")
 def preview_due_html(
-    customer_id: int, closing_day: date, session: Session = Depends(database)
+    customer_id: int, closing_day: date, session: Session = Depends(database_session)
 ) -> Response:
     """The same draft as HTML: the phone can zoom it with two fingers."""
     run = BillingRunOrchestrator(session).draft_for(
@@ -232,7 +236,7 @@ def preview_manual_html(
     customer_id: int,
     first_day: date,
     last_day: date,
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     customer = StoreQueries(session).customer(customer_id)
     run = BillingRunOrchestrator(session).manual_draft(
@@ -245,7 +249,7 @@ def preview_manual_html(
 def release_invoice(
     customer_id: int,
     closing_day: date = Form(...),
-    session: Session = Depends(database),
+    session: Session = Depends(database_session),
 ) -> Response:
     customer = StoreQueries(session).customer(customer_id)
     orchestrator = BillingRunOrchestrator(session)
@@ -261,7 +265,7 @@ def release_invoice(
 
 @router.post("/rechnungen/{number}/senden")
 def send_invoice(
-    number: int, request: Request, session: Session = Depends(database)
+    number: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     """Email the issued invoice to its customer, PDF attached."""
     record = StoreQueries(session).issued_invoice_by_number(number)
@@ -302,7 +306,7 @@ def send_invoice(
 
 @router.post("/rechnungen/{number}/gesendet")
 def mark_sent(
-    number: int, request: Request, session: Session = Depends(database)
+    number: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     record = StoreQueries(session).issued_invoice_by_number(number)
     if record is not None:
@@ -315,7 +319,7 @@ def mark_sent(
 
 @router.post("/rechnungen/{number}/bezahlt")
 def mark_paid(
-    number: int, request: Request, session: Session = Depends(database)
+    number: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     record = StoreQueries(session).issued_invoice_by_number(number)
     if record is None:
@@ -331,7 +335,7 @@ def mark_paid(
 
 @router.post("/rechnungen/{number}/unbezahlt")
 def mark_unpaid(
-    number: int, request: Request, session: Session = Depends(database)
+    number: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     record = StoreQueries(session).issued_invoice_by_number(number)
     if record is not None:
@@ -344,7 +348,7 @@ def mark_unpaid(
 
 @router.post("/rechnungen/{number}/erinnern")
 def send_payment_reminder(
-    number: int, request: Request, session: Session = Depends(database)
+    number: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
     """Send (or record) one more payment reminder for an unpaid invoice."""
     record = StoreQueries(session).issued_invoice_by_number(number)
@@ -390,7 +394,9 @@ def send_payment_reminder(
 
 @router.get("/rechnungen/{number}.pdf")
 def invoice_pdf(
-    number: int, herunterladen: bool = False, session: Session = Depends(database)
+    number: int,
+    herunterladen: bool = False,
+    session: Session = Depends(database_session),
 ) -> Response:
     """The stored PDF: shown in place by default, a download only on request."""
     path = InvoicePdfArchive(session).stored_pdf(number)

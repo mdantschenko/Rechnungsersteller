@@ -23,8 +23,8 @@ from invoicing.constant import (
 from invoicing.data_classes import Invoice
 from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.german_formatter import german_formatter
+from invoicing.german_template_filters import GermanTemplateFilters
 from invoicing.pdf.renderer_selection import PdfRendererSelection
-from invoicing.templating import GermanTemplateFilters
 
 
 class InvoiceDocumentWriter:

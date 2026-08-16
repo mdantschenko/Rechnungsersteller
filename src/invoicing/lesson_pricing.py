@@ -12,7 +12,7 @@ from invoicing.data_classes import (
     LineItem,
     TaughtLesson,
 )
-from invoicing.domain.invoice import InvoiceBuilder
+from invoicing.domain.invoice_builder import InvoiceBuilder
 from invoicing.storage import models
 from invoicing.utils import hours_per_unit, parse_german_amount, round_quantity
 

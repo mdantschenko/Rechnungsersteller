@@ -7,7 +7,7 @@ created, so discarded drafts leave no gap in the sequence.
 from __future__ import annotations
 
 
-class NumberSequence:
+class InvoiceNumberSequence:
     """Tracks which invoice number comes next.
 
     Not a dataclass: assigning mutates it, so behaviour and state stay together.

@@ -8,7 +8,7 @@ from fastapi import Request
 from sqlmodel import Session
 
 
-def database(request: Request) -> Iterator[Session]:
+def database_session(request: Request) -> Iterator[Session]:
     """A session that commits when the request finishes without an error.
 
     A free generator function because FastAPI's ``Depends`` drives it.

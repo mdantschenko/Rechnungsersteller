@@ -27,10 +27,10 @@ from invoicing.data_classes import (
     Issuer,
     ReleasedInvoice,
 )
-from invoicing.domain.billing_period import BillingCalendar
+from invoicing.domain.billing_calendar import BillingCalendar
 from invoicing.domain.extra_column_rules import ExtraColumnRules
-from invoicing.domain.invoice import InvoiceBuilder
-from invoicing.domain.invoice_numbers import NumberSequence
+from invoicing.domain.invoice_builder import InvoiceBuilder
+from invoicing.domain.invoice_number_sequence import InvoiceNumberSequence
 from invoicing.lesson_pricing import StoredLessonPricer
 from invoicing.storage import models
 
@@ -126,11 +126,15 @@ class BillingRunOrchestrator:
         )
 
     @staticmethod
-    def number_sequence_from_state(state: models.NumberState | None) -> NumberSequence:
+    def number_sequence_from_state(
+        state: models.NumberState | None,
+    ) -> InvoiceNumberSequence:
         """The numbering as a domain sequence; a missing row starts at one."""
         if state is None:
-            return NumberSequence(start=1)
-        return NumberSequence(start=state.start, last_assigned=state.last_assigned)
+            return InvoiceNumberSequence(start=1)
+        return InvoiceNumberSequence(
+            start=state.start, last_assigned=state.last_assigned
+        )
 
     def _collect_run(
         self,
@@ -224,7 +228,7 @@ class BillingRunOrchestrator:
         lesson = self.session.exec(statement).first()
         return None if lesson is None else lesson.taught_on
 
-    def _sequence(self) -> tuple[NumberSequence, models.NumberState]:
+    def _sequence(self) -> tuple[InvoiceNumberSequence, models.NumberState]:
         state = self.session.exec(select(models.NumberState)).first()
         if state is None:
             state = models.NumberState(start=1)

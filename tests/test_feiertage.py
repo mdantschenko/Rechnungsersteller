@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from invoicing.feiertage import HolidayCalendar
-from invoicing.storage.database import InvoiceDatabase
+from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import AppSettings, SchoolHoliday
 
 
