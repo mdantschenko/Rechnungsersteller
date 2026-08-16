@@ -21,7 +21,7 @@ from sqlmodel import Session
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
-from invoicing import alarms, push
+from invoicing.alarms import LessonAlarmClock
 from invoicing.constant import (
     ALARM_CHECK_INTERVAL_SECONDS,
     DEFAULT_DATABASE_LOCATION,
@@ -29,6 +29,7 @@ from invoicing.constant import (
     SIGNED_IN_SESSION_KEY,
     WEB_STATIC_DIRECTORY,
 )
+from invoicing.push import WebPushSender
 from invoicing.storage.database import open_database
 from invoicing.web import (
     calendar_page,
@@ -97,11 +98,8 @@ def _ring_once(engine: Engine) -> None:
     with Session(engine) as session:
         settings = settings_of(session)
         now = datetime.now()
-
-        def send(message: dict[str, str]) -> int:
-            return push.send_to_all(session, settings, message)
-
-        alarms.ring_due(session, settings, now, send)
+        send = WebPushSender(session, settings).send_to_all
+        LessonAlarmClock(session, settings, send).ring_all_due(now)
         daily.morning_round(session, settings, now, send)
         session.commit()
 

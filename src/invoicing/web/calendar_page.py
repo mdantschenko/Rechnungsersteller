@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, col, select
 from starlette.responses import Response
 
-from invoicing import alarms
+from invoicing.alarms import LessonAlarmClock
 from invoicing.constant import (
     FEDERAL_STATE_COLORS,
     GERMAN_LOCALE,
@@ -29,7 +29,8 @@ from invoicing.data_classes import CalendarDay
 from invoicing.feiertage import HolidayCalendar
 from invoicing.german_formatter import german_formatter
 from invoicing.lesson_pricing import StoredLessonPricer
-from invoicing.scheduling import materialise_series
+from invoicing.push import WebPushSender
+from invoicing.scheduling import LessonSeriesMaterialiser
 from invoicing.storage.models import Customer, Lesson, LessonStatus
 from invoicing.utils import billing_templates_by_customer, planning_horizon
 from invoicing.web.page import (
@@ -68,7 +69,7 @@ def _week_page(request: Request, session: Session, on: date) -> Response:
     monday = on - timedelta(days=on.weekday())
     sunday = monday + timedelta(days=6)
     horizon = planning_horizon(settings_of(session), today)
-    materialise_series(session, until=max(sunday, horizon))
+    LessonSeriesMaterialiser(session).materialise_all_active(until=max(sunday, horizon))
     session.flush()
     lessons = _lessons_between(session, monday, sunday)
     public, school = _holiday_notes(session, monday, sunday)
@@ -107,7 +108,9 @@ def _week_page(request: Request, session: Session, on: date) -> Response:
 
 @router.get("/tag/{on}")
 def a_day(on: date, request: Request, session: Session = Depends(database)) -> Response:
-    alarms.acknowledge_day(session, on)
+    settings = settings_of(session)
+    deliver = WebPushSender(session, settings).send_to_all
+    LessonAlarmClock(session, settings, deliver).acknowledge_day(on)
     public, school = _holiday_notes(session, on, on)
     lessons = _lessons_between(session, on, on)
     return templates.TemplateResponse(
@@ -138,7 +141,9 @@ def _month_page(request: Request, session: Session, year: int, month: int) -> Re
     first_of_month = date(year, month, 1)
     weeks = Calendar(WEEK_STARTS_ON_MONDAY).monthdatescalendar(year, month)
     horizon = planning_horizon(settings_of(session), today)
-    materialise_series(session, until=max(weeks[-1][-1], horizon))
+    LessonSeriesMaterialiser(session).materialise_all_active(
+        until=max(weeks[-1][-1], horizon)
+    )
     session.flush()
     lessons = _lessons_between(session, weeks[0][0], weeks[-1][-1])
     public, school = _holiday_notes(session, weeks[0][0], weeks[-1][-1])

@@ -18,7 +18,7 @@ from invoicing.constant import (
 )
 from invoicing.data_classes import LessonStats
 from invoicing.german_formatter import german_formatter
-from invoicing.scheduling import materialise_series
+from invoicing.scheduling import LessonSeriesMaterialiser
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -431,7 +431,9 @@ def change_series(
         session.delete(lesson)
     session.flush()
 
-    materialise_series(session, until=planning_horizon(settings_of(session), today))
+    LessonSeriesMaterialiser(session).materialise_all_active(
+        until=planning_horizon(settings_of(session), today)
+    )
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 

@@ -8,8 +8,8 @@ from pydantic import BaseModel
 from sqlmodel import Session
 from starlette.responses import FileResponse, JSONResponse, Response
 
-from invoicing import push
 from invoicing.constant import PWA_MANIFEST, WEB_STATIC_DIRECTORY
+from invoicing.push import WebPushSender
 from invoicing.utils import notice_redirect
 from invoicing.web.page import database, settings_of
 
@@ -33,7 +33,7 @@ class Subscription(BaseModel):
 
 @router.get("/push/schluessel")
 def subscription_key(session: Session = Depends(database)) -> Response:
-    key = push.application_server_key(session, settings_of(session))
+    key = WebPushSender(session, settings_of(session)).application_server_key()
     return JSONResponse({"key": key})
 
 
@@ -41,8 +41,7 @@ def subscription_key(session: Session = Depends(database)) -> Response:
 def store_subscription(
     subscription: Subscription, session: Session = Depends(database)
 ) -> None:
-    push.subscribe(
-        session,
+    WebPushSender(session, settings_of(session)).subscribe(
         endpoint=subscription.endpoint,
         p256dh=subscription.keys.get("p256dh", ""),
         auth=subscription.keys.get("auth", ""),
@@ -53,15 +52,13 @@ def store_subscription(
 def drop_subscription(
     subscription: Subscription, session: Session = Depends(database)
 ) -> None:
-    push.unsubscribe(session, subscription.endpoint)
+    WebPushSender(session, settings_of(session)).unsubscribe(subscription.endpoint)
 
 
 @router.post("/push/test")
 def test_ring(request: Request, session: Session = Depends(database)) -> Response:
-    delivered = push.send_to_all(
-        session,
-        settings_of(session),
-        {"title": "Probeweckruf", "body": "So klingelt der Wecker.", "url": "/"},
+    delivered = WebPushSender(session, settings_of(session)).send_to_all(
+        {"title": "Probeweckruf", "body": "So klingelt der Wecker.", "url": "/"}
     )
     if not delivered:
         return notice_redirect(

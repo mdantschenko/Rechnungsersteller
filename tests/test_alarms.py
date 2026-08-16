@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
-from invoicing.alarms import acknowledge_day, ring_due
+from invoicing.alarms import LessonAlarmClock
 from invoicing.constant import ALARM_RING_EVERY, ALARM_RINGS_AT_MOST
 from invoicing.storage.models import (
     AppSettings,
@@ -65,12 +65,10 @@ def test_rings_at_the_lead_time_and_names_the_lesson(
 ) -> None:
     _lesson(session)
     rung: list[dict[str, str]] = []
+    clock = LessonAlarmClock(session, settings, rung.append)
 
-    assert (
-        ring_due(session, settings, RING_MOMENT - timedelta(minutes=1), rung.append)
-        == 0
-    )
-    assert ring_due(session, settings, RING_MOMENT, rung.append) == 1
+    assert clock.ring_all_due(RING_MOMENT - timedelta(minutes=1)) == 0
+    assert clock.ring_all_due(RING_MOMENT) == 1
 
     assert rung[0]["title"] == "Nachhilfe Max"
     assert "um 15:00" in rung[0]["body"]
@@ -81,23 +79,26 @@ def test_rings_at_the_lead_time_and_names_the_lesson(
 def test_the_customer_clock_time_wins(session: Session, settings: AppSettings) -> None:
     _lesson(session, reminder_at=time(8, 30))
     rung: list[dict[str, str]] = []
+    clock = LessonAlarmClock(session, settings, rung.append)
 
-    assert ring_due(session, settings, datetime(2026, 6, 17, 8, 29), rung.append) == 0
-    assert ring_due(session, settings, datetime(2026, 6, 17, 8, 30), rung.append) == 1
+    assert clock.ring_all_due(datetime(2026, 6, 17, 8, 29)) == 0
+    assert clock.ring_all_due(datetime(2026, 6, 17, 8, 30)) == 1
 
 
 def test_an_untimed_lesson_stays_quiet(session: Session, settings: AppSettings) -> None:
     _lesson(session, starts_at=None)
+    clock = LessonAlarmClock(session, settings, lambda message: 1)
 
-    assert ring_due(session, settings, RING_MOMENT, lambda m: 1) == 0
+    assert clock.ring_all_due(RING_MOMENT) == 0
 
 
 def test_an_answered_lesson_stays_quiet(
     session: Session, settings: AppSettings
 ) -> None:
     _lesson(session, status=LessonStatus.DONE)
+    clock = LessonAlarmClock(session, settings, lambda message: 1)
 
-    assert ring_due(session, settings, RING_MOMENT, lambda m: 1) == 0
+    assert clock.ring_all_due(RING_MOMENT) == 0
 
 
 def test_it_keeps_ringing_until_acknowledged(
@@ -105,17 +106,18 @@ def test_it_keeps_ringing_until_acknowledged(
 ) -> None:
     _lesson(session)
     rung: list[dict[str, str]] = []
+    clock = LessonAlarmClock(session, settings, rung.append)
 
-    ring_due(session, settings, RING_MOMENT, rung.append)
-    ring_due(session, settings, RING_MOMENT + timedelta(seconds=30), rung.append)
+    clock.ring_all_due(RING_MOMENT)
+    clock.ring_all_due(RING_MOMENT + timedelta(seconds=30))
     assert len(rung) == 1
 
-    ring_due(session, settings, RING_MOMENT + ALARM_RING_EVERY, rung.append)
+    clock.ring_all_due(RING_MOMENT + ALARM_RING_EVERY)
     assert len(rung) == 2
     assert rung[1]["body"].startswith("2. Weckruf")
 
-    acknowledge_day(session, LESSON_DAY)
-    ring_due(session, settings, RING_MOMENT + 2 * ALARM_RING_EVERY, rung.append)
+    clock.acknowledge_day(LESSON_DAY)
+    clock.ring_all_due(RING_MOMENT + 2 * ALARM_RING_EVERY)
     assert len(rung) == 2
 
 
@@ -124,10 +126,11 @@ def test_the_ringing_gives_up_eventually(
 ) -> None:
     _lesson(session)
     rung: list[dict[str, str]] = []
+    clock = LessonAlarmClock(session, settings, rung.append)
 
     moment = RING_MOMENT
     for _ in range(ALARM_RINGS_AT_MOST + 3):
-        ring_due(session, settings, moment, rung.append)
+        clock.ring_all_due(moment)
         moment += ALARM_RING_EVERY
 
     assert len(rung) == ALARM_RINGS_AT_MOST
@@ -137,8 +140,7 @@ def test_a_long_missed_alarm_stays_quiet(
     session: Session, settings: AppSettings
 ) -> None:
     _lesson(session)
+    clock = LessonAlarmClock(session, settings, lambda message: 1)
 
-    assert (
-        ring_due(session, settings, RING_MOMENT + timedelta(hours=2), lambda m: 1) == 0
-    )
+    assert clock.ring_all_due(RING_MOMENT + timedelta(hours=2)) == 0
     assert session.exec(select(LessonAlarm)).first() is None
