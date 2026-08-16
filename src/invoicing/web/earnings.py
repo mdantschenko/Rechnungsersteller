@@ -18,13 +18,13 @@ from invoicing.billing import priced_line
 from invoicing.constant import ZERO
 from invoicing.data_classes import EarningsRow
 from invoicing.storage.models import (
-    BillingTemplate,
     Customer,
     InvoiceDelivery,
     IssuedInvoice,
     Lesson,
     LessonStatus,
 )
+from invoicing.utils import billing_templates_by_customer, sum_of_cents
 from invoicing.web.page import month_name
 
 
@@ -49,9 +49,9 @@ def monthly_earnings(
     ]
     total = EarningsRow(
         label="Gesamt",
-        received=sum((row.received for row in rows), ZERO),
-        outstanding=sum((row.outstanding for row in rows), ZERO),
-        uninvoiced=sum((row.uninvoiced for row in rows), ZERO),
+        received=sum_of_cents(row.received for row in rows),
+        outstanding=sum_of_cents(row.outstanding for row in rows),
+        uninvoiced=sum_of_cents(row.uninvoiced for row in rows),
     )
     return rows, total
 
@@ -89,7 +89,7 @@ def _uninvoiced_by_month(
     if not quiet:
         return {}
     quiet_ids = [entry.id or 0 for entry in quiet]
-    templates = _templates(session, quiet_ids)
+    templates = billing_templates_by_customer(session, quiet_ids)
     found: dict[tuple[int, int], Decimal] = {}
     for lesson in session.exec(
         select(Lesson)
@@ -102,14 +102,3 @@ def _uninvoiced_by_month(
         key = (lesson.taught_on.year, lesson.taught_on.month)
         found[key] = found.get(key, ZERO) + priced_line(terms, lesson).total
     return found
-
-
-def _templates(session: Session, customer_ids: list[int]) -> dict[int, BillingTemplate]:
-    return {
-        terms.customer_id: terms
-        for terms in session.exec(
-            select(BillingTemplate).where(
-                col(BillingTemplate.customer_id).in_(customer_ids)
-            )
-        ).all()
-    }

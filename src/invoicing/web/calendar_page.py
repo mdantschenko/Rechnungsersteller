@@ -28,13 +28,9 @@ from invoicing.constant import (
 )
 from invoicing.data_classes import CalendarDay
 from invoicing.domain.money import format_euro, format_quantity
-from invoicing.scheduling import materialise_series, planning_horizon
-from invoicing.storage.models import (
-    BillingTemplate,
-    Customer,
-    Lesson,
-    LessonStatus,
-)
+from invoicing.scheduling import materialise_series
+from invoicing.storage.models import Customer, Lesson, LessonStatus
+from invoicing.utils import billing_templates_by_customer, planning_horizon
 from invoicing.web.page import (
     active_customers,
     database,
@@ -283,14 +279,7 @@ def _lesson_extras(
     customer_ids = list({lesson.customer_id for lesson in lessons})
     if not customer_ids:
         return {}
-    terms_map = {
-        terms.customer_id: terms
-        for terms in session.exec(
-            select(BillingTemplate).where(
-                col(BillingTemplate.customer_id).in_(customer_ids)
-            )
-        ).all()
-    }
+    terms_map = billing_templates_by_customer(session, customer_ids)
     found: dict[int, list[dict[str, object]]] = {}
     for lesson in lessons:
         terms = terms_map.get(lesson.customer_id)

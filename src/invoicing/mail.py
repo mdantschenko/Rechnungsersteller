@@ -25,6 +25,7 @@ from invoicing.constant import (
     SMTP_TIMEOUT_SECONDS,
 )
 from invoicing.storage.models import AppSettings
+from invoicing.utils import mailbox_address_of
 
 
 class MailError(Exception):
@@ -113,9 +114,7 @@ def _outgoing(
         raise MailError(MAIL_NOT_CONFIGURED_MESSAGE)
     try:
         return build_message(
-            sender=from_header(
-                sender_name, settings.smtp_from or settings.smtp_user or ""
-            ),
+            sender=from_header(sender_name, mailbox_address_of(settings)),
             to=to,
             subject=subject,
             body=body,

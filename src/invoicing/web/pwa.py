@@ -10,7 +10,8 @@ from starlette.responses import FileResponse, JSONResponse, Response
 
 from invoicing import push
 from invoicing.constant import PWA_MANIFEST, WEB_STATIC_DIRECTORY
-from invoicing.web.page import database, notice_redirect, settings_of
+from invoicing.utils import notice_redirect
+from invoicing.web.page import database, settings_of
 
 router = APIRouter()
 

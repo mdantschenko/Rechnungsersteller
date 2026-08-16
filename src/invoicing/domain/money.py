@@ -1,50 +1,18 @@
-"""Monetary amounts and German number formatting.
+"""German number formatting for amounts and quantities.
 
 Every amount in the system is a :class:`~decimal.Decimal` and passes through
-:func:`round_to_cents`. Binary floating point cannot represent 0.10 exactly,
-and that error compounds across invoice lines into cent mismatches the
-customer can see.
+:func:`invoicing.utils.round_to_cents`. Binary floating point cannot represent
+0.10 exactly, and that error compounds across invoice lines into cent
+mismatches the customer can see.
 """
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import Decimal
 
 from babel.numbers import format_currency, format_decimal
 
-from invoicing.constant import CENT, GERMAN_LOCALE, TEN_THOUSANDTH
-
-
-def round_to_cents(amount: Decimal | int | str) -> Decimal:
-    """Round half up, the way invoices are rounded.
-
-    Half up rather than Python's default banker's rounding, so that the
-    customer reproduces every line with a pocket calculator.
-    """
-    return Decimal(amount).quantize(CENT, rounding=ROUND_HALF_UP)
-
-
-def round_quantity(amount: Decimal) -> Decimal:
-    """Round a count to four places: fine enough that a third of an hour
-    times the rate still lands on the cent a calculator produces."""
-    return amount.quantize(TEN_THOUSANDTH, rounding=ROUND_HALF_UP)
-
-
-def parse_user_amount(value: str) -> Decimal | None:
-    """Read an amount the way a person types it: ``20,00 €``, ``1.234,56``.
-
-    None when nothing readable remains — the caller decides whether that
-    means "empty" or "complain".
-    """
-    cleaned = value.replace("€", "").replace(" ", "").strip()
-    if "," in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    if not cleaned:
-        return None
-    try:
-        return Decimal(cleaned)
-    except InvalidOperation:
-        return None
+from invoicing.constant import GERMAN_LOCALE
 
 
 def format_euro(amount: Decimal) -> str:

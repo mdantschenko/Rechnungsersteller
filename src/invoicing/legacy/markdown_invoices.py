@@ -37,7 +37,12 @@ from invoicing.data_classes import (
     ParsedInvoice,
     ParsedLine,
 )
-from invoicing.domain.money import round_to_cents
+from invoicing.utils import (
+    collapse_table_markup,
+    parse_german_amount,
+    parse_german_date,
+    round_to_cents,
+)
 
 
 def read_archive(directory: Path) -> ArchiveReading:
@@ -75,7 +80,10 @@ def _record_invoice(
 
 def read_document(document: Path) -> Iterator[ParsedInvoice]:
     """Read every invoice contained in one Markdown file."""
-    lines = [_flatten(raw) for raw in document.read_text(encoding="utf-8").splitlines()]
+    lines = [
+        collapse_table_markup(raw)
+        for raw in document.read_text(encoding="utf-8").splitlines()
+    ]
     anchors = [
         index
         for index, line in enumerate(lines)
@@ -103,12 +111,12 @@ def _read_invoice(
         number=number,
         issued_on=_issue_date_above(lines, anchor, number, source),
         recipient=_recipient_above(lines, anchor, number, source),
-        printed_from=_german_date(period.group(1)),
-        printed_to=_german_date(period.group(2)),
+        printed_from=parse_german_date(period.group(1)),
+        printed_to=parse_german_date(period.group(2)),
         extra_column_label=extra_column.group(1).strip() if extra_column else None,
         lines=tuple(_read_lines(lines[anchor:end])),
-        printed_total=_amount(total.group(1)),
-        paid_on=_german_date(settled.group(1)) if settled else None,
+        printed_total=_read_amount(total.group(1)),
+        paid_on=parse_german_date(settled.group(1)) if settled else None,
         source_file=source,
     )
 
@@ -120,14 +128,14 @@ def _read_lines(block: Sequence[str]) -> Iterator[ParsedLine]:
             continue
         extra_printed = match.group(6).strip()
         yield ParsedLine(
-            taught_on=_german_date(match.group(4)),
-            quantity=_amount(match.group(1)),
+            taught_on=parse_german_date(match.group(4)),
+            quantity=_read_amount(match.group(1)),
             unit=match.group(2),
             description=match.group(3).strip(),
-            unit_price=_amount(match.group(5)),
+            unit_price=_read_amount(match.group(5)),
             extra_printed=extra_printed,
             extra_amount=_extra_amount(extra_printed),
-            total=_amount(match.group(7)),
+            total=_read_amount(match.group(7)),
         )
 
 
@@ -137,7 +145,7 @@ def _issue_date_above(
     for index in range(anchor, -1, -1):
         found = LEGACY_ISSUE_DATE_PATTERN.search(lines[index])
         if found:
-            return _german_date(found.group(1))
+            return parse_german_date(found.group(1))
         if EN_DASH in lines[index]:
             break
     raise ValueError(f"no issue date above invoice {number} in {source}")
@@ -175,24 +183,19 @@ def _describe_same_invoice(one: ParsedInvoice, other: ParsedInvoice) -> bool:
 
 def _extra_amount(printed: str) -> Decimal | None:
     match = LEGACY_AMOUNT_PATTERN.match(printed)
-    return _amount(match.group(1)) if match else None
-
-
-def _flatten(raw: str) -> str:
-    return re.sub(r"\s+", " ", raw.replace("|", " ")).strip()
+    return _read_amount(match.group(1)) if match else None
 
 
 def _is_rule(line: str) -> bool:
     return set(line) <= set("- ")
 
 
-def _german_date(text: str) -> date:
-    day, month, year = (int(part) for part in text.split("."))
-    return date(year, month, day)
-
-
-def _amount(text: str) -> Decimal:
-    return round_to_cents(text.replace(".", "").replace(",", "."))
+def _read_amount(text: str) -> Decimal:
+    """A regex-matched amount as cents; the reader must fail loudly on junk."""
+    parsed = parse_german_amount(text)
+    if parsed is None:
+        raise ValueError(f"unreadable amount: {text!r}")
+    return round_to_cents(parsed)
 
 
 def _require(match: re.Match[str] | None, where: str) -> re.Match[str]:

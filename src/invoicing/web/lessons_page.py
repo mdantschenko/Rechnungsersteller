@@ -6,15 +6,16 @@ off in the calendar leaves you in the calendar.
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form
 from sqlmodel import Session, select
-from starlette.responses import RedirectResponse, Response
+from starlette.responses import Response
 
 from invoicing.constant import ValueSource
 from invoicing.storage.models import BillingTemplate, Lesson, LessonStatus
+from invoicing.utils import parse_optional_clock_time, safe_back_redirect
 from invoicing.web.page import database
 
 router = APIRouter()
@@ -35,12 +36,12 @@ def set_extra_costs(
     """
     lesson = _lesson(session, lesson_id)
     if lesson.invoice_id is not None:
-        return _back_to(back)
+        return safe_back_redirect(back)
     terms = session.exec(
         select(BillingTemplate).where(BillingTemplate.customer_id == lesson.customer_id)
     ).first()
     if terms is None:
-        return _back_to(back)
+        return safe_back_redirect(back)
     values = dict(lesson.column_values)
     for column in terms.columns:
         if column.source is not ValueSource.PER_LESSON:
@@ -51,7 +52,7 @@ def set_extra_costs(
             values[column.label] = None
     lesson.column_values = values
     session.add(lesson)
-    return _back_to(back)
+    return safe_back_redirect(back)
 
 
 @router.post("/termine/{lesson_id}/erledigt")
@@ -61,7 +62,7 @@ def mark_done(
     session: Session = Depends(database),
 ) -> Response:
     _lesson(session, lesson_id).status = LessonStatus.DONE
-    return _back_to(back)
+    return safe_back_redirect(back)
 
 
 @router.post("/termine/{lesson_id}/ausgefallen")
@@ -71,7 +72,7 @@ def mark_cancelled(
     session: Session = Depends(database),
 ) -> Response:
     _lesson(session, lesson_id).status = LessonStatus.CANCELLED
-    return _back_to(back)
+    return safe_back_redirect(back)
 
 
 @router.post("/termine/{lesson_id}/offen")
@@ -82,7 +83,7 @@ def mark_planned(
 ) -> Response:
     """Undo an answer that was given by mistake."""
     _lesson(session, lesson_id).status = LessonStatus.PLANNED
-    return _back_to(back)
+    return safe_back_redirect(back)
 
 
 @router.post("/termine/{lesson_id}/verschieben")
@@ -95,9 +96,10 @@ def reschedule(
 ) -> Response:
     lesson = _lesson(session, lesson_id)
     lesson.taught_on = taught_on
-    if starts_at:
-        lesson.starts_at = time.fromisoformat(starts_at)
-    return _back_to(back)
+    new_start = parse_optional_clock_time(starts_at)
+    if new_start is not None:
+        lesson.starts_at = new_start
+    return safe_back_redirect(back)
 
 
 @router.post("/termine/{lesson_id}/stunden")
@@ -108,7 +110,7 @@ def change_quantity(
     session: Session = Depends(database),
 ) -> Response:
     _lesson(session, lesson_id).quantity = quantity
-    return _back_to(back)
+    return safe_back_redirect(back)
 
 
 @router.post("/termine/{lesson_id}/loeschen")
@@ -126,7 +128,7 @@ def remove_lesson(
     if lesson.invoice_id is not None:
         raise ValueError(f"lesson {lesson_id} is already on an invoice")
     session.delete(lesson)
-    return _back_to(back)
+    return safe_back_redirect(back)
 
 
 @router.post("/termine/neu")
@@ -143,10 +145,10 @@ def add_lesson(
             customer_id=customer_id,
             taught_on=taught_on,
             quantity=quantity,
-            starts_at=time.fromisoformat(starts_at) if starts_at else None,
+            starts_at=parse_optional_clock_time(starts_at),
         )
     )
-    return _back_to(back)
+    return safe_back_redirect(back)
 
 
 def _lesson(session: Session, lesson_id: int) -> Lesson:
@@ -155,7 +157,3 @@ def _lesson(session: Session, lesson_id: int) -> Lesson:
         raise ValueError(f"no lesson with id {lesson_id}")
     session.add(lesson)
     return lesson
-
-
-def _back_to(back: str) -> Response:
-    return RedirectResponse(back if back.startswith("/") else "/", status_code=303)

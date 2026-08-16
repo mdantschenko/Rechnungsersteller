@@ -4,7 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from invoicing.domain.money import format_euro, format_quantity, round_to_cents
+from invoicing.domain.money import format_euro, format_quantity
+from invoicing.utils import round_to_cents
 
 
 @pytest.mark.parametrize(

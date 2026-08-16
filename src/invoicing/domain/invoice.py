@@ -11,7 +11,6 @@ from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 
-from invoicing.constant import ZERO
 from invoicing.data_classes import (
     Address,
     BillingPeriod,
@@ -24,7 +23,7 @@ from invoicing.data_classes import (
     TaughtLesson,
 )
 from invoicing.domain.extra_column_rules import ExtraColumnRules
-from invoicing.domain.money import round_to_cents
+from invoicing.utils import round_to_cents, sum_of_cents
 
 
 def column_shares(
@@ -54,7 +53,7 @@ def build_line_item(template: InvoiceTerms, lesson: TaughtLesson) -> LineItem:
         unit_price=template.unit_price,
         column_values=tuple(value for _, value, _ in shares),
         total=round_to_cents(lesson.quantity * template.unit_price)
-        + sum((share for _, _, share in shares), start=ZERO),
+        + sum_of_cents(share for _, _, share in shares),
     )
 
 
@@ -87,6 +86,6 @@ def build_invoice(
         period=period,
         columns=tuple(template.columns),
         line_items=line_items,
-        total=sum((item.total for item in line_items), start=ZERO),
+        total=sum_of_cents(item.total for item in line_items),
         paid_on=paid_on,
     )

@@ -9,18 +9,16 @@ from babel.dates import format_date
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, col, select
-from starlette.responses import RedirectResponse
 
 from invoicing.constant import (
     GERMAN_LOCALE,
-    GERMAN_WEEKDAY_NAMES,
-    NOTICE_SESSION_KEY,
     WEB_STATIC_DIRECTORY,
     WEB_TEMPLATES_DIRECTORY,
 )
 from invoicing.storage.database import session_for
 from invoicing.storage.models import AppSettings, Customer, CustomerStatus, LessonSeries
 from invoicing.templating import install_german_filters
+from invoicing.utils import recurrence_label, recurrence_words
 
 
 def short_date(day: date) -> str:
@@ -97,45 +95,12 @@ def active_customers(session: Session) -> list[Customer]:
     return list(session.exec(statement).all())
 
 
-def notice_redirect(request: Request, path: str, message: str) -> RedirectResponse:
-    """Back to ``path`` with a message the layout shows once as a toast.
-
-    The message travels in the session rather than in the URL, so a crafted
-    link cannot place its own words inside the application's chrome.
-    """
-    request.session[NOTICE_SESSION_KEY] = message
-    return RedirectResponse(path, status_code=303)
-
-
 def series_labels(session: Session) -> dict[int, str]:
     """What to print behind the repeat sign of a lesson born from a series."""
     return {
-        entry.id or 0: _recurrence_label(entry.recurrence)
+        entry.id or 0: recurrence_label(entry.recurrence)
         for entry in session.exec(select(LessonSeries)).all()
     }
-
-
-def _recurrence_label(recurrence: str) -> str:
-    if "FREQ=WEEKLY" in recurrence:
-        return "Alle zwei Wochen" if "INTERVAL=2" in recurrence else "Wöchentlich"
-    return "Serie"
-
-
-def recurrence_words(recurrence: str) -> str:
-    """The recurrence rule as a German sentence: "Jeden zweiten Dienstag"."""
-    if "FREQ=WEEKLY" not in recurrence:
-        return recurrence
-    day = next(
-        (
-            name
-            for code, name in GERMAN_WEEKDAY_NAMES.items()
-            if f"BYDAY={code}" in recurrence
-        ),
-        None,
-    )
-    if day is None:
-        return _recurrence_label(recurrence)
-    return f"Jeden zweiten {day}" if "INTERVAL=2" in recurrence else f"Jeden {day}"
 
 
 templates.env.filters["serie"] = recurrence_words

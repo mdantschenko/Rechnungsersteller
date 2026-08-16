@@ -8,25 +8,21 @@ an invoice that crossed its due date overnight announces itself once.
 
 from __future__ import annotations
 
-import io
-import secrets
-import sqlite3
 from datetime import date, datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
-import pyzipper
 from sqlmodel import Session, select
 
 from invoicing import mail
 from invoicing.billing import release
-from invoicing.constant import (
-    BACKUP_PASSPHRASE_LENGTH,
-    MORNING_ROUND_STARTS_AT,
-    DeliverPushMessage,
-)
+from invoicing.constant import MORNING_ROUND_STARTS_AT, DeliverPushMessage
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
+from invoicing.utils import (
+    ensure_backup_passphrase,
+    mailbox_address_of,
+    sealed_sqlite_copy,
+)
 from invoicing.web.invoices_page import (
     due_runs,
     invoice_mail_body,
@@ -117,47 +113,25 @@ def _mail_weekly_backup(session: Session, settings: AppSettings, today: date) ->
     if not database.exists():
         return False
     settings.last_backup_mailed = today
-    if not settings.backup_passphrase:
-        settings.backup_passphrase = secrets.token_urlsafe(BACKUP_PASSPHRASE_LENGTH)
     session.add(settings)
+    passphrase = ensure_backup_passphrase(session, settings)
     try:
         mail.send_attachment(
             settings,
-            to=settings.smtp_from or settings.smtp_user or "",
+            to=mailbox_address_of(settings),
             subject=f"Datenbank-Backup {today:%d.%m.%Y}",
             body=(
                 "Guten Tag,\n\n"
                 "anbei die wöchentliche Kopie der Rechnungsdatenbank. Entpacken "
                 "mit dem Backup-Passwort aus den Einstellungen.\n"
             ),
-            content=_sealed_copy(database, settings.backup_passphrase),
+            content=sealed_sqlite_copy(database, passphrase),
             file_name=f"invoicing-{today}.zip",
             subtype="zip",
         )
     except mail.MailError:
         return False
     return True
-
-
-def _sealed_copy(database: Path, passphrase: str) -> bytes:
-    with TemporaryDirectory() as folder:
-        snapshot = Path(folder) / database.name
-        source = sqlite3.connect(database)
-        try:
-            copy = sqlite3.connect(snapshot)
-            try:
-                source.backup(copy)
-            finally:
-                copy.close()
-        finally:
-            source.close()
-        buffer = io.BytesIO()
-        with pyzipper.AESZipFile(
-            buffer, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES
-        ) as archive:
-            archive.setpassword(passphrase.encode())
-            archive.write(snapshot, arcname=database.name)
-        return buffer.getvalue()
 
 
 def _newly_overdue(

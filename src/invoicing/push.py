@@ -8,7 +8,6 @@ in the settings row, like everything else the app is configured with.
 
 from __future__ import annotations
 
-import base64
 import json
 
 from cryptography.hazmat.primitives import serialization
@@ -18,16 +17,17 @@ from sqlmodel import Session, select
 
 from invoicing.constant import PUSH_SUBSCRIPTION_GONE_STATUS_CODES
 from invoicing.storage.models import AppSettings, PushSubscription
+from invoicing.utils import base64url_without_padding, mailbox_address_of
 
 
 def application_server_key(session: Session, settings: AppSettings) -> str:
     """The public key a device subscribes with, creating the pair if needed."""
     if not settings.vapid_public_key or not settings.vapid_private_key:
         private = ec.generate_private_key(ec.SECP256R1())
-        settings.vapid_private_key = _unpadded(
+        settings.vapid_private_key = base64url_without_padding(
             private.private_numbers().private_value.to_bytes(32, "big")
         )
-        settings.vapid_public_key = _unpadded(
+        settings.vapid_public_key = base64url_without_padding(
             private.public_key().public_bytes(
                 serialization.Encoding.X962,
                 serialization.PublicFormat.UncompressedPoint,
@@ -88,9 +88,5 @@ def send_to_all(
 
 
 def _contact(settings: AppSettings) -> str:
-    address = settings.smtp_from or settings.smtp_user or "wecker@example.invalid"
+    address = mailbox_address_of(settings) or "wecker@example.invalid"
     return f"mailto:{address}"
-
-
-def _unpadded(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")

@@ -39,8 +39,8 @@ from invoicing.domain.billing_period import (
 from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.domain.invoice import build_invoice, build_line_item, column_shares
 from invoicing.domain.invoice_numbers import NumberSequence
-from invoicing.domain.money import parse_user_amount, round_quantity
 from invoicing.storage import models
+from invoicing.utils import hours_per_unit, parse_german_amount, round_quantity
 
 
 def draft_for(
@@ -228,17 +228,7 @@ def billable_quantity(terms: models.BillingTemplate, lesson: models.Lesson) -> D
     The unit is arithmetic: "h" prices per hour, "1,5h" prices per ninety
     minutes, so a ninety-minute lesson is exactly one unit then.
     """
-    return round_quantity(lesson.quantity / unit_hours(terms.unit))
-
-
-def unit_hours(unit: str) -> Decimal:
-    """How many hours one unit stands for: "h" is 1, "1,5h" is 1.5."""
-    number = parse_user_amount(
-        "".join(char for char in unit if char.isdigit() or char in ",.")
-    )
-    if number is None or number <= 0:
-        return Decimal(1)
-    return number
+    return round_quantity(lesson.quantity / hours_per_unit(terms.unit))
 
 
 def _lessons_in(
@@ -321,7 +311,7 @@ def _typed(kind: ValueKind, value: str | None) -> ExtraColumnValue:
     # Stored values may carry a German comma or a stray currency sign from
     # older input; unreadable ones count as empty rather than crashing the
     # whole billing page.
-    return parse_user_amount(value)
+    return parse_german_amount(value)
 
 
 def sequence_of(state: models.NumberState | None) -> NumberSequence:

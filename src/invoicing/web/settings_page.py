@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import secrets
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,7 +13,6 @@ from starlette.responses import RedirectResponse, Response
 from invoicing import feiertage, mail
 from invoicing.billing import domain_issuer, sequence_of
 from invoicing.constant import (
-    BACKUP_PASSPHRASE_LENGTH,
     GERMAN_FEDERAL_STATES,
     PAYMENT_DAYS_MAXIMUM,
     REMINDER_MINUTES_MAXIMUM,
@@ -23,8 +21,13 @@ from invoicing.domain import invoice as document
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.sample import sample_invoice
 from invoicing.storage.models import Issuer, NumberState
+from invoicing.utils import (
+    ensure_backup_passphrase,
+    mailbox_address_of,
+    notice_redirect,
+)
 from invoicing.web import security
-from invoicing.web.page import database, notice_redirect, settings_of, templates
+from invoicing.web.page import database, settings_of, templates
 
 router = APIRouter()
 
@@ -32,9 +35,7 @@ router = APIRouter()
 @router.get("/einstellungen")
 def settings_form(request: Request, session: Session = Depends(database)) -> Response:
     settings = settings_of(session)
-    if not settings.backup_passphrase:
-        settings.backup_passphrase = secrets.token_urlsafe(BACKUP_PASSPHRASE_LENGTH)
-        session.add(settings)
+    ensure_backup_passphrase(session, settings)
     numbering = session.exec(select(NumberState)).first()
     return templates.TemplateResponse(
         request,
@@ -289,7 +290,7 @@ def change_password(
         security.set_password(session, password)
         return notice_redirect(request, "/einstellungen", "Passwort geändert.")
     code = security.request_password_change(session, password)
-    recipient = settings.smtp_from or settings.smtp_user or ""
+    recipient = mailbox_address_of(settings)
     try:
         mail.send_text(
             settings,

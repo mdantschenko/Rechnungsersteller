@@ -14,7 +14,7 @@ from invoicing.domain.billing_period import (
 )
 from invoicing.domain.invoice import build_invoice, build_line_item
 from invoicing.domain.invoice_numbers import NumberSequence
-from invoicing.domain.money import format_euro, format_quantity, round_to_cents
+from invoicing.domain.money import format_euro, format_quantity
 
 __all__ = [
     "BillingCycle",
@@ -30,5 +30,4 @@ __all__ = [
     "next_closing_day",
     "period_closing_on",
     "period_containing",
-    "round_to_cents",
 ]

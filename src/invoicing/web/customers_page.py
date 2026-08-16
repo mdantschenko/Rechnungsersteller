@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -17,8 +17,7 @@ from invoicing.constant import (
     ValueSource,
 )
 from invoicing.data_classes import LessonStats
-from invoicing.domain.money import parse_user_amount
-from invoicing.scheduling import materialise_series, planning_horizon
+from invoicing.scheduling import materialise_series
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -31,12 +30,17 @@ from invoicing.storage.models import (
     LessonStatus,
     TemplateColumn,
 )
+from invoicing.utils import (
+    notice_redirect,
+    parse_german_amount,
+    parse_optional_clock_time,
+    planning_horizon,
+)
 from invoicing.web.earnings import monthly_earnings
 from invoicing.web.page import (
     customer_of,
     database,
     month_name,
-    notice_redirect,
     settings_of,
     templates,
 )
@@ -290,7 +294,7 @@ def add_column(
     terms = _terms(session, customer_id)
     stored_default = default_value.strip() or None
     if stored_default is not None and kind is not ValueKind.TEXT:
-        parsed = parse_user_amount(stored_default)
+        parsed = parse_german_amount(stored_default)
         if parsed is None:
             return notice_redirect(
                 request,
@@ -330,7 +334,7 @@ def edit_column(
         return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
     stored_default = default_value.strip() or None
     if stored_default is not None and column.kind is not ValueKind.TEXT:
-        parsed = parse_user_amount(stored_default)
+        parsed = parse_german_amount(stored_default)
         if parsed is None:
             return notice_redirect(
                 request,
@@ -373,7 +377,7 @@ def add_series(
             recurrence=recurrence,
             quantity=quantity,
             starts_on=starts_on,
-            starts_at=time.fromisoformat(starts_at) if starts_at else None,
+            starts_at=parse_optional_clock_time(starts_at),
         )
     )
     _remember_reminder(session, customer_id, reminder_at)
@@ -384,7 +388,7 @@ def _remember_reminder(session: Session, customer_id: int, reminder_at: str) -> 
     """The reminder time lives on the customer: one wake-up call per pupil,
     however many series they have."""
     customer = customer_of(session, customer_id)
-    customer.reminder_at = time.fromisoformat(reminder_at) if reminder_at else None
+    customer.reminder_at = parse_optional_clock_time(reminder_at)
     session.add(customer)
 
 
@@ -410,7 +414,7 @@ def change_series(
     today = date.today()
     series.recurrence = recurrence
     series.quantity = quantity
-    series.starts_at = time.fromisoformat(starts_at) if starts_at else None
+    series.starts_at = parse_optional_clock_time(starts_at)
     series.starts_on = max(series.starts_on, today)
     session.add(series)
 

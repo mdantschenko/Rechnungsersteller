@@ -33,13 +33,13 @@ from invoicing.storage.models import (
     Issuer,
     PaymentReminder,
 )
+from invoicing.utils import notice_redirect, whatsapp_number
 from invoicing.web.earnings import monthly_earnings
 from invoicing.web.page import (
     active_customers,
     customer_of,
     database,
     month_name,
-    notice_redirect,
     settings_of,
     templates,
 )
@@ -75,7 +75,7 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
                 customer.id or 0: customer.delivery.value for customer in everyone
             },
             "whatsapp": {
-                customer.id or 0: _whatsapp_number(customer.phone)
+                customer.id or 0: whatsapp_number(customer.phone)
                 for customer in everyone
             },
             "customers": active_customers(session),
@@ -600,16 +600,6 @@ def due_runs(session: Session, today: date) -> list[BillingRun]:
         for customer in session.exec(active).all()
         for run in open_runs(session, customer, today)
     ]
-
-
-def _whatsapp_number(phone: str | None) -> str:
-    """The digits wa.me expects: country code first, no plus, no zero."""
-    digits = "".join(character for character in phone or "" if character.isdigit())
-    if digits.startswith("00"):
-        return digits[2:]
-    if digits.startswith("0"):
-        return f"49{digits[1:]}"
-    return digits
 
 
 def pdf_path(session: Session, record: IssuedInvoice, customer_name: str) -> Path:
