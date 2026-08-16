@@ -18,7 +18,7 @@ from invoicing.storage.models import (
     Lesson,
     LessonStatus,
 )
-from invoicing.web.daily import morning_round
+from invoicing.web.daily import MorningRound
 
 MORNING = datetime(2026, 6, 16, 7, 30)
 
@@ -65,7 +65,7 @@ def test_the_round_sends_due_invoices_and_reports(
     )
     rung: list[dict[str, str]] = []
 
-    morning_round(session, _settings(session), MORNING, rung.append)
+    MorningRound(session, _settings(session), rung.append).run(MORNING)
 
     assert outbox == ["erika@example.com"]
     record = session.exec(select(IssuedInvoice)).one()
@@ -81,7 +81,7 @@ def test_without_the_switch_the_round_only_announces(
     settings.auto_send_invoices = False
     rung: list[dict[str, str]] = []
 
-    morning_round(session, settings, MORNING, rung.append)
+    MorningRound(session, settings, rung.append).run(MORNING)
 
     assert session.exec(select(IssuedInvoice)).first() is None
     assert "warten auf dich" in rung[0]["body"]
@@ -93,15 +93,17 @@ def test_the_round_respects_the_clock_and_runs_once(
     monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
     rung: list[dict[str, str]] = []
 
-    morning_round(
-        session, _settings(session), datetime(2026, 6, 16, 6, 59), rung.append
+    MorningRound(session, _settings(session), rung.append).run(
+        datetime(2026, 6, 16, 6, 59)
     )
     assert rung == []
 
-    morning_round(session, _settings(session), MORNING, rung.append)
+    MorningRound(session, _settings(session), rung.append).run(MORNING)
     assert len(rung) == 1
 
-    morning_round(session, _settings(session), datetime(2026, 6, 16, 9, 0), rung.append)
+    MorningRound(session, _settings(session), rung.append).run(
+        datetime(2026, 6, 16, 9, 0)
+    )
     assert len(rung) == 1
 
 
@@ -117,7 +119,7 @@ def test_monday_mails_a_sealed_backup(
     monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
     settings = _settings(session)
 
-    morning_round(session, settings, datetime(2026, 6, 15, 7, 30), lambda m: None)
+    MorningRound(session, settings, lambda m: None).run(datetime(2026, 6, 15, 7, 30))
 
     assert str(parcels["file_name"]).endswith(".zip")
     sealed = pyzipper.AESZipFile(io.BytesIO(bytes(parcels["content"])))  # type: ignore[arg-type]
@@ -136,7 +138,7 @@ def test_other_days_mail_no_backup(
     )
     monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
 
-    morning_round(session, _settings(session), MORNING, lambda m: None)
+    MorningRound(session, _settings(session), lambda m: None).run(MORNING)
 
     assert _settings(session).last_backup_mailed is None
 
@@ -146,14 +148,18 @@ def test_a_freshly_overdue_invoice_announces_itself(
 ) -> None:
     monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
     rung: list[dict[str, str]] = []
-    morning_round(session, _settings(session), MORNING, rung.append)
+    MorningRound(session, _settings(session), rung.append).run(MORNING)
     record = session.exec(select(IssuedInvoice)).one()
     record.issued_on = MORNING.date() - timedelta(days=14)
     session.add(record)
     session.commit()
 
-    morning_round(session, _settings(session), MORNING + timedelta(days=1), rung.append)
+    MorningRound(session, _settings(session), rung.append).run(
+        MORNING + timedelta(days=1)
+    )
     assert "überfällig" in rung[1]["body"]
 
-    morning_round(session, _settings(session), MORNING + timedelta(days=2), rung.append)
+    MorningRound(session, _settings(session), rung.append).run(
+        MORNING + timedelta(days=2)
+    )
     assert len(rung) == 2

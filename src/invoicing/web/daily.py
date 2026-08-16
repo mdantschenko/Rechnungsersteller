@@ -29,119 +29,125 @@ from invoicing.web.invoice_mail_composer import InvoiceMailComposer
 from invoicing.web.invoice_pdf_archive import InvoicePdfArchive
 
 
-def morning_round(
-    session: Session, settings: AppSettings, now: datetime, deliver: DeliverPushMessage
-) -> None:
-    if now.time() < MORNING_ROUND_STARTS_AT or settings.last_daily_round == now.date():
-        return
-    settings.last_daily_round = now.date()
-    session.add(settings)
-    sent, waiting = _send_due_invoices(session, settings, now.date())
-    lines = []
-    if sent:
-        lines.append(f"{sent} Rechnung(en) automatisch per E-Mail verschickt")
-    if waiting:
-        lines.append(f"{waiting} Rechnung(en) fällig — warten auf dich")
-    lines.extend(
-        f"Nr. {record.number} ({name}) ist seit heute überfällig"
-        for record, name in _newly_overdue(session, settings, now.date())
-    )
-    if _mail_weekly_backup(session, settings, now.date()):
-        lines.append("Backup der Datenbank ans Postfach gemailt")
-    if lines:
-        deliver(
-            {
-                "title": "Rechnungen",
-                "body": "\n".join(lines),
-                "tag": "morgenrunde",
-                "url": "/rechnungen",
-            }
-        )
+class MorningRound:
+    """Sends, announces and backs up once per day through ``run``."""
 
+    def __init__(
+        self, session: Session, settings: AppSettings, deliver: DeliverPushMessage
+    ) -> None:
+        self._session = session
+        self._settings = settings
+        self._deliver = deliver
 
-def _send_due_invoices(
-    session: Session, settings: AppSettings, today: date
-) -> tuple[int, int]:
-    sent = 0
-    waiting = 0
-    orchestrator = BillingRunOrchestrator(session)
-    mailer = mail.mailer_for(settings)
-    composer = InvoiceMailComposer(session)
-    for run in InvoiceListViewBuilder(session).open_billing_runs(today):
-        if run.invoice is None and not run.is_blocked:
-            continue
-        may_leave = (
-            settings.auto_send_invoices
-            and not run.is_blocked
-            and run.invoice is not None
-            and run.customer.delivery is InvoiceDelivery.EMAIL
-            and run.customer.email
-            and mailer.is_configured()
+    def run(self, now: datetime) -> None:
+        if (
+            now.time() < MORNING_ROUND_STARTS_AT
+            or self._settings.last_daily_round == now.date()
+        ):
+            return
+        self._settings.last_daily_round = now.date()
+        self._session.add(self._settings)
+        sent, waiting = self._send_due_invoices(now.date())
+        lines = []
+        if sent:
+            lines.append(f"{sent} Rechnung(en) automatisch per E-Mail verschickt")
+        if waiting:
+            lines.append(f"{waiting} Rechnung(en) fällig — warten auf dich")
+        lines.extend(
+            f"Nr. {record.number} ({name}) ist seit heute überfällig"
+            for record, name in self._newly_overdue(now.date())
         )
-        if not may_leave:
-            waiting += 1
-            continue
-        released = orchestrator.release(run)
-        session.flush()
-        target = InvoicePdfArchive(session).pdf_path(released.record, run.customer.name)
-        InvoiceDocumentWriter().write_pdf(released.document, target)
+        if self._mail_weekly_backup(now.date()):
+            lines.append("Backup der Datenbank ans Postfach gemailt")
+        if lines:
+            self._deliver(
+                {
+                    "title": "Rechnungen",
+                    "body": "\n".join(lines),
+                    "tag": "morgenrunde",
+                    "url": "/rechnungen",
+                }
+            )
+
+    def _send_due_invoices(self, today: date) -> tuple[int, int]:
+        sent = 0
+        waiting = 0
+        orchestrator = BillingRunOrchestrator(self._session)
+        mailer = mail.mailer_for(self._settings)
+        composer = InvoiceMailComposer(self._session)
+        for run in InvoiceListViewBuilder(self._session).open_billing_runs(today):
+            if run.invoice is None and not run.is_blocked:
+                continue
+            may_leave = (
+                self._settings.auto_send_invoices
+                and not run.is_blocked
+                and run.invoice is not None
+                and run.customer.delivery is InvoiceDelivery.EMAIL
+                and run.customer.email
+                and mailer.is_configured()
+            )
+            if not may_leave:
+                waiting += 1
+                continue
+            released = orchestrator.release(run)
+            self._session.flush()
+            target = InvoicePdfArchive(self._session).pdf_path(
+                released.record, run.customer.name
+            )
+            InvoiceDocumentWriter().write_pdf(released.document, target)
+            try:
+                mailer.send_pdf(
+                    to=run.customer.email or "",
+                    subject=f"Rechnung Nr. {released.record.number}",
+                    body=composer.invoice_mail_body(released.record),
+                    pdf=target,
+                    sender_name=composer.issuer_name(),
+                )
+            except MailError:
+                waiting += 1
+                continue
+            released.record.sent_on = today
+            self._session.add(released.record)
+            sent += 1
+        return sent, waiting
+
+    def _mail_weekly_backup(self, today: date) -> bool:
+        """Mail the sealed database home every Monday; losing the server must
+        never mean losing the books."""
+        if today.weekday() != 0 or self._settings.last_backup_mailed == today:
+            return False
+        mailer = mail.mailer_for(self._settings)
+        if not mailer.is_configured():
+            return False
+        database = Path(str(self._session.get_bind().engine.url.database or ""))
+        if not database.exists():
+            return False
+        self._settings.last_backup_mailed = today
+        self._session.add(self._settings)
+        passphrase = ensure_backup_passphrase(self._session, self._settings)
         try:
-            mailer.send_pdf(
-                to=run.customer.email or "",
-                subject=f"Rechnung Nr. {released.record.number}",
-                body=composer.invoice_mail_body(released.record),
-                pdf=target,
-                sender_name=composer.issuer_name(),
+            mailer.send_attachment(
+                to=mailbox_address_of(self._settings),
+                subject=f"Datenbank-Backup {today:%d.%m.%Y}",
+                body=(
+                    "Guten Tag,\n\n"
+                    "anbei die wöchentliche Kopie der Rechnungsdatenbank. Entpacken "
+                    "mit dem Backup-Passwort aus den Einstellungen.\n"
+                ),
+                content=sealed_sqlite_copy(database, passphrase),
+                file_name=f"invoicing-{today}.zip",
+                subtype="zip",
             )
         except MailError:
-            waiting += 1
-            continue
-        released.record.sent_on = today
-        session.add(released.record)
-        sent += 1
-    return sent, waiting
+            return False
+        return True
 
-
-def _mail_weekly_backup(session: Session, settings: AppSettings, today: date) -> bool:
-    """Mail the sealed database home every Monday; losing the server must
-    never mean losing the books."""
-    if today.weekday() != 0 or settings.last_backup_mailed == today:
-        return False
-    mailer = mail.mailer_for(settings)
-    if not mailer.is_configured():
-        return False
-    database = Path(str(session.get_bind().engine.url.database or ""))
-    if not database.exists():
-        return False
-    settings.last_backup_mailed = today
-    session.add(settings)
-    passphrase = ensure_backup_passphrase(session, settings)
-    try:
-        mailer.send_attachment(
-            to=mailbox_address_of(settings),
-            subject=f"Datenbank-Backup {today:%d.%m.%Y}",
-            body=(
-                "Guten Tag,\n\n"
-                "anbei die wöchentliche Kopie der Rechnungsdatenbank. Entpacken "
-                "mit dem Backup-Passwort aus den Einstellungen.\n"
-            ),
-            content=sealed_sqlite_copy(database, passphrase),
-            file_name=f"invoicing-{today}.zip",
-            subtype="zip",
-        )
-    except MailError:
-        return False
-    return True
-
-
-def _newly_overdue(
-    session: Session, settings: AppSettings, today: date
-) -> list[tuple[IssuedInvoice, str]]:
-    unpaid = session.exec(
-        select(IssuedInvoice).where(IssuedInvoice.paid_on == None)  # noqa: E711
-    ).all()
-    return [
-        (record, record.customer.name)
-        for record in unpaid
-        if record.days_overdue(settings.payment_days, today) == 1
-    ]
+    def _newly_overdue(self, today: date) -> list[tuple[IssuedInvoice, str]]:
+        unpaid = self._session.exec(
+            select(IssuedInvoice).where(IssuedInvoice.paid_on == None)  # noqa: E711
+        ).all()
+        return [
+            (record, record.customer.name)
+            for record in unpaid
+            if record.days_overdue(self._settings.payment_days, today) == 1
+        ]
