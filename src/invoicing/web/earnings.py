@@ -14,10 +14,10 @@ from decimal import Decimal
 
 from sqlmodel import Session, col, select
 
-from invoicing.billing import priced_line
 from invoicing.constant import ZERO
 from invoicing.data_classes import EarningsRow
 from invoicing.german_formatter import german_formatter
+from invoicing.lesson_pricing import StoredLessonPricer
 from invoicing.storage.models import (
     Customer,
     InvoiceDelivery,
@@ -100,5 +100,6 @@ def _uninvoiced_by_month(
         if terms is None:
             continue
         key = (lesson.taught_on.year, lesson.taught_on.month)
-        found[key] = found.get(key, ZERO) + priced_line(terms, lesson).total
+        line = StoredLessonPricer(terms).priced_line(lesson)
+        found[key] = found.get(key, ZERO) + line.total
     return found

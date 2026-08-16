@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
-from invoicing.billing import draft_for, release
+from invoicing.billing import BillingRunOrchestrator
 from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.storage.models import (
     Customer,
@@ -49,7 +49,9 @@ def test_bills_the_lessons_that_were_ticked_off(
         _lesson(session, date(2026, 5, 20))
         _lesson(session, date(2026, 6, 5))
 
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        run = BillingRunOrchestrator(session).draft_for(
+            _customer(session), closing_day, ISSUED_ON
+        )
 
         assert run.invoice is not None
         assert run.invoice.total == Decimal("66.66")
@@ -66,7 +68,9 @@ def test_an_unanswered_lesson_blocks_the_run(
         _lesson(session, date(2026, 5, 20))
         _lesson(session, date(2026, 6, 5), status=LessonStatus.PLANNED)
 
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        run = BillingRunOrchestrator(session).draft_for(
+            _customer(session), closing_day, ISSUED_ON
+        )
 
         assert run.is_blocked
         assert run.invoice is None
@@ -80,7 +84,9 @@ def test_a_cancelled_lesson_is_not_billed(
         _lesson(session, date(2026, 5, 20))
         _lesson(session, date(2026, 6, 5), status=LessonStatus.CANCELLED)
 
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        run = BillingRunOrchestrator(session).draft_for(
+            _customer(session), closing_day, ISSUED_ON
+        )
 
         assert run.invoice is not None
         assert run.invoice.total == Decimal("33.33")
@@ -95,7 +101,9 @@ def test_lessons_outside_the_period_are_left_for_another_invoice(
         _lesson(session, date(2026, 6, 15))
         _lesson(session, date(2026, 6, 16))
 
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        run = BillingRunOrchestrator(session).draft_for(
+            _customer(session), closing_day, ISSUED_ON
+        )
 
         assert run.invoice is not None
         assert [item.taught_on for item in run.invoice.line_items] == [
@@ -108,7 +116,9 @@ def test_a_period_without_lessons_produces_no_draft(
     ready_to_bill: Engine, closing_day: date
 ) -> None:
     with Session(ready_to_bill) as session:
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        run = BillingRunOrchestrator(session).draft_for(
+            _customer(session), closing_day, ISSUED_ON
+        )
 
         assert run.invoice is None
         assert not run.is_blocked
@@ -120,7 +130,9 @@ def test_the_extra_column_reaches_the_document(
     with Session(ready_to_bill) as session:
         _lesson(session, date(2026, 5, 20))
 
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        run = BillingRunOrchestrator(session).draft_for(
+            _customer(session), closing_day, ISSUED_ON
+        )
 
         assert run.invoice is not None
         (column,) = run.invoice.columns
@@ -136,9 +148,10 @@ def test_a_draft_only_peeks_at_the_next_number(
         session.add(NumberState(start=115))
         session.commit()
         _lesson(session, date(2026, 5, 20))
+        orchestrator = BillingRunOrchestrator(session)
 
-        first = draft_for(session, _customer(session), closing_day, ISSUED_ON)
-        second = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        first = orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
+        second = orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
 
         assert first.invoice is not None
         assert second.invoice is not None
@@ -152,9 +165,10 @@ def test_releasing_hands_out_the_number_and_freezes_the_record(
         session.add(NumberState(start=115))
         session.commit()
         _lesson(session, date(2026, 5, 20))
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        orchestrator = BillingRunOrchestrator(session)
+        run = orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
 
-        released = release(session, run)
+        released = orchestrator.release(run)
         session.commit()
 
         assert released.document.number == 115
@@ -169,10 +183,13 @@ def test_a_released_lesson_is_not_billed_again(
 ) -> None:
     with Session(ready_to_bill) as session:
         _lesson(session, date(2026, 5, 20))
-        release(session, draft_for(session, _customer(session), closing_day, ISSUED_ON))
+        orchestrator = BillingRunOrchestrator(session)
+        orchestrator.release(
+            orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
+        )
         session.commit()
 
-        again = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        again = orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
 
         assert again.invoice is None
         assert len(session.exec(select(IssuedInvoice)).all()) == 1
@@ -185,11 +202,14 @@ def test_the_next_release_continues_the_numbering(
         session.add(NumberState(start=115))
         session.commit()
         _lesson(session, date(2026, 5, 20))
-        release(session, draft_for(session, _customer(session), closing_day, ISSUED_ON))
+        orchestrator = BillingRunOrchestrator(session)
+        orchestrator.release(
+            orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
+        )
         session.commit()
         _lesson(session, date(2026, 6, 5))
 
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        run = orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
 
         assert run.invoice is not None
         assert run.invoice.number == 116
@@ -200,10 +220,11 @@ def test_releasing_a_blocked_run_is_refused(
 ) -> None:
     with Session(ready_to_bill) as session:
         _lesson(session, date(2026, 5, 20), status=LessonStatus.PLANNED)
-        run = draft_for(session, _customer(session), closing_day, ISSUED_ON)
+        orchestrator = BillingRunOrchestrator(session)
+        run = orchestrator.draft_for(_customer(session), closing_day, ISSUED_ON)
 
         with pytest.raises(ValueError, match="unanswered"):
-            release(session, run)
+            orchestrator.release(run)
 
 
 def test_a_customer_without_terms_cannot_be_billed(
@@ -215,4 +236,4 @@ def test_a_customer_without_terms_cannot_be_billed(
         session.commit()
 
         with pytest.raises(ValueError, match="no billing template"):
-            draft_for(session, stranger, closing_day, ISSUED_ON)
+            BillingRunOrchestrator(session).draft_for(stranger, closing_day, ISSUED_ON)

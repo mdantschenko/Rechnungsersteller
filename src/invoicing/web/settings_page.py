@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 from starlette.responses import RedirectResponse, Response
 
 from invoicing import feiertage, mail
-from invoicing.billing import domain_issuer, sequence_of
+from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import (
     GERMAN_FEDERAL_STATES,
     PAYMENT_DAYS_MAXIMUM,
@@ -43,7 +43,9 @@ def settings_form(request: Request, session: Session = Depends(database)) -> Res
         {
             "issuer": session.exec(select(Issuer)).first(),
             "numbering": numbering,
-            "next_number": sequence_of(numbering).peek(),
+            "next_number": (
+                BillingRunOrchestrator.number_sequence_from_state(numbering).peek()
+            ),
             "settings": settings,
             "states": GERMAN_FEDERAL_STATES,
             "chosen_states": feiertage.chosen_states(settings),
@@ -235,7 +237,7 @@ def _real_issuer(session: Session) -> DomainIssuer | None:
     falls back to its invented sender.
     """
     stored = session.exec(select(Issuer)).first()
-    return None if stored is None else domain_issuer(stored)
+    return None if stored is None else BillingRunOrchestrator.as_domain_issuer(stored)
 
 
 @router.post("/einstellungen/nummern")
@@ -246,7 +248,7 @@ def save_numbering(
 ) -> Response:
     """Move the sequence so the next release gets exactly this number."""
     state = session.exec(select(NumberState)).first() or NumberState(start=next_number)
-    sequence = sequence_of(state)
+    sequence = BillingRunOrchestrator.number_sequence_from_state(state)
     try:
         sequence.restart_at(next_number)
     except ValueError:

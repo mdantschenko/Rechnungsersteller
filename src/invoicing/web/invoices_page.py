@@ -18,7 +18,7 @@ from sqlmodel import Session, col, select
 from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
-from invoicing.billing import draft_for, manual_draft, open_runs, release
+from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import INVOICE_PDF_FILE_NAME_PATTERN
 from invoicing.data_classes import BillingRun
 from invoicing.german_formatter import german_formatter
@@ -166,7 +166,8 @@ def release_manual_invoice(
             request, "/rechnungen", "Das „Bis“-Datum liegt vor dem „Von“-Datum."
         )
     customer = customer_of(session, customer_id)
-    run = manual_draft(session, customer, first_day, last_day, date.today())
+    orchestrator = BillingRunOrchestrator(session)
+    run = orchestrator.manual_draft(customer, first_day, last_day, date.today())
     if run.is_blocked:
         return notice_redirect(
             request,
@@ -180,7 +181,7 @@ def release_manual_invoice(
             "/rechnungen",
             "Keine abgehakten, noch nicht abgerechneten Stunden in diesem Zeitraum.",
         )
-    released = release(session, run)
+    released = orchestrator.release(run)
     session.flush()
     write_pdf(released.document, pdf_path(session, released.record, customer.name))
     return notice_redirect(
@@ -285,8 +286,8 @@ def preview_due_invoice(
     customer_id: int, closing_day: date, session: Session = Depends(database)
 ) -> Response:
     """The draft as PDF, exactly as releasing would print it — nothing is written."""
-    run = draft_for(
-        session, customer_of(session, customer_id), closing_day, date.today()
+    run = BillingRunOrchestrator(session).draft_for(
+        customer_of(session, customer_id), closing_day, date.today()
     )
     return _draft_pdf(run)
 
@@ -299,7 +300,9 @@ def preview_manual_invoice(
     session: Session = Depends(database),
 ) -> Response:
     customer = customer_of(session, customer_id)
-    run = manual_draft(session, customer, first_day, last_day, date.today())
+    run = BillingRunOrchestrator(session).manual_draft(
+        customer, first_day, last_day, date.today()
+    )
     return _draft_pdf(run)
 
 
@@ -308,8 +311,8 @@ def preview_due_html(
     customer_id: int, closing_day: date, session: Session = Depends(database)
 ) -> Response:
     """The same draft as HTML: the phone can zoom it with two fingers."""
-    run = draft_for(
-        session, customer_of(session, customer_id), closing_day, date.today()
+    run = BillingRunOrchestrator(session).draft_for(
+        customer_of(session, customer_id), closing_day, date.today()
     )
     return _draft_html(run)
 
@@ -322,7 +325,9 @@ def preview_manual_html(
     session: Session = Depends(database),
 ) -> Response:
     customer = customer_of(session, customer_id)
-    run = manual_draft(session, customer, first_day, last_day, date.today())
+    run = BillingRunOrchestrator(session).manual_draft(
+        customer, first_day, last_day, date.today()
+    )
     return _draft_html(run)
 
 
@@ -360,8 +365,9 @@ def release_invoice(
     session: Session = Depends(database),
 ) -> Response:
     customer = customer_of(session, customer_id)
-    run = draft_for(session, customer, closing_day, date.today())
-    released = release(session, run)
+    orchestrator = BillingRunOrchestrator(session)
+    run = orchestrator.draft_for(customer, closing_day, date.today())
+    released = orchestrator.release(run)
     session.flush()
     write_pdf(released.document, pdf_path(session, released.record, customer.name))
     return RedirectResponse("/rechnungen", status_code=303)
@@ -594,10 +600,11 @@ def due_runs(session: Session, today: date) -> list[BillingRun]:
         .where(Customer.delivery != InvoiceDelivery.NONE)
         .order_by(col(Customer.name))
     )
+    orchestrator = BillingRunOrchestrator(session)
     return [
         run
         for customer in session.exec(active).all()
-        for run in open_runs(session, customer, today)
+        for run in orchestrator.open_runs(customer, today)
     ]
 
 

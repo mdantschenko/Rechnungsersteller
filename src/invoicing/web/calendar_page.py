@@ -19,7 +19,6 @@ from sqlmodel import Session, col, select
 from starlette.responses import Response
 
 from invoicing import alarms, feiertage
-from invoicing.billing import priced_columns
 from invoicing.constant import (
     FEDERAL_STATE_COLORS,
     GERMAN_LOCALE,
@@ -28,6 +27,7 @@ from invoicing.constant import (
 )
 from invoicing.data_classes import CalendarDay
 from invoicing.german_formatter import german_formatter
+from invoicing.lesson_pricing import StoredLessonPricer
 from invoicing.scheduling import materialise_series
 from invoicing.storage.models import Customer, Lesson, LessonStatus
 from invoicing.utils import billing_templates_by_customer, planning_horizon
@@ -274,7 +274,7 @@ def _lesson_extras(
         terms = terms_map.get(lesson.customer_id)
         if terms is None:
             continue
-        shares = priced_columns(terms, lesson)
+        shares = StoredLessonPricer(terms).priced_columns(lesson)
         if not shares:
             continue
         found[lesson.id or 0] = [

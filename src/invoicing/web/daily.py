@@ -14,7 +14,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from invoicing import mail
-from invoicing.billing import release
+from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import MORNING_ROUND_STARTS_AT, DeliverPushMessage
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
@@ -66,6 +66,7 @@ def _send_due_invoices(
 ) -> tuple[int, int]:
     sent = 0
     waiting = 0
+    orchestrator = BillingRunOrchestrator(session)
     for run in due_runs(session, today):
         if run.invoice is None and not run.is_blocked:
             continue
@@ -80,7 +81,7 @@ def _send_due_invoices(
         if not may_leave:
             waiting += 1
             continue
-        released = release(session, run)
+        released = orchestrator.release(run)
         session.flush()
         target = pdf_path(session, released.record, run.customer.name)
         write_pdf(released.document, target)
