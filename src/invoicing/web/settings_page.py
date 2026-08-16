@@ -17,9 +17,9 @@ from invoicing.constant import (
     PAYMENT_DAYS_MAXIMUM,
     REMINDER_MINUTES_MAXIMUM,
 )
-from invoicing.domain import invoice as document
+from invoicing.data_classes import Issuer as DomainIssuer
 from invoicing.pdf.invoice_document import write_pdf
-from invoicing.sample import sample_invoice
+from invoicing.sample import SampleInvoice
 from invoicing.storage.models import Issuer, NumberState
 from invoicing.utils import (
     ensure_backup_passphrase,
@@ -206,7 +206,7 @@ def send_test_invoice(
     try:
         with TemporaryDirectory() as folder:
             pdf = write_pdf(
-                sample_invoice(issuer),
+                SampleInvoice.build(issuer),
                 Path(folder) / "Testrechnung.pdf",
             )
             mail.send_pdf(
@@ -228,7 +228,7 @@ def send_test_invoice(
     )
 
 
-def _real_issuer(session: Session) -> document.Issuer | None:
+def _real_issuer(session: Session) -> DomainIssuer | None:
     """The stored sender details, so the test invoice looks like a real one.
 
     None when the settings screen has not been filled in yet; the sample then

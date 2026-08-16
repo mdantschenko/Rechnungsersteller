@@ -18,7 +18,7 @@ from invoicing.german_formatter import german_formatter
 from invoicing.legacy.import_history import import_history
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.reports import revenue_rows, write_csv, yearly_totals
-from invoicing.sample import sample_invoice
+from invoicing.sample import SampleInvoice
 from invoicing.storage.database import open_database, session_for
 from invoicing.web.security import is_configured, set_password
 
@@ -29,7 +29,9 @@ def main() -> None:
 
 
 def _render_sample(arguments: argparse.Namespace) -> None:
-    written_to = write_pdf(sample_invoice(), arguments.destination, arguments.renderer)
+    written_to = write_pdf(
+        SampleInvoice.build(), arguments.destination, arguments.renderer
+    )
     _report(f"Written: {written_to.resolve()}")
 
 

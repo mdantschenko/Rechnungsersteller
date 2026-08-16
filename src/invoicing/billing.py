@@ -33,7 +33,7 @@ from invoicing.data_classes import (
 )
 from invoicing.domain.billing_period import BillingCalendar
 from invoicing.domain.extra_column_rules import ExtraColumnRules
-from invoicing.domain.invoice import build_invoice, build_line_item, column_shares
+from invoicing.domain.invoice import InvoiceBuilder
 from invoicing.domain.invoice_numbers import NumberSequence
 from invoicing.storage import models
 from invoicing.utils import hours_per_unit, parse_german_amount, round_quantity
@@ -168,14 +168,13 @@ def _build(
     billable: tuple[models.Lesson, ...],
     issued_on: date,
 ) -> Invoice:
-    return build_invoice(
+    return InvoiceBuilder(domain_template(terms)).build_invoice(
         number=_peek_next_number(session),
         issued_on=issued_on,
         issuer=_issuer_of(session),
         recipient=Address(
             name=customer.name, street=customer.street, city=customer.city
         ),
-        template=domain_template(terms),
         period=period,
         lessons=[domain_lesson(terms, lesson) for lesson in billable],
     )
@@ -208,14 +207,18 @@ def priced_line(terms: models.BillingTemplate, lesson: models.Lesson) -> LineIte
     The earnings view and the invoice must never disagree about what a
     lesson is worth, so both go through this one function.
     """
-    return build_line_item(domain_template(terms), domain_lesson(terms, lesson))
+    return InvoiceBuilder(domain_template(terms)).build_line_item(
+        domain_lesson(terms, lesson)
+    )
 
 
 def priced_columns(
     terms: models.BillingTemplate, lesson: models.Lesson
 ) -> tuple[tuple[ExtraColumn, ExtraColumnValue, Decimal], ...]:
     """Each extra column with its value and its share for this stored lesson."""
-    return column_shares(domain_template(terms), domain_lesson(terms, lesson))
+    return InvoiceBuilder(domain_template(terms)).column_shares(
+        domain_lesson(terms, lesson)
+    )
 
 
 def billable_quantity(terms: models.BillingTemplate, lesson: models.Lesson) -> Decimal:

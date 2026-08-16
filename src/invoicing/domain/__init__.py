@@ -7,16 +7,15 @@ a whole. The dataclasses themselves live in :mod:`invoicing.data_classes`.
 
 from invoicing.constant import BillingCycle, TotalRule, ValueKind, ValueSource
 from invoicing.domain.billing_period import BillingCalendar
-from invoicing.domain.invoice import build_invoice, build_line_item
+from invoicing.domain.invoice import InvoiceBuilder
 from invoicing.domain.invoice_numbers import NumberSequence
 
 __all__ = [
     "BillingCalendar",
     "BillingCycle",
+    "InvoiceBuilder",
     "NumberSequence",
     "TotalRule",
     "ValueKind",
     "ValueSource",
-    "build_invoice",
-    "build_line_item",
 ]

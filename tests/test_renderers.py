@@ -12,7 +12,7 @@ from invoicing.pdf.renderers import (
     WeasyPrintRenderer,
     select_renderer,
 )
-from invoicing.sample import sample_invoice
+from invoicing.sample import SampleInvoice
 
 PDF_MAGIC_BYTES = b"%PDF"
 
@@ -20,7 +20,7 @@ PDF_MAGIC_BYTES = b"%PDF"
 def test_chromium_writes_a_single_page_pdf(tmp_path: Path) -> None:
     destination = tmp_path / "chromium.pdf"
 
-    ChromiumRenderer().write(to_html(sample_invoice()), destination)
+    ChromiumRenderer().write(to_html(SampleInvoice.build()), destination)
 
     assert destination.read_bytes().startswith(PDF_MAGIC_BYTES)
     with pdfplumber.open(destination) as document:
@@ -30,7 +30,7 @@ def test_chromium_writes_a_single_page_pdf(tmp_path: Path) -> None:
 def test_weasyprint_writes_a_single_page_pdf(tmp_path: Path) -> None:
     destination = tmp_path / "weasyprint.pdf"
     try:
-        WeasyPrintRenderer().write(to_html(sample_invoice()), destination)
+        WeasyPrintRenderer().write(to_html(SampleInvoice.build()), destination)
     except OSError as missing_libraries:
         pytest.skip(f"WeasyPrint needs the GTK runtime: {missing_libraries}")
 

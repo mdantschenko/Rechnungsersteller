@@ -20,7 +20,7 @@ from pdfplumber.page import Page
 
 from invoicing.data_classes import Address
 from invoicing.pdf.invoice_document import to_html, write_pdf
-from invoicing.sample import sample_invoice
+from invoicing.sample import SampleInvoice
 
 MILLIMETRE = 72 / 25.4
 TOLERANCE_MM = 0.5
@@ -58,7 +58,7 @@ TABLE_BOTTOM_MM = 140.0
 @pytest.fixture(scope="module")
 def rendered_page(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Page]:
     destination = tmp_path_factory.mktemp("pdf") / "invoice.pdf"
-    write_pdf(sample_invoice(), destination)
+    write_pdf(SampleInvoice.build(), destination)
     with pdfplumber.open(destination) as document:
         assert len(document.pages) == 1
         yield document.pages[0]
@@ -123,7 +123,7 @@ def test_the_columns_keep_their_edges(rendered_page: Page) -> None:
 
 
 def test_a_settled_invoice_replaces_the_payment_terms() -> None:
-    settled = replace(sample_invoice(), paid_on=date(2026, 6, 20))
+    settled = replace(SampleInvoice.build(), paid_on=date(2026, 6, 20))
 
     html = to_html(settled)
 
@@ -133,7 +133,7 @@ def test_a_settled_invoice_replaces_the_payment_terms() -> None:
 
 def test_recipient_details_cannot_inject_markup() -> None:
     hostile = replace(
-        sample_invoice(),
+        SampleInvoice.build(),
         recipient=Address(name="<script>alert(1)</script>", street="a & b", city="X"),
     )
 
@@ -145,7 +145,7 @@ def test_recipient_details_cannot_inject_markup() -> None:
 
 
 def test_the_document_carries_its_fonts_and_styles_inside_itself() -> None:
-    html = to_html(sample_invoice())
+    html = to_html(SampleInvoice.build())
 
     assert "data:font/ttf;base64," in html
     assert "<link" not in html
@@ -154,7 +154,7 @@ def test_the_document_carries_its_fonts_and_styles_inside_itself() -> None:
 def test_writing_creates_missing_directories(tmp_path: Path) -> None:
     destination = tmp_path / "does" / "not" / "exist" / "invoice.pdf"
 
-    written = write_pdf(sample_invoice(), destination)
+    written = write_pdf(SampleInvoice.build(), destination)
 
     assert written.exists()
 

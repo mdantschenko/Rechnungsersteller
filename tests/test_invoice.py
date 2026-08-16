@@ -16,7 +16,7 @@ from invoicing.data_classes import (
     TaughtLesson,
 )
 from invoicing.domain.billing_period import BillingCalendar
-from invoicing.domain.invoice import build_invoice
+from invoicing.domain.invoice import InvoiceBuilder
 
 ISSUER = Issuer(
     address=Address(name="Max Mustermann", street="Musterstraße 1", city="12345 Ort"),
@@ -51,12 +51,11 @@ def invoice_for(
     lessons: Sequence[TaughtLesson],
     cycle: BillingCycle,
 ) -> Invoice:
-    return build_invoice(
+    return InvoiceBuilder(template).build_invoice(
         number=1,
         issued_on=period_closes_on,
         issuer=ISSUER,
         recipient=RECIPIENT,
-        template=template,
         period=BillingCalendar(cycle).period_closing_on(period_closes_on),
         lessons=lessons,
     )
