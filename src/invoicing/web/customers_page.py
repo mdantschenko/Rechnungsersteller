@@ -9,16 +9,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlmodel import Session, col, select
 from starlette.responses import RedirectResponse, Response
 
-from invoicing.constant import (
-    DEFAULT_LESSON_UNIT_PRICE,
-    BillingCycle,
-    TotalRule,
-    ValueKind,
-    ValueSource,
-)
-from invoicing.data_classes import LessonStats
-from invoicing.german_formatter import german_formatter
-from invoicing.scheduling import LessonSeriesMaterialiser
+from invoicing.constant import BillingCycle, TotalRule, ValueKind, ValueSource
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -28,16 +19,9 @@ from invoicing.storage.models import (
     IssuedInvoice,
     Lesson,
     LessonSeries,
-    LessonStatus,
-    TemplateColumn,
 )
-from invoicing.utils import (
-    notice_redirect,
-    parse_german_amount,
-    parse_optional_clock_time,
-    planning_horizon,
-)
-from invoicing.web.earnings import monthly_earnings
+from invoicing.utils import notice_redirect
+from invoicing.web.customer_administration import CustomerAdministration
 from invoicing.web.page import database
 from invoicing.web.store_queries import StoreQueries
 from invoicing.web.template_renderer import template_renderer
@@ -73,16 +57,7 @@ def add_customer(
     city: str = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    customer = Customer(
-        name=name, street=street, city=city, status=CustomerStatus.ACTIVE
-    )
-    session.add(customer)
-    session.flush()
-    session.add(
-        BillingTemplate(
-            customer_id=customer.id or 0, unit_price=DEFAULT_LESSON_UNIT_PRICE
-        )
-    )
+    customer = CustomerAdministration(session).create(name, street, city)
     return RedirectResponse(f"/kunden/{customer.id}", status_code=303)
 
 
@@ -90,51 +65,10 @@ def add_customer(
 def customer_detail(
     customer_id: int, request: Request, session: Session = Depends(database)
 ) -> Response:
-    customer = StoreQueries(session).customer(customer_id)
-    earnings_rows, earnings_total = monthly_earnings(session, customer)
     return template_renderer.render(
         request,
         "customer.html",
-        {
-            "customer": customer,
-            "grades": session.exec(
-                select(ExamGrade)
-                .where(ExamGrade.customer_id == customer_id)
-                .order_by(col(ExamGrade.written_on).desc())
-            ).all(),
-            "stats": _lesson_stats(session, customer_id),
-            "terms": _terms(session, customer_id),
-            "series": session.exec(
-                select(LessonSeries).where(LessonSeries.customer_id == customer_id)
-            ).all(),
-            "invoices": session.exec(
-                select(IssuedInvoice)
-                .where(IssuedInvoice.customer_id == customer_id)
-                .order_by(col(IssuedInvoice.number).desc())
-            ).all(),
-            "history": _lesson_history(session, customer_id),
-            "earnings": earnings_rows,
-            "earnings_total": earnings_total,
-            "cycles": list(BillingCycle),
-            "sources": list(ValueSource),
-            "kinds": list(ValueKind),
-            "rules": list(TotalRule),
-        },
-    )
-
-
-def _lesson_stats(session: Session, customer_id: int) -> LessonStats:
-    lessons = session.exec(
-        select(Lesson).where(Lesson.customer_id == customer_id)
-    ).all()
-    taught = [lesson for lesson in lessons if lesson.status is LessonStatus.DONE]
-    cancelled = [
-        lesson for lesson in lessons if lesson.status is LessonStatus.CANCELLED
-    ]
-    return LessonStats(
-        taught_hours=sum((lesson.quantity for lesson in taught), Decimal("0")),
-        taught_count=len(taught),
-        cancelled_count=len(cancelled),
+        CustomerAdministration(session).detail_context(customer_id),
     )
 
 
@@ -165,28 +99,6 @@ def remove_exam_grade(
     if stored is not None and stored.customer_id == customer_id:
         session.delete(stored)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
-
-
-def _lesson_history(
-    session: Session, customer_id: int
-) -> list[tuple[str, list[Lesson]]]:
-    """The customer's past lessons, newest month first."""
-    lessons = session.exec(
-        select(Lesson)
-        .where(Lesson.customer_id == customer_id)
-        .where(Lesson.taught_on <= date.today())
-        .where(Lesson.status != LessonStatus.PLANNED)
-        .order_by(col(Lesson.taught_on).desc())
-    ).all()
-    months: list[tuple[str, list[Lesson]]] = []
-    for lesson in lessons:
-        label = (
-            f"{german_formatter.month_name(lesson.taught_on)} {lesson.taught_on.year}"
-        )
-        if not months or months[-1][0] != label:
-            months.append((label, []))
-        months[-1][1].append(lesson)
-    return months
 
 
 @router.post("/kunden/{customer_id}/loeschen")
@@ -242,21 +154,22 @@ def save_customer(
     reminder_text: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
-    customer = StoreQueries(session).customer(customer_id)
-    customer.name = name
-    customer.street = street
-    customer.city = city
-    customer.email = email or None
-    customer.phone = phone or None
-    customer.status = status
-    customer.delivery = delivery
-    customer.student_name = student_name.strip() or None
-    customer.student_grade = student_grade.strip() or None
-    customer.lesson_address = lesson_address.strip() or None
-    customer.online = bool(online)
-    customer.mail_text = mail_text.strip() or None
-    customer.reminder_text = reminder_text.strip() or None
-    session.add(customer)
+    CustomerAdministration(session).save(
+        customer_id,
+        name,
+        street,
+        city,
+        email,
+        phone,
+        status,
+        delivery,
+        student_name,
+        student_grade,
+        lesson_address,
+        online,
+        mail_text,
+        reminder_text,
+    )
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
@@ -269,12 +182,9 @@ def save_terms(
     cycle: BillingCycle = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    terms = _terms(session, customer_id)
-    terms.unit_price = unit_price
-    terms.unit = unit
-    terms.description = description
-    terms.cycle = cycle
-    session.add(terms)
+    CustomerAdministration(session).save_terms(
+        customer_id, unit_price, unit, description, cycle
+    )
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
@@ -290,29 +200,11 @@ def add_column(
     placeholder: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    terms = _terms(session, customer_id)
-    stored_default = default_value.strip() or None
-    if stored_default is not None and kind is not ValueKind.TEXT:
-        parsed = parse_german_amount(stored_default)
-        if parsed is None:
-            return notice_redirect(
-                request,
-                f"/kunden/{customer_id}",
-                "Der Standardwert muss eine Zahl sein, zum Beispiel 20,00.",
-            )
-        stored_default = str(parsed)
-    session.add(
-        TemplateColumn(
-            template_id=terms.id,
-            ordinal=len(terms.columns),
-            label=label,
-            source=source,
-            kind=kind,
-            total_rule=total_rule,
-            default_value=stored_default,
-            placeholder=placeholder,
-        )
+    complaint = CustomerAdministration(session).add_column(
+        customer_id, label, source, kind, total_rule, default_value, placeholder
     )
+    if complaint is not None:
+        return notice_redirect(request, f"/kunden/{customer_id}", complaint)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
@@ -328,25 +220,11 @@ def edit_column(
     placeholder: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    column = session.get(TemplateColumn, column_id)
-    if column is None:
-        return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
-    stored_default = default_value.strip() or None
-    if stored_default is not None and column.kind is not ValueKind.TEXT:
-        parsed = parse_german_amount(stored_default)
-        if parsed is None:
-            return notice_redirect(
-                request,
-                f"/kunden/{customer_id}",
-                "Der Betrag muss eine Zahl sein, zum Beispiel 25,00.",
-            )
-        stored_default = str(parsed)
-    column.label = label.strip()
-    column.source = source
-    column.total_rule = total_rule
-    column.default_value = stored_default
-    column.placeholder = placeholder or "/"
-    session.add(column)
+    complaint = CustomerAdministration(session).edit_column(
+        column_id, label, source, total_rule, default_value, placeholder
+    )
+    if complaint is not None:
+        return notice_redirect(request, f"/kunden/{customer_id}", complaint)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
@@ -354,9 +232,7 @@ def edit_column(
 def remove_column(
     customer_id: int, column_id: int, session: Session = Depends(database)
 ) -> Response:
-    column = session.get(TemplateColumn, column_id)
-    if column is not None:
-        session.delete(column)
+    CustomerAdministration(session).remove_column(column_id)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
@@ -370,25 +246,10 @@ def add_series(
     reminder_at: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
-    session.add(
-        LessonSeries(
-            customer_id=customer_id,
-            recurrence=recurrence,
-            quantity=quantity,
-            starts_on=starts_on,
-            starts_at=parse_optional_clock_time(starts_at),
-        )
+    CustomerAdministration(session).add_series(
+        customer_id, recurrence, quantity, starts_on, starts_at, reminder_at
     )
-    _remember_reminder(session, customer_id, reminder_at)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
-
-
-def _remember_reminder(session: Session, customer_id: int, reminder_at: str) -> None:
-    """The reminder time lives on the customer: one wake-up call per pupil,
-    however many series they have."""
-    customer = StoreQueries(session).customer(customer_id)
-    customer.reminder_at = parse_optional_clock_time(reminder_at)
-    session.add(customer)
 
 
 @router.post("/kunden/{customer_id}/serie/{series_id}/anpassen")
@@ -401,35 +262,8 @@ def change_series(
     reminder_at: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
-    """Rewrite the series from today on.
-
-    Lessons that are already answered or billed stay exactly as they are;
-    only the open ones from today onwards are written out anew.
-    """
-    series = session.get(LessonSeries, series_id)
-    if series is None or not series.active:
-        return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
-    _remember_reminder(session, customer_id, reminder_at)
-    today = date.today()
-    series.recurrence = recurrence
-    series.quantity = quantity
-    series.starts_at = parse_optional_clock_time(starts_at)
-    series.starts_on = max(series.starts_on, today)
-    session.add(series)
-
-    replaceable = (
-        select(Lesson)
-        .where(Lesson.series_id == series_id)
-        .where(Lesson.taught_on >= today)
-        .where(Lesson.status == LessonStatus.PLANNED)
-        .where(Lesson.invoice_id == None)  # noqa: E711
-    )
-    for lesson in session.exec(replaceable).all():
-        session.delete(lesson)
-    session.flush()
-
-    LessonSeriesMaterialiser(session).materialise_all_active(
-        until=planning_horizon(StoreQueries(session).app_settings(), today)
+    CustomerAdministration(session).change_series(
+        customer_id, series_id, recurrence, quantity, starts_at, reminder_at
     )
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
@@ -438,21 +272,5 @@ def change_series(
 def stop_series(
     customer_id: int, series_id: int, session: Session = Depends(database)
 ) -> Response:
-    series = session.get(LessonSeries, series_id)
-    if series is not None:
-        series.active = False
-        session.add(series)
+    CustomerAdministration(session).stop_series(series_id)
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
-
-
-def _terms(session: Session, customer_id: int) -> BillingTemplate:
-    terms = session.exec(
-        select(BillingTemplate).where(BillingTemplate.customer_id == customer_id)
-    ).first()
-    if terms is None:
-        terms = BillingTemplate(
-            customer_id=customer_id, unit_price=DEFAULT_LESSON_UNIT_PRICE
-        )
-        session.add(terms)
-        session.flush()
-    return terms

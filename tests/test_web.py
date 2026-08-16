@@ -1133,7 +1133,7 @@ def test_the_custom_letter_fills_its_placeholders(
     client: TestClient, location: Path
 ) -> None:
     from invoicing.storage.models import IssuedInvoice
-    from invoicing.web.invoices_page import invoice_mail_body
+    from invoicing.web.invoice_mail_composer import InvoiceMailComposer
 
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
@@ -1158,7 +1158,7 @@ def test_the_custom_letter_fills_its_placeholders(
 
     with Session(InvoiceDatabase(location).open()) as session:
         record = session.exec(select(IssuedInvoice)).one()
-        body = invoice_mail_body(session, record)
+        body = InvoiceMailComposer(session).invoice_mail_body(record)
 
     assert "Rechnung für Mai über 33,33\xa0€, Gruß Max Mustermann" in body
 

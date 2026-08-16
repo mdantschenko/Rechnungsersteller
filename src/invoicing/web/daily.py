@@ -24,12 +24,9 @@ from invoicing.utils import (
     mailbox_address_of,
     sealed_sqlite_copy,
 )
-from invoicing.web.invoices_page import (
-    due_runs,
-    invoice_mail_body,
-    issuer_name,
-    pdf_path,
-)
+from invoicing.web.invoice_list_view import InvoiceListViewBuilder
+from invoicing.web.invoice_mail_composer import InvoiceMailComposer
+from invoicing.web.invoice_pdf_archive import InvoicePdfArchive
 
 
 def morning_round(
@@ -69,7 +66,8 @@ def _send_due_invoices(
     waiting = 0
     orchestrator = BillingRunOrchestrator(session)
     mailer = mail.mailer_for(settings)
-    for run in due_runs(session, today):
+    composer = InvoiceMailComposer(session)
+    for run in InvoiceListViewBuilder(session).open_billing_runs(today):
         if run.invoice is None and not run.is_blocked:
             continue
         may_leave = (
@@ -85,15 +83,15 @@ def _send_due_invoices(
             continue
         released = orchestrator.release(run)
         session.flush()
-        target = pdf_path(session, released.record, run.customer.name)
+        target = InvoicePdfArchive(session).pdf_path(released.record, run.customer.name)
         InvoiceDocumentWriter().write_pdf(released.document, target)
         try:
             mailer.send_pdf(
                 to=run.customer.email or "",
                 subject=f"Rechnung Nr. {released.record.number}",
-                body=invoice_mail_body(session, released.record),
+                body=composer.invoice_mail_body(released.record),
                 pdf=target,
-                sender_name=issuer_name(session),
+                sender_name=composer.issuer_name(),
             )
         except MailError:
             waiting += 1

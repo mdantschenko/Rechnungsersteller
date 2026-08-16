@@ -6,11 +6,7 @@ lessons as they stand right now. Only releasing writes anything down.
 
 from __future__ import annotations
 
-import io
-import zipfile
-from collections.abc import Sequence
 from datetime import date
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlmodel import Session, col, select
@@ -18,21 +14,18 @@ from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
-from invoicing.constant import INVOICE_PDF_FILE_NAME_PATTERN
-from invoicing.data_classes import BillingRun
-from invoicing.german_formatter import german_formatter
 from invoicing.mail_error import MailError
 from invoicing.pdf import InvoiceDocumentWriter, PdfPreview
 from invoicing.storage.models import (
     Customer,
-    CustomerStatus,
     InvoiceDelivery,
     IssuedInvoice,
-    Issuer,
     PaymentReminder,
 )
-from invoicing.utils import notice_redirect, whatsapp_number
-from invoicing.web.earnings import monthly_earnings
+from invoicing.utils import notice_redirect
+from invoicing.web.invoice_list_view import InvoiceListViewBuilder
+from invoicing.web.invoice_mail_composer import InvoiceMailComposer
+from invoicing.web.invoice_pdf_archive import InvoicePdfArchive
 from invoicing.web.page import database
 from invoicing.web.store_queries import StoreQueries
 from invoicing.web.template_renderer import template_renderer
@@ -42,65 +35,9 @@ router = APIRouter()
 
 @router.get("/rechnungen")
 def invoice_list(request: Request, session: Session = Depends(database)) -> Response:
-    store = StoreQueries(session)
-    today = date.today()
-    everyone = session.exec(select(Customer)).all()
-    issued = session.exec(
-        select(IssuedInvoice).order_by(col(IssuedInvoice.number).desc())
-    ).all()
-    unpaid = [record for record in issued if record.paid_on is None]
-    signature = issuer_name(session)
-    earnings_rows, earnings_total = monthly_earnings(session)
     return template_renderer.render(
-        request,
-        "invoices.html",
-        {
-            "today": today,
-            "due": due_runs(session, today),
-            "issued": unpaid,
-            "paid": [record for record in issued if record.paid_on is not None],
-            "reminders": _reminder_days(session),
-            "mail_bodies": {
-                record.number: invoice_mail_body(session, record, signature)
-                for record in unpaid
-            },
-            "names": {customer.id or 0: customer.name for customer in everyone},
-            "deliveries": {
-                customer.id or 0: customer.delivery.value for customer in everyone
-            },
-            "whatsapp": {
-                customer.id or 0: whatsapp_number(customer.phone)
-                for customer in everyone
-            },
-            "customers": store.active_customers(),
-            "earnings": earnings_rows,
-            "earnings_total": earnings_total,
-            "overdue": _overdue_days(unpaid, store.app_settings().payment_days),
-            "paid_years": _paid_years(issued),
-        },
+        request, "invoices.html", InvoiceListViewBuilder(session).list_context()
     )
-
-
-def _reminder_days(session: Session) -> dict[int, list[date]]:
-    days: dict[int, list[date]] = {}
-    rows = session.exec(
-        select(PaymentReminder).order_by(col(PaymentReminder.sent_on))
-    ).all()
-    for row in rows:
-        days.setdefault(row.invoice_id, []).append(row.sent_on)
-    return days
-
-
-def _overdue_days(unpaid: Sequence[IssuedInvoice], due_days: int) -> dict[int, int]:
-    """Days past the due date, per unpaid invoice number."""
-    today = date.today()
-    late = {record.number: record.days_overdue(due_days, today) for record in unpaid}
-    return {number: days for number, days in late.items() if days > 0}
-
-
-def _paid_years(issued: Sequence[IssuedInvoice]) -> list[int]:
-    years = {record.paid_on.year for record in issued if record.paid_on is not None}
-    return sorted(years, reverse=True)
 
 
 @router.get("/rechnungen/finanzamt/{year}.zip")
@@ -116,7 +53,7 @@ def tax_office_zip(year: int, session: Session = Depends(database)) -> Response:
             status_code=404,
             detail=f"keine bezahlte Rechnung mit Zahlungseingang in {year}",
         )
-    return _zip_response(session, list(records), f"Rechnungen-{year}.zip")
+    return InvoicePdfArchive(session).zip_of(list(records), f"Rechnungen-{year}.zip")
 
 
 @router.get("/kunden/{customer_id}/rechnungen.zip")
@@ -128,24 +65,7 @@ def customer_zip(customer_id: int, session: Session = Depends(database)) -> Resp
     if not records:
         raise HTTPException(status_code=404, detail="keine Rechnung für diesen Kunden")
     name = StoreQueries(session).customer(customer_id).name
-    return _zip_response(session, list(records), f"Rechnungen {name}.zip")
-
-
-def _zip_response(
-    session: Session, records: list[IssuedInvoice], file_name: str
-) -> Response:
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for record in records:
-            pdf = find_pdf(session, record, record.customer.name)
-            if pdf is None:
-                continue
-            archive.write(pdf, arcname=pdf.name)
-    return Response(
-        buffer.getvalue(),
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
-    )
+    return InvoicePdfArchive(session).zip_of(list(records), f"Rechnungen {name}.zip")
 
 
 @router.post("/rechnungen/manuell")
@@ -180,7 +100,8 @@ def release_manual_invoice(
     released = orchestrator.release(run)
     session.flush()
     InvoiceDocumentWriter().write_pdf(
-        released.document, pdf_path(session, released.record, customer.name)
+        released.document,
+        InvoicePdfArchive(session).pdf_path(released.record, customer.name),
     )
     return notice_redirect(
         request,
@@ -194,7 +115,7 @@ def view_invoice(
     number: int, request: Request, session: Session = Depends(database)
 ) -> Response:
     """The invoice's pages as images inside the app's own chrome."""
-    path = _stored_pdf(session, number)
+    path = InvoicePdfArchive(session).stored_pdf(number)
     pages = PdfPreview(path).page_count() if path else 0
     return template_renderer.render(
         request,
@@ -214,18 +135,11 @@ def view_invoice(
 def invoice_page_image(
     number: int, index: int, session: Session = Depends(database)
 ) -> Response:
-    path = _stored_pdf(session, number)
+    path = InvoicePdfArchive(session).stored_pdf(number)
     image = PdfPreview(path).page_png(index) if path else None
     if image is None:
         raise HTTPException(status_code=404)
     return Response(image, media_type="image/png")
-
-
-def _stored_pdf(session: Session, number: int) -> Path | None:
-    record = StoreQueries(session).issued_invoice_by_number(number)
-    if record is None:
-        return None
-    return find_pdf(session, record, record.customer.name)
 
 
 @router.get("/rechnungen/vorschau-ansicht")
@@ -285,7 +199,7 @@ def preview_due_invoice(
     run = BillingRunOrchestrator(session).draft_for(
         StoreQueries(session).customer(customer_id), closing_day, date.today()
     )
-    return _draft_pdf(run)
+    return InvoicePdfArchive.draft_pdf_response(run)
 
 
 @router.get("/rechnungen/vorschau-manuell")
@@ -299,7 +213,7 @@ def preview_manual_invoice(
     run = BillingRunOrchestrator(session).manual_draft(
         customer, first_day, last_day, date.today()
     )
-    return _draft_pdf(run)
+    return InvoicePdfArchive.draft_pdf_response(run)
 
 
 @router.get("/rechnungen/vorschau.html")
@@ -310,7 +224,7 @@ def preview_due_html(
     run = BillingRunOrchestrator(session).draft_for(
         StoreQueries(session).customer(customer_id), closing_day, date.today()
     )
-    return _draft_html(run)
+    return InvoicePdfArchive.draft_html_response(run)
 
 
 @router.get("/rechnungen/vorschau-manuell.html")
@@ -324,34 +238,7 @@ def preview_manual_html(
     run = BillingRunOrchestrator(session).manual_draft(
         customer, first_day, last_day, date.today()
     )
-    return _draft_html(run)
-
-
-def _draft_html(run: BillingRun) -> Response:
-    if run.invoice is None:
-        raise HTTPException(
-            status_code=404,
-            detail="In diesem Zeitraum gibt es keine fertige Rechnung — offene "
-            "Termine beantworten oder Stunden abhaken.",
-        )
-    return Response(
-        InvoiceDocumentWriter().to_html(run.invoice),
-        media_type="text/html; charset=utf-8",
-    )
-
-
-def _draft_pdf(run: BillingRun) -> Response:
-    if run.invoice is None:
-        raise HTTPException(
-            status_code=404,
-            detail="In diesem Zeitraum gibt es keine fertige Rechnung — offene "
-            "Termine beantworten oder Stunden abhaken.",
-        )
-    return Response(
-        InvoiceDocumentWriter().pdf_bytes(run.invoice),
-        media_type="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="Vorschau.pdf"'},
-    )
+    return InvoicePdfArchive.draft_html_response(run)
 
 
 @router.post("/rechnungen/{customer_id}/freigeben")
@@ -366,7 +253,8 @@ def release_invoice(
     released = orchestrator.release(run)
     session.flush()
     InvoiceDocumentWriter().write_pdf(
-        released.document, pdf_path(session, released.record, customer.name)
+        released.document,
+        InvoicePdfArchive(session).pdf_path(released.record, customer.name),
     )
     return RedirectResponse("/rechnungen", status_code=303)
 
@@ -389,18 +277,19 @@ def send_invoice(
             "Für diesen Kunden ist keine E-Mail-Adresse hinterlegt — "
             "bitte auf der Kundenseite eintragen.",
         )
-    pdf = find_pdf(session, record, customer.name)
+    pdf = InvoicePdfArchive(session).find_pdf(record, customer.name)
     if pdf is None:
         return notice_redirect(
             request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
         )
+    composer = InvoiceMailComposer(session)
     try:
         mail.mailer_for(StoreQueries(session).app_settings()).send_pdf(
             to=customer.email,
             subject=f"Rechnung Nr. {number}",
-            body=invoice_mail_body(session, record),
+            body=composer.invoice_mail_body(record),
             pdf=pdf,
-            sender_name=issuer_name(session),
+            sender_name=composer.issuer_name(),
         )
     except MailError as error:
         return notice_redirect(request, "/rechnungen", str(error))
@@ -422,53 +311,6 @@ def mark_sent(
     return notice_redirect(
         request, "/rechnungen", f"Rechnung Nr. {number} als gesendet vermerkt."
     )
-
-
-def issuer_name(session: Session) -> str:
-    issuer = session.exec(select(Issuer)).first()
-    return issuer.name if issuer else ""
-
-
-def invoice_mail_body(
-    session: Session, record: IssuedInvoice, signature: str | None = None
-) -> str:
-    """The letter accompanying the invoice; ``signature`` may be preloaded
-    so a page listing many invoices asks for the sender only once."""
-    if signature is None:
-        signature = issuer_name(session)
-    customer = session.get(Customer, record.customer_id)
-    if customer is not None and customer.mail_text:
-        return _filled_in(customer.mail_text, record, customer, signature)
-    return (
-        f"Guten Tag,\n\n"
-        f"anbei die Rechnung Nr. {record.number} über "
-        f"{german_formatter.format_euro(record.printed_total)} für den Zeitraum "
-        f"{german_formatter.format_german_date(record.period_printed_from)} bis "
-        f"{german_formatter.format_german_date(record.period_printed_to)}.\n\n"
-        f"Mit freundlichen Grüßen\n{signature}\n"
-    )
-
-
-def _filled_in(
-    text: str, record: IssuedInvoice, customer: Customer, signature: str
-) -> str:
-    """The customer's own letter, its placeholders replaced with the facts."""
-    values = {
-        "MONAT": german_formatter.month_name(record.period_printed_from),
-        "JAHR": str(record.period_printed_from.year),
-        "BETRAG": german_formatter.format_euro(record.printed_total),
-        "NUMMER": str(record.number),
-        "ZEITRAUM": (
-            f"{german_formatter.format_german_date(record.period_printed_from)} bis "
-            f"{german_formatter.format_german_date(record.period_printed_to)}"
-        ),
-        "NAME": customer.name,
-        "SCHUELER": customer.pupil_name,
-        "ABSENDER": signature,
-    }
-    for key, value in values.items():
-        text = text.replace("{" + key + "}", value)
-    return text
 
 
 @router.post("/rechnungen/{number}/bezahlt")
@@ -521,18 +363,19 @@ def send_payment_reminder(
         and customer.delivery is InvoiceDelivery.EMAIL
         and customer.email
     ):
-        pdf = find_pdf(session, record, customer.name)
+        pdf = InvoicePdfArchive(session).find_pdf(record, customer.name)
         if pdf is None:
             return notice_redirect(
                 request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
             )
+        composer = InvoiceMailComposer(session)
         try:
             mail.mailer_for(StoreQueries(session).app_settings()).send_pdf(
                 to=customer.email,
                 subject=f"Zahlungserinnerung zur Rechnung Nr. {number}",
-                body=_reminder_mail_body(session, record, count),
+                body=composer.reminder_mail_body(record, count),
                 pdf=pdf,
-                sender_name=issuer_name(session),
+                sender_name=composer.issuer_name(),
             )
         except MailError as error:
             return notice_redirect(request, "/rechnungen", str(error))
@@ -545,30 +388,12 @@ def send_payment_reminder(
     return notice_redirect(request, "/rechnungen", message)
 
 
-def _reminder_mail_body(session: Session, record: IssuedInvoice, count: int) -> str:
-    signature = issuer_name(session)
-    customer = session.get(Customer, record.customer_id)
-    if customer is not None and customer.reminder_text:
-        text = _filled_in(customer.reminder_text, record, customer, signature)
-        return text.replace("{ANZAHL}", str(count))
-    return (
-        f"Guten Tag,\n\n"
-        f"dies ist die {count}. Zahlungserinnerung zur Rechnung Nr. "
-        f"{record.number} über {german_formatter.format_euro(record.printed_total)} "
-        f"vom {german_formatter.format_german_date(record.issued_on)} — anbei noch "
-        f"einmal als PDF. "
-        f"Falls die Zahlung schon unterwegs ist, betrachte diese Nachricht "
-        f"bitte als gegenstandslos.\n\n"
-        f"Mit freundlichen Grüßen\n{signature}\n"
-    )
-
-
 @router.get("/rechnungen/{number}.pdf")
 def invoice_pdf(
     number: int, herunterladen: bool = False, session: Session = Depends(database)
 ) -> Response:
     """The stored PDF: shown in place by default, a download only on request."""
-    path = _stored_pdf(session, number)
+    path = InvoicePdfArchive(session).stored_pdf(number)
     if path is None:
         raise HTTPException(
             status_code=404, detail=f"keine PDF zu Rechnung Nr. {number}"
@@ -578,45 +403,4 @@ def invoice_pdf(
         media_type="application/pdf",
         filename=path.name,
         content_disposition_type="attachment" if herunterladen else "inline",
-    )
-
-
-def due_runs(session: Session, today: date) -> list[BillingRun]:
-    active = (
-        select(Customer)
-        .where(Customer.status == CustomerStatus.ACTIVE)
-        .where(Customer.delivery != InvoiceDelivery.NONE)
-        .order_by(col(Customer.name))
-    )
-    orchestrator = BillingRunOrchestrator(session)
-    return [
-        run
-        for customer in session.exec(active).all()
-        for run in orchestrator.open_runs(customer, today)
-    ]
-
-
-def pdf_path(session: Session, record: IssuedInvoice, customer_name: str) -> Path:
-    folder = Path(StoreQueries(session).app_settings().invoice_folder) / str(
-        record.issued_on.year
-    )
-    stem = INVOICE_PDF_FILE_NAME_PATTERN.format(number=record.number)
-    return folder / f"{stem} {customer_name}.pdf"
-
-
-def find_pdf(
-    session: Session, record: IssuedInvoice, customer_name: str
-) -> Path | None:
-    """The stored PDF, even if the customer was renamed after it was written.
-
-    The file carries the name the customer had at release time, so when the
-    exact path is gone the unique invoice number finds it again.
-    """
-    exact = pdf_path(session, record, customer_name)
-    if exact.exists():
-        return exact
-    stem = INVOICE_PDF_FILE_NAME_PATTERN.format(number=record.number)
-    return next(
-        exact.parent.glob(f"{stem} *.pdf"),
-        None,
     )

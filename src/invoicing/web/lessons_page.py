@@ -10,12 +10,11 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form
-from sqlmodel import Session, select
+from sqlmodel import Session
 from starlette.responses import Response
 
-from invoicing.constant import ValueSource
-from invoicing.storage.models import BillingTemplate, Lesson, LessonStatus
-from invoicing.utils import parse_optional_clock_time, safe_back_redirect
+from invoicing.utils import safe_back_redirect
+from invoicing.web.lesson_editor import LessonEditor
 from invoicing.web.page import database
 
 router = APIRouter()
@@ -28,30 +27,7 @@ def set_extra_costs(
     aktiv: list[str] = Form([]),
     session: Session = Depends(database),
 ) -> Response:
-    """Tick the extra costs that apply to this one lesson.
-
-    Only "je Termin" columns can be switched here; an unticked one is stored
-    as an explicit "nothing", which prints the placeholder on the invoice
-    and adds nothing to the total.
-    """
-    lesson = _lesson(session, lesson_id)
-    if lesson.invoice_id is not None:
-        return safe_back_redirect(back)
-    terms = session.exec(
-        select(BillingTemplate).where(BillingTemplate.customer_id == lesson.customer_id)
-    ).first()
-    if terms is None:
-        return safe_back_redirect(back)
-    values = dict(lesson.column_values)
-    for column in terms.columns:
-        if column.source is not ValueSource.PER_LESSON:
-            continue
-        if column.label in aktiv:
-            values.pop(column.label, None)
-        else:
-            values[column.label] = None
-    lesson.column_values = values
-    session.add(lesson)
+    LessonEditor(session).set_extra_costs(lesson_id, aktiv)
     return safe_back_redirect(back)
 
 
@@ -61,7 +37,7 @@ def mark_done(
     back: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    _lesson(session, lesson_id).status = LessonStatus.DONE
+    LessonEditor(session).mark_done(lesson_id)
     return safe_back_redirect(back)
 
 
@@ -71,7 +47,7 @@ def mark_cancelled(
     back: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    _lesson(session, lesson_id).status = LessonStatus.CANCELLED
+    LessonEditor(session).mark_cancelled(lesson_id)
     return safe_back_redirect(back)
 
 
@@ -81,8 +57,7 @@ def mark_planned(
     back: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    """Undo an answer that was given by mistake."""
-    _lesson(session, lesson_id).status = LessonStatus.PLANNED
+    LessonEditor(session).mark_planned(lesson_id)
     return safe_back_redirect(back)
 
 
@@ -94,11 +69,7 @@ def reschedule(
     back: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    lesson = _lesson(session, lesson_id)
-    lesson.taught_on = taught_on
-    new_start = parse_optional_clock_time(starts_at)
-    if new_start is not None:
-        lesson.starts_at = new_start
+    LessonEditor(session).reschedule(lesson_id, taught_on, starts_at)
     return safe_back_redirect(back)
 
 
@@ -109,7 +80,7 @@ def change_quantity(
     back: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    _lesson(session, lesson_id).quantity = quantity
+    LessonEditor(session).change_quantity(lesson_id, quantity)
     return safe_back_redirect(back)
 
 
@@ -119,15 +90,7 @@ def remove_lesson(
     back: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    """Delete a lesson that should never have existed.
-
-    Refused once the lesson has been billed, because the invoice would then
-    name a lesson that is no longer there.
-    """
-    lesson = _lesson(session, lesson_id)
-    if lesson.invoice_id is not None:
-        raise ValueError(f"lesson {lesson_id} is already on an invoice")
-    session.delete(lesson)
+    LessonEditor(session).remove(lesson_id)
     return safe_back_redirect(back)
 
 
@@ -140,20 +103,5 @@ def add_lesson(
     back: str = Form("/"),
     session: Session = Depends(database),
 ) -> Response:
-    session.add(
-        Lesson(
-            customer_id=customer_id,
-            taught_on=taught_on,
-            quantity=quantity,
-            starts_at=parse_optional_clock_time(starts_at),
-        )
-    )
+    LessonEditor(session).add(customer_id, taught_on, quantity, starts_at)
     return safe_back_redirect(back)
-
-
-def _lesson(session: Session, lesson_id: int) -> Lesson:
-    lesson = session.get(Lesson, lesson_id)
-    if lesson is None:
-        raise ValueError(f"no lesson with id {lesson_id}")
-    session.add(lesson)
-    return lesson
