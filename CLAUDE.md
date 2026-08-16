@@ -28,6 +28,23 @@ wenn ein normales Wort reicht.
 - `src/invoicing/utils.py` — Hilfsfunktionen, besonders alles, was an
   mehreren Stellen gebraucht wird.
 
+## Kommentare und Docstrings
+
+- Grundsatz: keine Kommentare. Der Code selbst liest sich wie der Kommentar.
+  Statt einen Kommentar zu schreiben, den Code menschlicher machen:
+  - Magische Werte bekommen eine benannte Konstante (in `constant.py`).
+  - Komplizierte Bedingungen bekommen benannte Zwischenvariablen oder eine
+    eigene, sprechend benannte Funktion.
+  - Typen ersetzen Erklärungen (`date | None` statt "kann leer sein"-Kommentar).
+- Nur zwei erlaubte Ausnahmen für einen Kommentar:
+  - Der Code sieht aus Performance-Gründen absichtlich seltsam aus.
+  - Der Code setzt einen bestimmten Algorithmus oder eine mathematische
+    Regel um — dann mit Quelle/Link.
+- Docstrings sind Dokumentation, keine Kommentare: sie beschreiben, wie man
+  ein Modul, eine Klasse oder eine Funktion BENUTZT — nicht, wie sie innen
+  arbeitet. Kurz halten und im Google-Stil schreiben (Abschnitte `Args:`,
+  `Returns:`, `Raises:`, nur wo sie etwas Nicht-Offensichtliches sagen).
+
 ## Namen
 
 Variablen, Funktionen, Klassen, Dateien und Ordner heißen so, dass man am
@@ -44,3 +61,6 @@ langer, sprechender Name als ein kurzer, den man nachschlagen muss.
 
 Ein Thema pro Commit. Englischer Betreff mit Scope (zum Beispiel
 `fix(web): …`), im Body steht das Warum.
+
+Verboten in jeder Commit-Botschaft: `Co-Authored-By`-Zeilen und ähnliche
+Trailer. Der Body endet mit dem Warum, sonst nichts.
