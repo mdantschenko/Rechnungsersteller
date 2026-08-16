@@ -121,6 +121,32 @@ def test_it_keeps_ringing_until_acknowledged(
     assert len(rung) == 2
 
 
+def test_a_ring_that_reached_nobody_does_not_use_up_the_alarm(
+    session: Session, settings: AppSettings
+) -> None:
+    _lesson(session)
+    clock = LessonAlarmClock(session, settings, lambda message: 0)
+
+    assert clock.ring_all_due(RING_MOMENT) == 1
+
+    alarm = session.exec(select(LessonAlarm)).one()
+    assert alarm.rings == 0
+    assert alarm.last_rung_at == RING_MOMENT
+
+
+def test_a_ring_that_reached_a_device_counts(
+    session: Session, settings: AppSettings
+) -> None:
+    _lesson(session)
+    clock = LessonAlarmClock(session, settings, lambda message: 2)
+
+    clock.ring_all_due(RING_MOMENT)
+
+    alarm = session.exec(select(LessonAlarm)).one()
+    assert alarm.rings == 1
+    assert alarm.last_rung_at == RING_MOMENT
+
+
 def test_the_ringing_gives_up_eventually(
     session: Session, settings: AppSettings
 ) -> None:

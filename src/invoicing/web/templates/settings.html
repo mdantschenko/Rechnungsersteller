@@ -125,11 +125,20 @@
         navigator.serviceWorker.register("/sw.js").then(function () {
           return navigator.serviceWorker.ready;
         }),
-        fetch("/push/schluessel").then(function (answer) { return answer.json(); }),
+        fetch("/push/schluessel").then(function (answer) {
+          if (!answer.ok) throw new Error("Schlüssel nicht bekommen");
+          return answer.json();
+        }),
       ]).then(function (ready) {
-        return ready[0].pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: toServerKey(ready[1].key),
+        var manager = ready[0].pushManager;
+        var serverKey = toServerKey(ready[1].key);
+        return manager.getSubscription().then(function (existing) {
+          return existing ? existing.unsubscribe() : true;
+        }).then(function () {
+          return manager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: serverKey,
+          });
         });
       }).then(function (subscription) {
         return fetch("/push/abo", {
@@ -137,7 +146,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(subscription),
         });
-      }).then(function () {
+      }).then(function (answer) {
+        if (!answer.ok) throw new Error("Abo nicht gespeichert");
         say("Aktiv auf diesem Gerät.");
       }).catch(function () {
         say("Aktivieren fehlgeschlagen — nochmal versuchen.");

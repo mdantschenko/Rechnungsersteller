@@ -54,31 +54,52 @@ class LessonAlarmClock:
         """Ring every lesson whose time has come, and return how often it rang."""
         rung = 0
         for lesson, customer in self._planned_lessons_today_and_tomorrow(now):
-            moment = self.ring_time_for(
-                lesson, customer, self._settings.reminder_minutes
-            )
-            if moment is None or now < moment:
-                continue
-            alarm = self._session.exec(
-                select(LessonAlarm).where(LessonAlarm.lesson_id == lesson.id)
-            ).first()
-            if alarm is None:
-                if now > moment + ALARM_CATCH_UP_WINDOW:
-                    continue
-                alarm = LessonAlarm(lesson_id=lesson.id or 0)
-            if alarm.acknowledged or alarm.rings >= ALARM_RINGS_AT_MOST:
-                continue
-            if (
-                alarm.last_rung_at is not None
-                and now < alarm.last_rung_at + ALARM_RING_EVERY
-            ):
-                continue
-            self._deliver(self._wake_up_message(lesson, customer, alarm.rings + 1))
-            alarm.rings += 1
-            alarm.last_rung_at = now
-            self._session.add(alarm)
-            rung += 1
+            if self._ring_when_due(lesson, customer, now):
+                rung += 1
         return rung
+
+    def _ring_when_due(self, lesson: Lesson, customer: Customer, now: datetime) -> bool:
+        moment = self.ring_time_for(lesson, customer, self._settings.reminder_minutes)
+        if moment is None or now < moment:
+            return False
+        alarm = self._alarm_ready_to_ring(lesson, moment, now)
+        if alarm is None:
+            return False
+        outcome = self._deliver(
+            self._wake_up_message(lesson, customer, alarm.rings + 1)
+        )
+        if self._reached_a_device(outcome):
+            alarm.rings += 1
+        alarm.last_rung_at = now
+        self._session.add(alarm)
+        return True
+
+    def _alarm_ready_to_ring(
+        self, lesson: Lesson, moment: datetime, now: datetime
+    ) -> LessonAlarm | None:
+        alarm = self._session.exec(
+            select(LessonAlarm).where(LessonAlarm.lesson_id == lesson.id)
+        ).first()
+        if alarm is None:
+            if now > moment + ALARM_CATCH_UP_WINDOW:
+                return None
+            alarm = LessonAlarm(lesson_id=lesson.id or 0)
+        if alarm.acknowledged or alarm.rings >= ALARM_RINGS_AT_MOST:
+            return None
+        if (
+            alarm.last_rung_at is not None
+            and now < alarm.last_rung_at + ALARM_RING_EVERY
+        ):
+            return None
+        return alarm
+
+    @staticmethod
+    def _reached_a_device(outcome: object) -> bool:
+        """Whether the deliverer says the ring reached at least one device.
+
+        Only a counting deliverer can say no: an integer outcome of zero.
+        """
+        return not isinstance(outcome, int) or outcome > 0
 
     def acknowledge_day(self, day: date) -> None:
         """Opening a day answers its alarms; the ringing stops."""

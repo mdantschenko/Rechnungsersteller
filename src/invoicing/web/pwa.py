@@ -67,16 +67,23 @@ def drop_subscription(
 def test_ring(
     request: Request, session: Session = Depends(database_session)
 ) -> Response:
-    delivered = WebPushSender(
-        session, StoreQueries(session).app_settings()
-    ).send_to_all(
-        {"title": "Probeweckruf", "body": "So klingelt der Wecker.", "url": "/"}
-    )
-    if not delivered:
+    sender = WebPushSender(session, StoreQueries(session).app_settings())
+    subscribed = sender.subscription_count()
+    if not subscribed:
         return notice_redirect(
             request,
             "/einstellungen",
-            "Kein Gerät hat den Weckruf angenommen — erst auf dem Handy aktivieren.",
+            "Auf keinem Gerät aktiviert — aktiviere den Wecker in den Einstellungen.",
+        )
+    delivered = sender.send_to_all(
+        {"title": "Probeweckruf", "body": "So klingelt der Wecker.", "url": "/"}
+    )
+    failed = subscribed - delivered
+    if failed:
+        return notice_redirect(
+            request,
+            "/einstellungen",
+            f"Probeweckruf: {failed} von {subscribed} Sendung(en) fehlgeschlagen.",
         )
     return notice_redirect(
         request, "/einstellungen", f"Probeweckruf an {delivered} Gerät(e) geschickt."

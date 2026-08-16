@@ -841,7 +841,7 @@ def test_a_device_can_subscribe_to_the_alarm(
 def test_without_devices_the_test_ring_says_so(client: TestClient) -> None:
     page = client.post("/push/test", follow_redirects=True).text
 
-    assert "Kein Gerät" in page
+    assert "Auf keinem Gerät aktiviert" in page
 
 
 def test_opening_a_day_silences_its_alarms(client: TestClient, location: Path) -> None:

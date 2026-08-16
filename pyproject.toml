@@ -17,6 +17,7 @@ dependencies = [
     "python-multipart>=0.0.32",
     "pywebpush>=2.4.0",
     "pyzipper>=0.4.0",
+    "requests>=2.34.2",
     "sqlmodel",
     "uvicorn>=0.52.0",
     "weasyprint",
