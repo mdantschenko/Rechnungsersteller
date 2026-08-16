@@ -219,6 +219,7 @@ def send_test_invoice(
             content=InvoiceDocumentWriter().pdf_bytes(SampleInvoice.build(issuer)),
             file_name="Testrechnung.pdf",
             subtype="pdf",
+            copy_into_sent=True,
         )
     except MailError as error:
         return notice_redirect(request, "/einstellungen", str(error))

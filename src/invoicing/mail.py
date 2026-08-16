@@ -74,8 +74,13 @@ class SmtpMailer:
         file_name: str,
         subtype: str = "octet-stream",
         sender_name: str = "",
+        copy_into_sent: bool = False,
     ) -> None:
-        """Send raw bytes as an attachment, without a copy into the Sent folder.
+        """Send raw bytes as an attachment.
+
+        Args:
+            copy_into_sent: File the mail under "Gesendet" like a real
+                invoice; the weekly backup mail leaves this off.
 
         Raises:
             MailError: if the settings are incomplete or the server refuses.
@@ -84,6 +89,8 @@ class SmtpMailer:
             to, subject, body, sender_name, content, file_name, subtype
         )
         self._deliver(message)
+        if copy_into_sent:
+            self._copy_into_sent(message)
 
     def send_text(
         self, to: str, subject: str, body: str, sender_name: str = ""
