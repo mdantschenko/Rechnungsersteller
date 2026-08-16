@@ -5,12 +5,7 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
-from invoicing.feiertage import (
-    chosen_states,
-    public_holidays,
-    refresh_school_holidays,
-    school_holidays,
-)
+from invoicing.feiertage import HolidayCalendar
 from invoicing.storage.database import open_database
 from invoicing.storage.models import AppSettings, SchoolHoliday
 
@@ -24,11 +19,13 @@ def _settings(**overrides: object) -> AppSettings:
 def test_unknown_state_codes_are_dropped() -> None:
     settings = _settings(holiday_states="NW,XX,BY")
 
-    assert chosen_states(settings) == ["NW", "BY"]
+    assert HolidayCalendar.chosen_states(settings) == ["NW", "BY"]
 
 
 def test_public_holidays_know_allerheiligen() -> None:
-    found = public_holidays(["NW"], date(2026, 11, 1), date(2026, 11, 1))
+    found = HolidayCalendar.public_holidays(
+        ["NW"], date(2026, 11, 1), date(2026, 11, 1)
+    )
 
     assert found[date(2026, 11, 1)] == "Allerheiligen"
 
@@ -46,7 +43,9 @@ def test_school_holidays_cover_every_day_of_a_stretch(tmp_path: Path) -> None:
         )
         session.commit()
 
-        found = school_holidays(session, ["NW"], date(2026, 8, 1), date(2026, 8, 31))
+        found = HolidayCalendar(session).school_holidays(
+            ["NW"], date(2026, 8, 1), date(2026, 8, 31)
+        )
 
         assert found[date(2026, 8, 1)] == [("NW", "Sommerferien")]
         assert found[date(2026, 8, 26)] == [("NW", "Sommerferien")]
@@ -76,8 +75,8 @@ def test_refreshing_replaces_the_cache(tmp_path: Path) -> None:
         )
         session.commit()
 
-        count = refresh_school_holidays(
-            session, ["NW"], date(2026, 8, 8), fetch=fake_fetch
+        count = HolidayCalendar(session, fetch=fake_fetch).refresh_school_holidays(
+            ["NW"], date(2026, 8, 8)
         )
         session.commit()
 

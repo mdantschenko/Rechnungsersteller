@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, col, select
 from starlette.responses import Response
 
-from invoicing import alarms, feiertage
+from invoicing import alarms
 from invoicing.constant import (
     FEDERAL_STATE_COLORS,
     GERMAN_LOCALE,
@@ -26,6 +26,7 @@ from invoicing.constant import (
     ValueSource,
 )
 from invoicing.data_classes import CalendarDay
+from invoicing.feiertage import HolidayCalendar
 from invoicing.german_formatter import german_formatter
 from invoicing.lesson_pricing import StoredLessonPricer
 from invoicing.scheduling import materialise_series
@@ -210,16 +211,16 @@ def _holiday_notes(
     session: Session, first: date, last: date
 ) -> tuple[dict[date, str], dict[date, list[tuple[str, str]]]]:
     settings = settings_of(session)
-    states = feiertage.chosen_states(settings)
+    states = HolidayCalendar.chosen_states(settings)
     if not states:
         return {}, {}
     public = (
-        feiertage.public_holidays(states, first, last)
+        HolidayCalendar.public_holidays(states, first, last)
         if settings.show_public_holidays
         else {}
     )
     school = (
-        feiertage.school_holidays(session, states, first, last)
+        HolidayCalendar(session).school_holidays(states, first, last)
         if settings.show_school_holidays
         else {}
     )
@@ -230,7 +231,7 @@ def _school_states(session: Session) -> list[str]:
     settings = settings_of(session)
     if not settings.show_school_holidays:
         return []
-    return feiertage.chosen_states(settings)
+    return HolidayCalendar.chosen_states(settings)
 
 
 def _lessons_between(session: Session, first: date, last: date) -> list[Lesson]:

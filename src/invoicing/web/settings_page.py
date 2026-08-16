@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlmodel import Session, select
 from starlette.responses import RedirectResponse, Response
 
-from invoicing import feiertage, mail
+from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import (
     GERMAN_FEDERAL_STATES,
@@ -18,6 +18,8 @@ from invoicing.constant import (
     REMINDER_MINUTES_MAXIMUM,
 )
 from invoicing.data_classes import Issuer as DomainIssuer
+from invoicing.feiertage import HolidayCalendar
+from invoicing.holiday_fetch_error import HolidayFetchError
 from invoicing.mail_error import MailError
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.sample import SampleInvoice
@@ -49,7 +51,7 @@ def settings_form(request: Request, session: Session = Depends(database)) -> Res
             ),
             "settings": settings,
             "states": GERMAN_FEDERAL_STATES,
-            "chosen_states": feiertage.chosen_states(settings),
+            "chosen_states": HolidayCalendar.chosen_states(settings),
             "pending_password": security.has_pending_password(session),
         },
     )
@@ -72,8 +74,8 @@ def save_holidays(
     if not (settings.show_school_holidays and chosen):
         return notice_redirect(request, "/einstellungen", "Gespeichert.")
     try:
-        count = feiertage.refresh_school_holidays(session, chosen, date.today())
-    except feiertage.HolidayFetchError as error:
+        count = HolidayCalendar(session).refresh_school_holidays(chosen, date.today())
+    except HolidayFetchError as error:
         return notice_redirect(request, "/einstellungen", f"Gespeichert, aber: {error}")
     return notice_redirect(
         request, "/einstellungen", f"Gespeichert — {count} Ferienzeiträume geladen."
