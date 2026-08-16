@@ -360,6 +360,9 @@ class AppSettings(SQLModel, table=True):
     backup_passphrase: str | None = None
     """Opens the weekly database backup that is mailed to the own mailbox."""
     last_backup_mailed: date | None = None
+    backup_digest: str | None = None
+    """Fingerprint of the user data in the last backup that really left.
+    Empty means no backup has ever left, which forces the first one out."""
 
 
 class ExamGrade(SQLModel, table=True):

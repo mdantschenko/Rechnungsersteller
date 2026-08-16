@@ -19,6 +19,7 @@ from invoicing.constant import MORNING_ROUND_STARTS_AT, DeliverPushMessage
 from invoicing.mail_error import MailError
 from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
+from invoicing.user_data_digest import UserDataDigest
 from invoicing.utils import (
     ensure_backup_passphrase,
     mailbox_address_of,
@@ -112,9 +113,10 @@ class MorningRound:
         return sent, waiting
 
     def _mail_weekly_backup(self, today: date) -> bool:
-        """Mail the sealed database home every Monday.
+        """Mail the sealed database home on Mondays, once the books changed.
 
-        Losing the server must never mean losing the books.
+        Losing the server must never mean losing the books, but a week
+        without new entries deserves no copy of the old ones.
         """
         if today.weekday() != 0 or self._settings.last_backup_mailed == today:
             return False
@@ -124,9 +126,12 @@ class MorningRound:
         database = Path(str(self._session.get_bind().engine.url.database or ""))
         if not database.exists():
             return False
+        passphrase = ensure_backup_passphrase(self._session, self._settings)
+        digest = UserDataDigest(self._session).value()
         self._settings.last_backup_mailed = today
         self._session.add(self._settings)
-        passphrase = ensure_backup_passphrase(self._session, self._settings)
+        if digest == self._settings.backup_digest:
+            return False
         try:
             mailer.send_attachment(
                 to=mailbox_address_of(self._settings),
@@ -142,6 +147,8 @@ class MorningRound:
             )
         except MailError:
             return False
+        self._settings.backup_digest = digest
+        self._session.add(self._settings)
         return True
 
     def _newly_overdue(self, today: date) -> list[tuple[IssuedInvoice, str]]:

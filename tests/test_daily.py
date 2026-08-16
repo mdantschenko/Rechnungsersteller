@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session, select
 
 from invoicing.mail import SmtpMailer
+from invoicing.mail_error import MailError
 from invoicing.storage.models import (
     AppSettings,
     Customer,
@@ -21,6 +22,9 @@ from invoicing.storage.models import (
 from invoicing.web.daily import MorningRound
 
 MORNING = datetime(2026, 6, 16, 7, 30)
+MONDAY = datetime(2026, 6, 15, 7, 30)
+NEXT_MONDAY = MONDAY + timedelta(days=7)
+BACKUP_LINE = "Backup der Datenbank ans Postfach gemailt"
 
 
 @pytest.fixture
@@ -141,6 +145,90 @@ def test_other_days_mail_no_backup(
     MorningRound(session, _settings(session), lambda m: None).run(MORNING)
 
     assert _settings(session).last_backup_mailed is None
+
+
+def test_the_first_backup_leaves_and_remembers_the_fingerprint(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backups: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        SmtpMailer, "send_attachment", lambda mailer, **parts: backups.append(parts)
+    )
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
+    rung: list[dict[str, str]] = []
+
+    MorningRound(session, _settings(session), rung.append).run(MONDAY)
+
+    assert len(backups) == 1
+    assert _settings(session).backup_digest
+    assert BACKUP_LINE in rung[0]["body"]
+
+
+def test_an_unchanged_week_mails_no_second_backup(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backups: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        SmtpMailer, "send_attachment", lambda mailer, **parts: backups.append(parts)
+    )
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
+    rung: list[dict[str, str]] = []
+
+    MorningRound(session, _settings(session), rung.append).run(MONDAY)
+    fingerprint = _settings(session).backup_digest
+    MorningRound(session, _settings(session), rung.append).run(NEXT_MONDAY)
+
+    assert len(backups) == 1
+    assert _settings(session).backup_digest == fingerprint
+    assert _settings(session).last_backup_mailed == NEXT_MONDAY.date()
+    assert all(BACKUP_LINE not in message["body"] for message in rung[1:])
+
+
+def test_a_changed_customer_mails_a_fresh_backup(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backups: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        SmtpMailer, "send_attachment", lambda mailer, **parts: backups.append(parts)
+    )
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
+
+    MorningRound(session, _settings(session), lambda m: None).run(MONDAY)
+    fingerprint = _settings(session).backup_digest
+    customer = session.exec(select(Customer)).one()
+    customer.phone = "0151 2345678"
+    session.add(customer)
+    session.commit()
+    MorningRound(session, _settings(session), lambda m: None).run(NEXT_MONDAY)
+
+    assert len(backups) == 2
+    assert _settings(session).backup_digest != fingerprint
+
+
+def test_a_failed_backup_mail_tries_again_next_monday(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*a: object, **k: object) -> None:
+        raise MailError("Postausgang verschlossen")
+
+    monkeypatch.setattr(SmtpMailer, "send_attachment", refuse)
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
+    rung: list[dict[str, str]] = []
+
+    MorningRound(session, _settings(session), rung.append).run(MONDAY)
+
+    assert _settings(session).backup_digest is None
+    assert _settings(session).last_backup_mailed == MONDAY.date()
+    assert all(BACKUP_LINE not in message["body"] for message in rung)
+
+    backups: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        SmtpMailer, "send_attachment", lambda mailer, **parts: backups.append(parts)
+    )
+    MorningRound(session, _settings(session), rung.append).run(NEXT_MONDAY)
+
+    assert len(backups) == 1
+    assert _settings(session).backup_digest
 
 
 def test_a_freshly_overdue_invoice_announces_itself(
