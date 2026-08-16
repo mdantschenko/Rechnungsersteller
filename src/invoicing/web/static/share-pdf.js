@@ -36,13 +36,23 @@ function flash(message) {
   setTimeout(function () { note.remove(); }, 4000);
 }
 
-async function sendWhatsApp(button) {
-  // The text goes to the clipboard, because WhatsApp accepts either a file
-  // or a text, never both. Paste it into the chat next to the PDF.
+/* WhatsApp accepts either a file or a text, never both: the text waits on
+   the clipboard, to be pasted into the chat next to the PDF. */
+async function copyTextForChat(button) {
   try {
     await navigator.clipboard.writeText(button.dataset.text);
     flash("Text kopiert — im Chat einfach einfügen.");
   } catch (error) {}
+}
+
+function openChatWithoutPdf(button) {
+  if (button.dataset.phone) {
+    window.open("https://wa.me/" + button.dataset.phone, "_blank");
+  }
+}
+
+async function sendWhatsApp(button) {
+  await copyTextForChat(button);
   try {
     var file = await pdfAsFile(button.dataset.pdf, button.dataset.title);
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -52,8 +62,5 @@ async function sendWhatsApp(button) {
   } catch (error) {
     if (error.name === "AbortError") return;
   }
-  // No share sheet on this device: at least open the chat, PDF by hand.
-  if (button.dataset.phone) {
-    window.open("https://wa.me/" + button.dataset.phone, "_blank");
-  }
+  openChatWithoutPdf(button);
 }

@@ -5,10 +5,14 @@ Older documents contain mistakes, so nothing is quietly corrected on the way
 in and nothing is derived from them. Where a document contradicts itself the
 printed figure is kept and the recomputed one is kept beside it, which is what
 lets the import report the difference instead of hiding it.
-"""
 
-# No "from __future__ import annotations" here: it would turn the relationship
-# annotations into plain strings, which SQLAlchemy cannot resolve into classes.
+Two SQLAlchemy quirks shape the file. ``from __future__ import annotations``
+must stay out: it would turn the relationship annotations into plain strings,
+which SQLAlchemy cannot resolve into classes. And every ``__tablename__`` is
+spelled out rather than left to SQLModel, which would derive names such as
+"issuedinvoiceline"; SQLAlchemy declares ``__tablename__`` as a declared_attr,
+so each plain string needs its pragma.
+"""
 
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -59,9 +63,6 @@ def money_field(**keywords: Any) -> Any:
     return Field(sa_type=ExactDecimal, **keywords)
 
 
-# The table names are spelled out rather than left to SQLModel, which would
-# derive "issuedinvoiceline". SQLAlchemy declares __tablename__ as a
-# declared_attr, so a plain string needs the pragma below.
 class CustomerStatus(StrEnum):
     """Whether a customer still takes lessons."""
 
@@ -157,8 +158,10 @@ class IssuedInvoice(SQLModel, table=True):
         return self.printed_total != self.computed_total
 
     def days_overdue(self, payment_days: int, today: date) -> int:
-        """How many days past its due date this invoice is; zero and less
-        mean the customer is still within the payment window."""
+        """How many days past its due date this invoice is.
+
+        Zero and less mean the customer is still within the payment window.
+        """
         return (today - self.issued_on).days - payment_days
 
 

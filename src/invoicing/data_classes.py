@@ -128,7 +128,6 @@ class LineItem:
     @property
     def label(self) -> str:
         """The text of the "Bezeichnung / Datum" column."""
-        # The date keeps its inline format: this file imports no project helpers.
         return f"{self.description} / {self.taught_on:%d.%m.%Y}"
 
 
@@ -208,8 +207,7 @@ class CalendarDay:
 
     @property
     def peek(self) -> str:
-        """What the long press shows: holidays first, then the lessons,
-        one per line."""
+        """The long-press text: holidays first, then the lessons, one per line."""
         parts = [self.holiday] if self.holiday else []
         parts.extend(f"{name} ({state})" for state, name in self.vacations)
         if self.summary:

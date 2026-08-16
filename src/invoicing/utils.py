@@ -54,8 +54,11 @@ def sum_of_cents(amounts: Iterable[Decimal]) -> Decimal:
 
 
 def parse_german_amount(value: str) -> Decimal | None:
-    """Read an amount the way a person writes it (``20,00 €``, ``1.234,56``);
-    None when nothing readable remains."""
+    """Read an amount the way a person writes it (``20,00 €``, ``1.234,56``).
+
+    Returns:
+        The parsed amount, or None when nothing readable remains.
+    """
     cleaned = value.replace("€", "").replace(" ", "").strip()
     if "," in cleaned:
         cleaned = cleaned.replace(".", "").replace(",", ".")
@@ -196,7 +199,9 @@ def safe_back_redirect(back: str) -> RedirectResponse:
 
 
 def notice_redirect(request: Request, path: str, message: str) -> RedirectResponse:
-    """Back to ``path`` with a toast message that travels in the session,
-    out of reach of crafted links."""
+    """Back to ``path`` with a toast message.
+
+    The message travels in the session, out of reach of crafted links.
+    """
     request.session[NOTICE_SESSION_KEY] = message
     return RedirectResponse(path, status_code=303)

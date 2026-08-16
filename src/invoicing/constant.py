@@ -1,6 +1,7 @@
 """Every constant of the application lives here, grouped by topic.
 
 Only the standard library is imported, so any module can use this file freely.
+The enum string values are stored in the database and never change.
 """
 
 from __future__ import annotations
@@ -28,7 +29,6 @@ GERMAN_WEEKDAY_NAMES = {
     "SU": "Sonntag",
 }
 WEEK_STARTS_ON_MONDAY = 0
-# The filter names are a contract with the templates.
 TEMPLATE_FILTER_EURO = "euro"
 TEMPLATE_FILTER_QUANTITY = "quantity"
 TEMPLATE_FILTER_GERMAN_DATE = "german_date"
@@ -39,7 +39,7 @@ CENT = Decimal("0.01")
 TEN_THOUSANDTH = Decimal("0.0001")
 ZERO = Decimal("0.00")
 
-# --- Domain enums — the string values are stored in the database and never change ---
+# --- Domain enums ---
 
 
 class ValueSource(StrEnum):
@@ -122,7 +122,6 @@ GERMAN_FEDERAL_STATES = {
     "TH": "Thüringen",
 }
 
-# One colour per federal state, so overlapping school holidays stay apart.
 FEDERAL_STATE_COLORS = {
     "BW": "#e6550d",
     "BY": "#3182bd",
@@ -198,7 +197,6 @@ INVOICE_DOCUMENT_FONT_FILES = (
     ("OpenSans-Italic.ttf", 400, "italic"),
     ("OpenSans-Bold.ttf", 700, "normal"),
 )
-# The stored PDFs are found again by this stem, so it never changes.
 INVOICE_PDF_FILE_NAME_PATTERN = "Rechnung Nr {number}"
 
 # --- Storage ---

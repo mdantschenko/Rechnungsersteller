@@ -22,8 +22,11 @@ class LessonSeriesMaterialiser:
         self._session = session
 
     def materialise_all_active(self, until: date) -> tuple[Lesson, ...]:
-        """Create every lesson the active series call for, up to and including
-        ``until``, and return the ones that were newly created."""
+        """Write out every active series up to and including ``until``.
+
+        Returns:
+            Only the lessons that were newly created.
+        """
         created: list[Lesson] = []
         for series in self._session.exec(
             select(LessonSeries).where(col(LessonSeries.active))

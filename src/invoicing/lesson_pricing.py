@@ -97,11 +97,14 @@ class StoredLessonPricer:
     def _parsed_column_value(
         self, kind: ValueKind, value: str | None
     ) -> ExtraColumnValue:
+        """The stored cell parsed to its kind.
+
+        Stored values may carry a German comma or a stray currency sign from
+        older input; an unreadable one counts as empty rather than crashing
+        the whole billing page.
+        """
         if value is None:
             return None
         if kind is ValueKind.TEXT:
             return value
-        # Stored values may carry a German comma or a stray currency sign from
-        # older input; unreadable ones count as empty rather than crashing the
-        # whole billing page.
         return parse_german_amount(value)

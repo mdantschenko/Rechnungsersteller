@@ -117,6 +117,9 @@ class SmtpMailer:
     ) -> EmailMessage:
         """The checked and addressed message every send goes through.
 
+        The email policy refuses header values with line breaks in them,
+        which is also what keeps injected extra headers out.
+
         Raises:
             MailError: if the settings are incomplete or the address is unusable.
         """
@@ -135,8 +138,6 @@ class SmtpMailer:
                 subtype=subtype,
             )
         except ValueError as error:
-            # The email policy refuses header values with line breaks in them,
-            # which is also what keeps injected extra headers out.
             raise MailError(
                 "Die Empfängeradresse enthält unzulässige Zeichen."
             ) from error

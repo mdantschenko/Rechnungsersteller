@@ -18,7 +18,11 @@ from invoicing.web.store_queries import StoreQueries
 
 
 class InvoicePdfArchive:
-    """Finds, bundles and renders the PDFs behind the invoice records."""
+    """Finds, bundles and renders the PDFs behind the invoice records.
+
+    Every file name starts with the "Rechnung Nr {number}" stem; the stored
+    PDFs are found again by it, so that pattern never changes.
+    """
 
     def __init__(self, session: Session) -> None:
         self._session = session

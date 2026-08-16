@@ -243,7 +243,8 @@ def test_a_german_default_value_does_not_break_billing(client: TestClient) -> No
     page = client.get("/rechnungen")
 
     assert page.status_code == 200
-    assert "53,33" in page.text  # 33,33 lesson + 20,00 travel
+    lesson_price_plus_travel_costs = "53,33"
+    assert lesson_price_plus_travel_costs in page.text
 
 
 def test_an_unreadable_default_value_is_refused(client: TestClient) -> None:
@@ -263,8 +264,11 @@ def test_an_unreadable_default_value_is_refused(client: TestClient) -> None:
     ).text
 
     assert "muss eine Zahl sein" in page
-    # Only the form placeholder mentions the label; no column row was stored.
-    assert client.get(f"/kunden/{customer_id}").text.count("Anfahrtskosten") == 1
+    only_the_form_placeholder = 1
+    assert (
+        client.get(f"/kunden/{customer_id}").text.count("Anfahrtskosten")
+        == only_the_form_placeholder
+    )
 
 
 def test_a_lesson_can_be_ticked_off_and_billed(
@@ -867,7 +871,8 @@ def test_a_draft_can_be_previewed_without_releasing(client: TestClient) -> None:
 
     assert preview.status_code == 200
     assert preview.content.startswith(b"%PDF")
-    assert "Nr. 115" in client.get("/rechnungen").text  # still only a draft
+    still_only_a_draft = "Nr. 115"
+    assert still_only_a_draft in client.get("/rechnungen").text
 
 
 def test_the_html_preview_serves_the_invoice_page(client: TestClient) -> None:
@@ -935,7 +940,8 @@ def test_the_unit_does_the_arithmetic(client: TestClient) -> None:
 
     page = client.get("/rechnungen").text
 
-    assert "40,00" in page  # 1.5 hours = exactly one 1,5h unit
+    exactly_one_unit = "40,00"
+    assert exactly_one_unit in page
     assert "60,00" not in page
 
 
@@ -966,7 +972,8 @@ def test_a_partial_unit_lands_on_the_calculator_cent(client: TestClient) -> None
 
     page = client.get("/rechnungen").text
 
-    assert "51,67" in page  # 40 x (1/1.5) = 26.67, plus 25 travel
+    two_thirds_of_a_unit_plus_travel = "51,67"
+    assert two_thirds_of_a_unit_plus_travel in page
     assert "51,80" not in page
 
 
@@ -1077,7 +1084,8 @@ def test_uninvoiced_earnings_count_the_extra_columns(client: TestClient) -> None
 
     page = client.get("/rechnungen").text
 
-    assert "65,00" in page  # 40 the hour + 25 travel
+    one_hour_plus_travel = "65,00"
+    assert one_hour_plus_travel in page
 
 
 def test_the_calendar_speaks_of_the_pupil_and_the_place(client: TestClient) -> None:

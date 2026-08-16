@@ -101,7 +101,8 @@ class HolidayCalendar:
     def refresh_school_holidays(self, states: Sequence[str], today: date) -> int:
         """Replace the cache with fresh data for the chosen states.
 
-        Returns how many holiday stretches were stored.
+        Returns:
+            How many holiday stretches were stored.
 
         Raises:
             HolidayFetchError: if the API cannot be reached or answers nonsense.

@@ -31,8 +31,11 @@ class PdfRendererSelection:
 
 @cache
 def _weasyprint_is_usable() -> bool:
-    # WeasyPrint announces a failed import with a bare print(), so its notice
-    # lands on stdout rather than on stderr.
+    """Whether WeasyPrint can actually be imported on this machine.
+
+    WeasyPrint announces a failed import with a bare print(), so stdout is
+    silenced alongside stderr.
+    """
     with (
         contextlib.redirect_stdout(io.StringIO()),
         contextlib.redirect_stderr(io.StringIO()),

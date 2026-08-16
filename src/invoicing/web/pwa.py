@@ -1,5 +1,8 @@
-"""What iOS needs to treat the site as an app: manifest, icons and the wake-up
-service worker with its push subscription endpoints."""
+"""What iOS needs to treat the site as an app.
+
+Manifest, icons and the wake-up service worker with its push subscription
+endpoints.
+"""
 
 from __future__ import annotations
 

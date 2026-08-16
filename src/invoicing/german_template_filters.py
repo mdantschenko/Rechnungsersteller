@@ -18,7 +18,10 @@ from invoicing.german_formatter import GermanFormatter
 
 
 class GermanTemplateFilters:
-    """Puts one formatter's methods behind the shared template filter names."""
+    """Puts one formatter's methods behind the shared template filter names.
+
+    The filter names are a contract with the templates.
+    """
 
     def __init__(self, formatter: GermanFormatter) -> None:
         self.formatter = formatter

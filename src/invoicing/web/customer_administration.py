@@ -279,8 +279,10 @@ class CustomerAdministration:
             self._session.add(series)
 
     def remember_reminder(self, customer_id: int, reminder_at: str) -> None:
-        """The reminder time lives on the customer: one wake-up call per pupil,
-        however many series they have."""
+        """Remember the reminder time on the customer.
+
+        One wake-up call per pupil, however many series they have.
+        """
         customer = self._store.customer(customer_id)
         customer.reminder_at = parse_optional_clock_time(reminder_at)
         self._session.add(customer)

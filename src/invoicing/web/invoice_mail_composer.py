@@ -21,8 +21,11 @@ class InvoiceMailComposer:
     def invoice_mail_body(
         self, record: IssuedInvoice, signature: str | None = None
     ) -> str:
-        """The letter accompanying the invoice; ``signature`` may be preloaded
-        so a page listing many invoices asks for the sender only once."""
+        """The letter accompanying the invoice.
+
+        ``signature`` may be preloaded so a page listing many invoices asks
+        for the sender only once.
+        """
         if signature is None:
             signature = self.issuer_name()
         customer = self._session.get(Customer, record.customer_id)

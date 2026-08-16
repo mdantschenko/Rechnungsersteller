@@ -36,8 +36,13 @@ from invoicing.web.password_gate import PasswordGate
 
 
 def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
-    """Build the application against the database at ``location``; a free
-    factory because uvicorn and the tests call it before any object exists."""
+    """Build the application against the database at ``location``.
+
+    A free factory because uvicorn and the tests call it before any object
+    exists. The sign-in guard is added before the session middleware:
+    Starlette runs the last middleware added on the outside, so the guard
+    ends up inside the session cookie handling.
+    """
     database = InvoiceDatabase(location)
     database.open()
     with database.session() as session:
@@ -50,8 +55,6 @@ def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
         lifespan=TickingAlarmClock(database).lifespan,
     )
     app.state.database = database
-    # Starlette runs the last middleware added on the outside, so the guard is
-    # registered first in order to run inside the session cookie handling.
     app.middleware("http")(_send_strangers_to_the_sign_in_page)
     app.add_middleware(SessionMiddleware, secret_key=secret, same_site="lax")
     app.mount("/static", StaticFiles(directory=WEB_STATIC_DIRECTORY), name="static")

@@ -112,8 +112,10 @@ class MorningRound:
         return sent, waiting
 
     def _mail_weekly_backup(self, today: date) -> bool:
-        """Mail the sealed database home every Monday; losing the server must
-        never mean losing the books."""
+        """Mail the sealed database home every Monday.
+
+        Losing the server must never mean losing the books.
+        """
         if today.weekday() != 0 or self._settings.last_backup_mailed == today:
             return False
         mailer = mail.mailer_for(self._settings)
