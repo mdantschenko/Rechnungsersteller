@@ -5,8 +5,10 @@ Lexware has no interface of its own: the file goes in through
 interface version 700, category 21 — a 31 field header, then the column
 names, then one row per invoice. Format version and column count belong
 together (12 means 124 columns, 13 means 125), so both are read from the same
-table and can never drift apart. Field order, quoting and the date formats
-follow the DATEV format description:
+table and can never drift apart. Which of the two it is comes from the
+settings, because Lexware 2024 reads version 12 while Lexware 2025 asks for
+version 13. Field order, quoting and the date formats follow the DATEV format
+description:
 https://developer.datev.de/de/file-format/details/datev-format/format-description/booking-batch
 """
 
@@ -54,7 +56,6 @@ from invoicing.constant import (
     DATEV_FILE_NAME_PATTERN,
     DATEV_FORMAT_CATEGORY_BOOKING_BATCH,
     DATEV_FORMAT_NAME_BOOKING_BATCH,
-    DATEV_FORMAT_VERSION,
     DATEV_GENERAL_LEDGER_ACCOUNT_LENGTH,
     DATEV_HEADER_FIELD_COUNT,
     DATEV_INTERFACE_VERSION,
@@ -71,7 +72,9 @@ from invoicing.constant import (
     DATEV_SMALL_BUSINESS_REVENUE_ACCOUNT_SINCE_2025,
     DATEV_TEXT_SEPARATOR_REPLACEMENT,
     DATEV_UNENCODABLE_CHARACTER_HANDLING,
+    DATEV_UNKNOWN_FORMAT_VERSION_MESSAGE,
     DATEV_VOUCHER_DAY_FORMAT,
+    DEFAULT_DATEV_FORMAT_VERSION,
     MICROSECONDS_PER_MILLISECOND,
     ZERO,
 )
@@ -96,8 +99,9 @@ class DatevBookingBatchExport:
 
     Raises:
         DatevExportError: when the file would not be importable — no advisor
-            or client number, no invoice in that year, or an invoice whose
-            amount is not above zero.
+            or client number, a format version without a column list, no
+            invoice in that year, or an invoice whose amount is not above
+            zero.
     """
 
     def __init__(self, session: Session, created_at: datetime | None = None) -> None:
@@ -132,13 +136,23 @@ class DatevBookingBatchExport:
         """The name the import dialog looks for: it must start with ``EXTF_``."""
         return DATEV_FILE_NAME_PATTERN.format(year=year)
 
-    @staticmethod
-    def _column_header_line() -> str:
-        return DATEV_BOOKING_COLUMN_HEADER_LINE_BY_FORMAT_VERSION[DATEV_FORMAT_VERSION]
+    def _format_version(self) -> int:
+        settings = self._settings
+        if settings is None:
+            return DEFAULT_DATEV_FORMAT_VERSION
+        return settings.datev_format_version
 
-    @classmethod
-    def _booking_field_count(cls) -> int:
-        return cls._column_header_line().count(DATEV_FIELD_SEPARATOR) + 1
+    def _column_header_line(self) -> str:
+        version = self._format_version()
+        columns = DATEV_BOOKING_COLUMN_HEADER_LINE_BY_FORMAT_VERSION.get(version)
+        if columns is None:
+            raise DatevExportError(
+                DATEV_UNKNOWN_FORMAT_VERSION_MESSAGE.format(version=version)
+            )
+        return columns
+
+    def _booking_field_count(self) -> int:
+        return self._column_header_line().count(DATEV_FIELD_SEPARATOR) + 1
 
     def _invoices_of(self, year: int) -> Sequence[IssuedInvoice]:
         records = self._session.exec(
@@ -162,7 +176,7 @@ class DatevBookingBatchExport:
                 str(DATEV_INTERFACE_VERSION),
                 str(DATEV_FORMAT_CATEGORY_BOOKING_BATCH),
                 self._quoted(DATEV_FORMAT_NAME_BOOKING_BATCH),
-                str(DATEV_FORMAT_VERSION),
+                str(self._format_version()),
                 self._created_at_stamp(),
                 DATEV_EMPTY_FIELD,
                 self._quoted(DATEV_ORIGIN_MARK),

@@ -276,16 +276,28 @@
 <div class="block">
   <form method="post" action="/einstellungen/datev" class="stack">
     <label>Beraternummer
-      <input type="number" name="datev_advisor_number" value="{{ settings.datev_advisor_number or '' }}" min="1000" max="9999999">
+      <input type="number" name="datev_advisor_number" value="{{ settings.datev_advisor_number or '' }}"
+             min="{{ datev_advisor_minimum }}" max="{{ datev_advisor_maximum }}">
     </label>
     <label>Mandantennummer
-      <input type="number" name="datev_client_number" value="{{ settings.datev_client_number or '' }}" min="1" max="99999">
+      <input type="number" name="datev_client_number" value="{{ settings.datev_client_number or '' }}"
+             min="{{ datev_client_minimum }}" max="{{ datev_client_maximum }}">
+    </label>
+    <label>Formatversion
+      <select name="datev_format_version">
+        {% for version in datev_format_versions %}
+        <option value="{{ version }}" {% if settings.datev_format_version == version %}selected{% endif %}>{{ version }}</option>
+        {% endfor %}
+      </select>
     </label>
     <button class="button button-fill" type="submit">Speichern</button>
   </form>
   <p class="hint">
     Beide Nummern stehen in Lexware im Firmenstamm der Firma, in die der
     Buchungsstapel eingelesen wird. Ohne sie gibt es keine DATEV-Datei.
+    Die Formatversion muss zum Lexware-Jahrgang passen: Lexware 2024 liest
+    Version 12, Lexware 2025 verlangt Version 13. Passt sie nicht, bricht der
+    Import schon in der ersten Zeile ab.
   </p>
 </div>
 

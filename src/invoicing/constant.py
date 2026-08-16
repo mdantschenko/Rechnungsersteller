@@ -300,7 +300,7 @@ DATEV_FILE_MARKER = "EXTF"
 DATEV_INTERFACE_VERSION = 700
 DATEV_FORMAT_CATEGORY_BOOKING_BATCH = 21
 DATEV_FORMAT_NAME_BOOKING_BATCH = "Buchungsstapel"
-DATEV_FORMAT_VERSION = 12
+DEFAULT_DATEV_FORMAT_VERSION = 12
 DATEV_ORIGIN_MARK = "RE"
 DATEV_EXPORTING_APPLICATION = "Rechnungsersteller"
 DATEV_GENERAL_LEDGER_ACCOUNT_LENGTH = 4
@@ -338,11 +338,30 @@ DATEV_BOOKING_TEXT_MAX_LENGTH = 60
 DATEV_CONTROL_CHARACTER_PATTERN = re.compile(r"[\x00-\x1f]")
 DATEV_TEXT_SEPARATOR_REPLACEMENT = " "
 
+DATEV_ADVISOR_NUMBER_LABEL = "Beraternummer"
+DATEV_ADVISOR_NUMBER_MINIMUM = 1001
+DATEV_ADVISOR_NUMBER_MAXIMUM = 9999999
+DATEV_CLIENT_NUMBER_LABEL = "Mandantennummer"
+DATEV_CLIENT_NUMBER_MINIMUM = 1
+DATEV_CLIENT_NUMBER_MAXIMUM = 99999
+
 DATEV_NUMBERS_MISSING_MESSAGE = (
     "Berater- und Mandantennummer fehlen. Trage sie in den Einstellungen "
     "unter „DATEV-Export“ ein — sonst ordnet Lexware die Datei keinem "
     "Mandanten zu."
 )
+DATEV_NUMBER_REJECTED_MESSAGE = (
+    "Die {label} muss eine Zahl zwischen {minimum} und {maximum} sein — "
+    "es wurde nichts geändert."
+)
+DATEV_FORMAT_VERSION_REJECTED_MESSAGE = (
+    "Die Formatversion muss 12 oder 13 sein — es wurde nichts geändert."
+)
+DATEV_UNKNOWN_FORMAT_VERSION_MESSAGE = (
+    "Zur Formatversion {version} kennt dieses Programm keine Spaltenliste. "
+    "Stelle in den Einstellungen unter „DATEV-Export“ 12 oder 13 ein."
+)
+DATEV_SETTINGS_SAVED_MESSAGE = "DATEV-Einstellungen gespeichert."
 DATEV_NO_INVOICES_MESSAGE = (
     "Für {year} gibt es keine gestellte Rechnung — es gibt nichts zu buchen."
 )
@@ -424,6 +443,7 @@ DATEV_BOOKING_COLUMN_HEADER_LINE_BY_FORMAT_VERSION = {
     + DATEV_FIELD_SEPARATOR
     + DATEV_SKONTO_ACCOUNT_COLUMN,
 }
+DATEV_FORMAT_VERSION_CHOICES = tuple(DATEV_BOOKING_COLUMN_HEADER_LINE_BY_FORMAT_VERSION)
 
 # --- Legacy Markdown parsing ---
 

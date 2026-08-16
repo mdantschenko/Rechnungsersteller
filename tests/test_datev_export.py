@@ -7,7 +7,6 @@ import pytest
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
-from invoicing.constant import DATEV_BOOKING_COLUMN_HEADER_LINE_BY_FORMAT_VERSION
 from invoicing.datev_export import DatevBookingBatchExport
 from invoicing.datev_export_error import DatevExportError
 from invoicing.storage.models import (
@@ -18,7 +17,9 @@ from invoicing.storage.models import (
 )
 
 BOOKING_FIELD_COUNT = 124
+COLUMN_COUNT_BY_FORMAT_VERSION = {12: 124, 13: 125}
 HEADER_FIELD_COUNT = 31
+FORMAT_VERSION_HEADER_FIELD = 4
 FIRST_BOOKING_LINE = 2
 VOUCHER_NUMBER_COLUMN = 10
 
@@ -74,6 +75,14 @@ def _forget_datev_numbers(engine: Engine) -> None:
         session.commit()
 
 
+def _choose_format_version(engine: Engine, version: int) -> None:
+    with Session(engine) as session:
+        settings = session.exec(select(AppSettings)).one()
+        settings.datev_format_version = version
+        session.add(settings)
+        session.commit()
+
+
 @pytest.fixture
 def booked(engine: Engine) -> Engine:
     """Two invoices from 2026, one from 2025 and one from 2024."""
@@ -107,16 +116,40 @@ def test_the_header_names_the_format_version_and_the_lexware_client(
     assert ';12345;678;20260101;4;20260305;20261231;"Rechnungsausgang 2026"' in header
 
 
-def test_the_column_line_belongs_to_the_declared_format_version(
-    booked: Engine,
+@pytest.mark.parametrize(("version", "columns"), COLUMN_COUNT_BY_FORMAT_VERSION.items())
+def test_each_format_version_writes_exactly_its_own_columns(
+    booked: Engine, version: int, columns: int
 ) -> None:
+    _choose_format_version(booked, version)
+
     with Session(booked) as session:
         rows = DatevBookingBatchExport(session).rows_for_year(2026)
 
-    assert rows[1].split(";")[-1] == "EU-Steuersatz (Ursprung)"
-    assert (
-        rows[1] == DATEV_BOOKING_COLUMN_HEADER_LINE_BY_FORMAT_VERSION[12]
-    ), "Formatversion 12 verlangt genau diese Spalten"
+    assert len(rows[1].split(";")) == columns
+
+
+def test_the_header_names_the_version_the_column_line_delivers(
+    booked: Engine,
+) -> None:
+    for version in COLUMN_COUNT_BY_FORMAT_VERSION:
+        _choose_format_version(booked, version)
+        with Session(booked) as session:
+            rows = DatevBookingBatchExport(session).rows_for_year(2026)
+
+        declared = int(rows[0].split(";")[FORMAT_VERSION_HEADER_FIELD])
+        assert COLUMN_COUNT_BY_FORMAT_VERSION[declared] == len(rows[1].split(";"))
+
+
+def test_an_unknown_format_version_says_so_instead_of_breaking(
+    booked: Engine,
+) -> None:
+    _choose_format_version(booked, 10)
+
+    with Session(booked) as session, pytest.raises(DatevExportError) as raised:
+        DatevBookingBatchExport(session).rows_for_year(2026)
+
+    assert "Formatversion 10" in str(raised.value)
+    assert "12 oder 13" in str(raised.value)
 
 
 def test_every_line_carries_exactly_the_prescribed_field_count(

@@ -24,6 +24,7 @@ from sqlmodel import Column, Field, Relationship, SQLModel
 
 from invoicing.constant import (
     DEFAULT_BILLING_UNIT,
+    DEFAULT_DATEV_FORMAT_VERSION,
     DEFAULT_INVOICE_FOLDER,
     DEFAULT_ISSUER_COUNTRY,
     DEFAULT_LESSON_DESCRIPTION,
@@ -362,6 +363,9 @@ class AppSettings(SQLModel, table=True):
     Empty stops the DATEV export instead of inventing a number."""
     datev_client_number: int | None = None
     """Mandantennummer of that same Lexware client."""
+    datev_format_version: int = DEFAULT_DATEV_FORMAT_VERSION
+    """Booking batch format the Lexware import dialog expects: 12 up to the
+    2024 program, 13 from the 2025 one on."""
 
     backup_passphrase: str | None = None
     """Opens the weekly database backup that is mailed to the own mailbox."""

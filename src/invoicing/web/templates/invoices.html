@@ -244,9 +244,10 @@
   </p>
   {% endif %}
   {% if issued_years %}
+  {% if datev_numbers_are_set %}
   <div class="row-actions">
     {% for year in issued_years %}
-    <a class="button button-small" href="/rechnungen/datev/{{ year }}.csv" download>DATEV-Export {{ year }}</a>
+    <a class="button button-small" href="/rechnungen/datev/{{ year }}.csv">DATEV-Export {{ year }}</a>
     {% endfor %}
   </div>
   <p class="hint">
@@ -258,6 +259,12 @@
     schon angelegt sein, sonst bricht der Import ab. Berater- und
     Mandantennummer stehen in den Einstellungen.
   </p>
+  {% else %}
+  <p class="hint">
+    Für den DATEV-Export fehlen noch die Nummern aus Lexware —
+    <a href="/einstellungen">in den Einstellungen eintragen</a>.
+  </p>
+  {% endif %}
   {% endif %}
 </div>
 

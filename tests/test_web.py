@@ -708,15 +708,27 @@ def test_the_year_can_be_downloaded_as_a_datev_booking_batch(
     )
 
     year = date.today().year
-    assert f"/rechnungen/datev/{year}.csv" in client.get("/rechnungen").text
+    page = client.get("/rechnungen").text
+    assert f"/rechnungen/datev/{year}.csv" not in page
+    assert "fehlen noch die Nummern aus Lexware" in page
 
-    without_numbers = client.get(f"/rechnungen/datev/{year}.csv")
-    assert "Berater- und Mandantennummer fehlen" in without_numbers.text
+    without_numbers = client.get(
+        f"/rechnungen/datev/{year}.csv", follow_redirects=False
+    )
+    assert without_numbers.status_code == 303
+    assert without_numbers.headers["location"] == "/rechnungen"
+    assert "Berater- und Mandantennummer fehlen" in client.get("/rechnungen").text
 
     client.post(
         "/einstellungen/datev",
-        data={"datev_advisor_number": "12345", "datev_client_number": "678"},
+        data={
+            "datev_advisor_number": "12345",
+            "datev_client_number": "678",
+            "datev_format_version": "12",
+        },
     )
+    assert f"/rechnungen/datev/{year}.csv" in client.get("/rechnungen").text
+
     answer = client.get(f"/rechnungen/datev/{year}.csv")
     assert answer.status_code == 200
     assert answer.headers["content-disposition"] == (
@@ -724,6 +736,68 @@ def test_the_year_can_be_downloaded_as_a_datev_booking_batch(
     )
     assert answer.content.startswith(b'"EXTF";700;21;"Buchungsstapel";12;')
     assert b";12345;678;" in answer.content
+
+
+def test_the_datev_settings_keep_the_numbers_and_the_format_version(
+    client: TestClient, location: Path
+) -> None:
+    client.post(
+        "/einstellungen/datev",
+        data={
+            "datev_advisor_number": "12345",
+            "datev_client_number": "678",
+            "datev_format_version": "13",
+        },
+    )
+
+    with Session(InvoiceDatabase(location).open()) as session:
+        settings = session.exec(select(AppSettings)).one()
+        assert settings.datev_advisor_number == 12345
+        assert settings.datev_client_number == 678
+        assert settings.datev_format_version == 13
+
+
+def test_a_rejected_datev_number_leaves_the_stored_ones_alone(
+    client: TestClient, location: Path
+) -> None:
+    client.post(
+        "/einstellungen/datev",
+        data={
+            "datev_advisor_number": "12345",
+            "datev_client_number": "678",
+            "datev_format_version": "12",
+        },
+    )
+
+    page = client.post(
+        "/einstellungen/datev",
+        data={
+            "datev_advisor_number": "12.345",
+            "datev_client_number": "4711",
+            "datev_format_version": "13",
+        },
+    ).text
+
+    assert "Die Beraternummer muss eine Zahl zwischen 1001 und 9999999 sein" in page
+    assert "es wurde nichts geändert" in page
+    with Session(InvoiceDatabase(location).open()) as session:
+        settings = session.exec(select(AppSettings)).one()
+        assert settings.datev_advisor_number == 12345
+        assert settings.datev_client_number == 678
+        assert settings.datev_format_version == 12
+
+
+def test_a_client_number_out_of_range_is_refused_by_name(client: TestClient) -> None:
+    page = client.post(
+        "/einstellungen/datev",
+        data={
+            "datev_advisor_number": "12345",
+            "datev_client_number": "100000",
+            "datev_format_version": "12",
+        },
+    ).text
+
+    assert "Die Mandantennummer muss eine Zahl zwischen 1 und 99999 sein" in page
 
 
 def test_the_customer_page_tells_the_whole_story(client: TestClient) -> None:

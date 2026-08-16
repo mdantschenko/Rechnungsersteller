@@ -9,6 +9,16 @@ from sqlmodel import Session, select
 from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import (
+    DATEV_ADVISOR_NUMBER_LABEL,
+    DATEV_ADVISOR_NUMBER_MAXIMUM,
+    DATEV_ADVISOR_NUMBER_MINIMUM,
+    DATEV_CLIENT_NUMBER_LABEL,
+    DATEV_CLIENT_NUMBER_MAXIMUM,
+    DATEV_CLIENT_NUMBER_MINIMUM,
+    DATEV_FORMAT_VERSION_CHOICES,
+    DATEV_FORMAT_VERSION_REJECTED_MESSAGE,
+    DATEV_NUMBER_REJECTED_MESSAGE,
+    DATEV_SETTINGS_SAVED_MESSAGE,
     GERMAN_FEDERAL_STATES,
     PAYMENT_DAYS_MAXIMUM,
     REMINDER_MINUTES_MAXIMUM,
@@ -46,6 +56,11 @@ class SettingsService:
             "states": GERMAN_FEDERAL_STATES,
             "chosen_states": HolidayCalendar.chosen_states(settings),
             "pending_password": PasswordGate(self._session).has_pending_change(),
+            "datev_format_versions": DATEV_FORMAT_VERSION_CHOICES,
+            "datev_advisor_minimum": DATEV_ADVISOR_NUMBER_MINIMUM,
+            "datev_advisor_maximum": DATEV_ADVISOR_NUMBER_MAXIMUM,
+            "datev_client_minimum": DATEV_CLIENT_NUMBER_MINIMUM,
+            "datev_client_maximum": DATEV_CLIENT_NUMBER_MAXIMUM,
         }
 
     def save_holidays(
@@ -207,18 +222,57 @@ class SettingsService:
         self._session.add(state)
         return f"Die nächste Rechnung bekommt Nummer {next_number}."
 
-    def save_datev_client(self, advisor_number: str, client_number: str) -> str:
-        """Remember the Lexware client the booking batch is booked into."""
+    def save_datev_export(
+        self, advisor_number: str, client_number: str, format_version: str
+    ) -> str:
+        """Remember the Lexware client and the format its import dialog wants.
+
+        An empty number field clears that number. Anything the DATEV file
+        could not carry — a number outside its range, an unknown format
+        version — leaves every stored value as it was and says so.
+        """
+        try:
+            advisor = self._datev_number(
+                advisor_number,
+                DATEV_ADVISOR_NUMBER_LABEL,
+                DATEV_ADVISOR_NUMBER_MINIMUM,
+                DATEV_ADVISOR_NUMBER_MAXIMUM,
+            )
+            client = self._datev_number(
+                client_number,
+                DATEV_CLIENT_NUMBER_LABEL,
+                DATEV_CLIENT_NUMBER_MINIMUM,
+                DATEV_CLIENT_NUMBER_MAXIMUM,
+            )
+            version = self._offered_format_version(format_version)
+        except ValueError as rejected:
+            return str(rejected)
         settings = self._store.app_settings()
-        settings.datev_advisor_number = self._whole_number_or_none(advisor_number)
-        settings.datev_client_number = self._whole_number_or_none(client_number)
+        settings.datev_advisor_number = advisor
+        settings.datev_client_number = client
+        settings.datev_format_version = version
         self._session.add(settings)
-        return "DATEV-Nummern gespeichert."
+        return DATEV_SETTINGS_SAVED_MESSAGE
 
     @staticmethod
-    def _whole_number_or_none(text: str) -> int | None:
-        digits = text.strip()
-        return int(digits) or None if digits.isdigit() else None
+    def _datev_number(text: str, label: str, minimum: int, maximum: int) -> int | None:
+        typed = text.strip()
+        if not typed:
+            return None
+        if typed.isdigit() and minimum <= int(typed) <= maximum:
+            return int(typed)
+        raise ValueError(
+            DATEV_NUMBER_REJECTED_MESSAGE.format(
+                label=label, minimum=minimum, maximum=maximum
+            )
+        )
+
+    @staticmethod
+    def _offered_format_version(text: str) -> int:
+        typed = text.strip()
+        if typed.isdigit() and int(typed) in DATEV_FORMAT_VERSION_CHOICES:
+            return int(typed)
+        raise ValueError(DATEV_FORMAT_VERSION_REJECTED_MESSAGE)
 
     def save_filing(self, invoice_folder: str, lesson_horizon_days: int) -> None:
         settings = self._store.app_settings()

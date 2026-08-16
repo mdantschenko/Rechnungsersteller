@@ -134,14 +134,15 @@ def save_numbering(
 
 
 @router.post("/einstellungen/datev")
-def save_datev_client(
+def save_datev_export(
     request: Request,
     datev_advisor_number: str = Form(""),
     datev_client_number: str = Form(""),
+    datev_format_version: str = Form(""),
     session: Session = Depends(database_session),
 ) -> Response:
-    notice = SettingsService(session).save_datev_client(
-        datev_advisor_number, datev_client_number
+    notice = SettingsService(session).save_datev_export(
+        datev_advisor_number, datev_client_number, datev_format_version
     )
     return notice_redirect(request, "/einstellungen", notice)
 

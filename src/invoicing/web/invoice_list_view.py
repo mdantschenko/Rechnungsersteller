@@ -53,6 +53,7 @@ class InvoiceListViewBuilder:
         composer = InvoiceMailComposer(self._session)
         signature = composer.issuer_name()
         earnings_rows, earnings_total = EarningsLedger(self._session).monthly_earnings()
+        settings = self._store.app_settings()
         return {
             "today": today,
             "due": self.open_billing_runs(today),
@@ -74,11 +75,12 @@ class InvoiceListViewBuilder:
             "customers": self._store.active_customers(),
             "earnings": earnings_rows,
             "earnings_total": earnings_total,
-            "overdue": self._overdue_days(
-                unpaid, self._store.app_settings().payment_days
-            ),
+            "overdue": self._overdue_days(unpaid, settings.payment_days),
             "paid_years": self._paid_years(issued),
             "issued_years": self._issued_years(issued),
+            "datev_numbers_are_set": bool(
+                settings.datev_advisor_number and settings.datev_client_number
+            ),
         }
 
     def _reminder_days(self) -> dict[int, list[date]]:
