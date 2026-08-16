@@ -19,12 +19,15 @@ try {
   if (thema) document.documentElement.dataset.theme = thema;
 } catch (ignored) {}
 </script>
-<link rel="stylesheet" href="/static/app.css?v={{ static_version }}">
+<link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
 </head>
 <body>
 <main class="sign-in">
   <h1 class="page-title">Kein Netz</h1>
-  <p>Diese Seite ist nicht gespeichert. Stunden abhaken und Rechnungen brauchen Internet.</p>
+  {% if unsaved %}
+  <p class="warn">Das Formular wurde nicht abgeschickt. Bitte trage es noch einmal ein, sobald du wieder Netz hast.</p>
+  {% endif %}
+  <p>Ohne Internet kann die App nichts zeigen. Auf dem Handy ist nichts gespeichert — Kalender, Kunden und Rechnungen liegen alle auf dem Server.</p>
   <div class="stack">
     <button class="button button-fill button-large" type="button" id="nochmal">Nochmal versuchen</button>
     <a class="button button-large" href="/">Zum Kalender</a>

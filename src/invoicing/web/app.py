@@ -17,6 +17,8 @@ from starlette.responses import RedirectResponse
 
 from invoicing.constant import (
     DEFAULT_DATABASE_LOCATION,
+    NO_STORE_CACHE_CONTROL,
+    NO_STORE_EXEMPT_PATHS,
     SIGN_IN_EXEMPT_PATHS,
     SIGNED_IN_SESSION_KEY,
     WEB_STATIC_DIRECTORY,
@@ -41,7 +43,8 @@ def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
     A free factory because uvicorn and the tests call it before any object
     exists. The sign-in guard is added before the session middleware:
     Starlette runs the last middleware added on the outside, so the guard
-    ends up inside the session cookie handling.
+    ends up inside the session cookie handling and the cache header ends up
+    around every answer, redirects included.
     """
     database = InvoiceDatabase(location)
     database.open()
@@ -57,6 +60,7 @@ def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
     app.state.database = database
     app.middleware("http")(_send_strangers_to_the_sign_in_page)
     app.add_middleware(SessionMiddleware, secret_key=secret, same_site="lax")
+    app.middleware("http")(_keep_customer_data_out_of_the_browser_cache)
     app.mount("/static", StaticFiles(directory=WEB_STATIC_DIRECTORY), name="static")
     for page in (
         sign_in,
@@ -80,3 +84,13 @@ async def _send_strangers_to_the_sign_in_page(
     ):
         return await call_next(request)
     return RedirectResponse("/anmelden", status_code=303)
+
+
+async def _keep_customer_data_out_of_the_browser_cache(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """A free function because Starlette calls middleware as a plain callable."""
+    answer = await call_next(request)
+    if not request.url.path.startswith(NO_STORE_EXEMPT_PATHS):
+        answer.headers["Cache-Control"] = NO_STORE_CACHE_CONTROL
+    return answer

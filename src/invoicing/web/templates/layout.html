@@ -20,7 +20,7 @@ try {
   if (thema) document.documentElement.dataset.theme = thema;
 } catch (ignored) {}
 </script>
-<link rel="stylesheet" href="/static/app.css?v={{ static_version }}">
+<link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
 <script>
 window.addEventListener("pageswap", function (event) {
   if (event.viewTransition && sessionStorage.getItem("nav-skip") === "1") {
@@ -90,7 +90,7 @@ window.addEventListener("pagereveal", function (event) {
     Einstellungen
   </a>
 </nav>
-<script src="/static/swipe.js?v={{ static_version }}"></script>
+<script src="/static/swipe.js?v={{ asset_version }}"></script>
 <script>
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
 </script>

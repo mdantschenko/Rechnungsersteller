@@ -489,6 +489,8 @@ DEFAULT_DATABASE_LOCATION = Path("data/invoicing.db")
 SIGN_IN_PATH = "/anmelden"
 OFFLINE_PATH = "/offline"
 OFFLINE_TEMPLATE_NAME = "offline.html"
+OFFLINE_UNSAVED_QUERY = "ungespeichert=1"
+OFFLINE_UNSAVED_PATH = f"{OFFLINE_PATH}?{OFFLINE_UNSAVED_QUERY}"
 SIGN_IN_EXEMPT_PATHS = (
     SIGN_IN_PATH,
     "/static",
@@ -507,7 +509,7 @@ PAYMENT_DAYS_MAXIMUM = 90
 REMINDER_MINUTES_MAXIMUM = 1440
 BACKUP_PASSPHRASE_LENGTH = 12
 
-# --- Offline cache ---
+# --- Offline shell ---
 
 SERVICE_WORKER_FILE_NAME = "sw.js"
 SERVICE_WORKER_PATH = "/sw.js"
@@ -515,34 +517,30 @@ SERVICE_WORKER_MEDIA_TYPE = "text/javascript"
 SERVICE_WORKER_CACHE_CONTROL = "no-cache"
 SERVICE_WORKER_SETTINGS_LINE = "self.APP_CACHE = {settings};\n"
 
-CACHE_STATIC_NAME_PATTERN = "rechnungen-statik-v{version}"
-CACHE_PAGES_NAME_PATTERN = "rechnungen-seiten-v{version}"
-CACHE_STATIC_PATH_PREFIXES = ("/static/", "/manifest.webmanifest")
-CACHE_NEVER_PATH_PREFIXES = (
-    SIGN_IN_PATH,
-    "/einstellungen",
-    "/push/",
-    SERVICE_WORKER_PATH,
-    "/rechnungen/vorschau",
-)
-CACHE_NEVER_PATH_SUFFIXES = (".pdf", ".zip", ".csv", ".png", "/ansehen")
-CACHE_VERSIONED_STATIC_PATHS = (
-    "/static/app.css",
-    "/static/swipe.js",
-    "/static/share-pdf.js",
-)
-CACHE_PLAIN_PRELOADED_PATHS = (
-    OFFLINE_PATH,
+ASSET_VERSION_FOLDERS = (WEB_STATIC_DIRECTORY, WEB_TEMPLATES_DIRECTORY)
+ASSET_VERSION_HEX_LENGTH = 12
+CACHE_SHELL_NAME_PATTERN = "rechnungen-geruest-v{version}"
+CACHE_ALLOWED_PATH_PREFIXES = ("/static/", "/manifest.webmanifest", OFFLINE_PATH)
+CACHE_REQUIRED_PLAIN_PATHS = (OFFLINE_PATH, OFFLINE_UNSAVED_PATH)
+CACHE_REQUIRED_VERSIONED_PATHS = ("/static/app.css",)
+CACHE_OPTIONAL_PLAIN_PATHS = (
     "/manifest.webmanifest",
     "/static/icon-180.png",
     "/static/icon-32.png",
     "/static/favicon.svg",
 )
+CACHE_OPTIONAL_VERSIONED_PATHS = ("/static/swipe.js", "/static/share-pdf.js")
 CACHE_VERSIONED_PATH_PATTERN = "{path}?v={version}"
-CACHE_PAGE_LIMIT = 20
-CACHE_NETWORK_TIMEOUT_MILLISECONDS = 4000
-CACHE_CLEAR_PAGES_MESSAGE = "seiten-cache-leeren"
 CACHE_OFFLINE_FALLBACK_TEXT = "Kein Netz"
+
+NO_STORE_CACHE_CONTROL = "no-store, private"
+NO_STORE_EXEMPT_PATHS = (
+    "/static",
+    "/manifest.webmanifest",
+    SERVICE_WORKER_PATH,
+    OFFLINE_PATH,
+)
+CLEAR_SITE_DATA_ON_SIGN_OUT = '"cache", "cookies", "storage"'
 
 PWA_MANIFEST = {
     "name": "Rechnungsersteller",

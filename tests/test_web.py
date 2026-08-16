@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from invoicing.constant import NO_STORE_CACHE_CONTROL
 from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
     AppSettings,
@@ -264,6 +265,7 @@ def test_releasing_writes_a_pdf_that_can_be_downloaded(client: TestClient) -> No
 
     assert downloaded.status_code == 200
     assert downloaded.content.startswith(b"%PDF")
+    assert downloaded.headers["cache-control"] == NO_STORE_CACHE_CONTROL
 
 
 def test_a_lesson_can_be_moved_and_shortened(

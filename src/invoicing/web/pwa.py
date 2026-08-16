@@ -42,8 +42,10 @@ def service_worker() -> Response:
 
 
 @router.get("/offline")
-def offline_page(request: Request) -> Response:
-    return template_renderer.render(request, OFFLINE_TEMPLATE_NAME, {})
+def offline_page(request: Request, ungespeichert: bool = False) -> Response:
+    return template_renderer.render(
+        request, OFFLINE_TEMPLATE_NAME, {"unsaved": ungespeichert}
+    )
 
 
 class PushSubscriptionPayload(BaseModel):

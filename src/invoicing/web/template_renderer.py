@@ -8,14 +8,11 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
-from invoicing.constant import (
-    CACHE_CLEAR_PAGES_MESSAGE,
-    WEB_TEMPLATES_DIRECTORY,
-)
+from invoicing.constant import WEB_TEMPLATES_DIRECTORY
 from invoicing.german_formatter import german_formatter
 from invoicing.german_template_filters import GermanTemplateFilters
 from invoicing.utils import recurrence_words
-from invoicing.web.static_version import STATIC_VERSION
+from invoicing.web.asset_version import ASSET_VERSION
 
 
 class GermanTemplateRenderer:
@@ -29,8 +26,7 @@ class GermanTemplateRenderer:
         environment.filters["long_weekday"] = german_formatter.long_weekday
         environment.filters["clock"] = german_formatter.clock
         environment.filters["serie"] = recurrence_words
-        environment.globals["static_version"] = STATIC_VERSION
-        environment.globals["cache_clear_message"] = CACHE_CLEAR_PAGES_MESSAGE
+        environment.globals["asset_version"] = ASSET_VERSION
 
     def render(
         self,

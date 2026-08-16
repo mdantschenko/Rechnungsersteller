@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlmodel import Session
 from starlette.responses import RedirectResponse, Response
 
-from invoicing.constant import SIGNED_IN_SESSION_KEY
+from invoicing.constant import CLEAR_SITE_DATA_ON_SIGN_OUT, SIGNED_IN_SESSION_KEY
 from invoicing.web.dependencies import database_session
 from invoicing.web.password_gate import PasswordGate
 from invoicing.web.template_renderer import template_renderer
@@ -36,4 +36,8 @@ def sign_in(
 @router.post("/abmelden")
 def sign_out(request: Request) -> Response:
     request.session.clear()
-    return RedirectResponse("/anmelden", status_code=303)
+    return RedirectResponse(
+        "/anmelden",
+        status_code=303,
+        headers={"Clear-Site-Data": CLEAR_SITE_DATA_ON_SIGN_OUT},
+    )

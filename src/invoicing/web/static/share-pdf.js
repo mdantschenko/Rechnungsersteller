@@ -3,7 +3,7 @@
    serves both paths. */
 
 async function pdfAsFile(url, title) {
-  var loaded = await fetch(url);
+  var loaded = await fetch(url, { cache: "no-store" });
   return new File([await loaded.blob()], title + ".pdf", {
     type: "application/pdf",
   });

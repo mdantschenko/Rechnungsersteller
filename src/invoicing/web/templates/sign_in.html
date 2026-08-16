@@ -19,7 +19,7 @@ try {
   if (thema) document.documentElement.dataset.theme = thema;
 } catch (ignored) {}
 </script>
-<link rel="stylesheet" href="/static/app.css?v={{ static_version }}">
+<link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
 </head>
 <body>
 <main class="sign-in">
@@ -34,10 +34,5 @@ try {
     <button class="button button-fill button-large" type="submit">Anmelden</button>
   </form>
 </main>
-<script>
-if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-  navigator.serviceWorker.controller.postMessage({ typ: "{{ cache_clear_message }}" });
-}
-</script>
 </body>
 </html>
