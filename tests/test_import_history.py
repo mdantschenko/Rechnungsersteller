@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlmodel import Session, col, select
 
-from invoicing.legacy.import_history import import_history
+from invoicing.legacy.import_history import HistoryImporter
 from invoicing.storage.database import open_database, session_for
 from invoicing.storage.models import (
     Customer,
@@ -22,7 +22,7 @@ def _imported(tmp_path: Path, document: str, name: str = "collected.md") -> Sess
     (archive / name).write_text(document, encoding="utf-8")
     engine = open_database(tmp_path / "invoicing.db")
     with session_for(engine) as session:
-        import_history(session, archive)
+        HistoryImporter(session).import_from(archive)
     return Session(engine)
 
 
@@ -95,9 +95,9 @@ def test_running_the_import_twice_changes_nothing(
     engine = open_database(tmp_path / "invoicing.db")
 
     with session_for(engine) as session:
-        first = import_history(session, archive)
+        first = HistoryImporter(session).import_from(archive)
     with session_for(engine) as session:
-        second = import_history(session, archive)
+        second = HistoryImporter(session).import_from(archive)
 
     assert first.imported == 2
     assert second.imported == 0
@@ -115,7 +115,7 @@ def test_reports_what_does_not_add_up(
     engine = open_database(tmp_path / "invoicing.db")
 
     with session_for(engine) as session:
-        report = import_history(session, archive)
+        report = HistoryImporter(session).import_from(archive)
 
     descriptions = " | ".join(anomaly.description for anomaly in report.anomalies)
     assert "printed total 53.33" in descriptions
@@ -132,7 +132,7 @@ def test_a_sound_document_produces_no_anomalies(
     engine = open_database(tmp_path / "invoicing.db")
 
     with session_for(engine) as session:
-        report = import_history(session, archive)
+        report = HistoryImporter(session).import_from(archive)
 
     assert report.anomalies == ()
     assert report.lowest_number == 12
@@ -158,7 +158,7 @@ def test_the_caller_can_say_where_numbering_continues(
     engine = open_database(tmp_path / "invoicing.db")
 
     with session_for(engine) as session:
-        import_history(session, archive, next_number=115)
+        HistoryImporter(session).import_from(archive, next_number=115)
 
     with Session(engine) as session:
         assert session.exec(select(NumberState)).one().start == 115

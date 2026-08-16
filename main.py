@@ -15,9 +15,9 @@ from invoicing.constant import (
 )
 from invoicing.data_classes import ImportReport, RevenueRow
 from invoicing.german_formatter import german_formatter
-from invoicing.legacy.import_history import import_history
+from invoicing.legacy.import_history import HistoryImporter
 from invoicing.pdf.invoice_document import write_pdf
-from invoicing.reports import revenue_rows, write_csv, yearly_totals
+from invoicing.reports import RevenueReport
 from invoicing.sample import SampleInvoice
 from invoicing.storage.database import open_database, session_for
 from invoicing.web.security import is_configured, set_password
@@ -38,17 +38,20 @@ def _render_sample(arguments: argparse.Namespace) -> None:
 def _import_history(arguments: argparse.Namespace) -> None:
     engine = open_database(arguments.database)
     with session_for(engine) as session:
-        report = import_history(session, arguments.directory, arguments.next_number)
+        report = HistoryImporter(session).import_from(
+            arguments.directory, arguments.next_number
+        )
     _describe_import(report)
 
 
 def _show_summary(arguments: argparse.Namespace) -> None:
     engine = open_database(arguments.database)
     with session_for(engine) as session:
-        rows = revenue_rows(session)
+        rows = RevenueReport(session).rows()
     _describe_revenue(rows)
     if arguments.csv is not None:
-        _report(f"\nWritten: {write_csv(rows, arguments.csv).resolve()}")
+        written = RevenueReport.write_csv(rows, arguments.csv)
+        _report(f"\nWritten: {written.resolve()}")
 
 
 def _describe_import(report: ImportReport) -> None:
@@ -86,7 +89,7 @@ def _describe_revenue(rows: Sequence[RevenueRow]) -> None:
             f"{german_formatter.format_euro(row.total):>12}"
         )
     _report("")
-    for year, total in sorted(yearly_totals(rows).items()):
+    for year, total in sorted(RevenueReport.yearly_totals(rows).items()):
         _report(
             f"{year}  {'total':<{width}}  {'':>3}   "
             f"{german_formatter.format_euro(total):>12}"

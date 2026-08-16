@@ -15,7 +15,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from invoicing.data_classes import Anomaly, ImportReport, ParsedInvoice
-from invoicing.legacy.markdown_invoices import read_archive
+from invoicing.legacy.markdown_invoices import MarkdownInvoiceArchiveReader
 from invoicing.storage.models import (
     Customer,
     CustomerStatus,
@@ -25,151 +25,155 @@ from invoicing.storage.models import (
 )
 
 
-def import_history(
-    session: Session,
-    directory: Path,
-    next_number: int | None = None,
-) -> ImportReport:
-    """Read every old invoice below ``directory`` and store what is new.
+class HistoryImporter:
+    """Stores the parsed old invoices that the database does not know yet."""
 
-    ``next_number`` sets where new invoices will continue. Left out, it becomes
-    one past the highest number found, which is only right if these documents
-    really are the most recent ones.
-    """
-    reading = read_archive(directory)
-    known = _numbers_already_stored(session)
-    customers_created = 0
-    imported = 0
-    anomalies: list[Anomaly] = []
+    def __init__(self, session: Session) -> None:
+        self._session = session
 
-    for parsed in reading.invoices:
-        anomalies.extend(_anomalies_in(parsed))
-        if parsed.number in known:
-            continue
-        customer = _find_customer(session, parsed.recipient.name)
-        if customer is None:
-            customer = _create_customer(session, parsed)
-            customers_created += 1
-        session.add(_as_issued_invoice(parsed, customer))
-        imported += 1
+    def import_from(
+        self, directory: Path, next_number: int | None = None
+    ) -> ImportReport:
+        """Read every old invoice below ``directory`` and store what is new.
 
-    numbers = [parsed.number for parsed in reading.invoices]
-    _remember_numbering(session, numbers, next_number)
+        ``next_number`` sets where new invoices will continue. Left out, it
+        becomes one past the highest number found, which is only right if these
+        documents really are the most recent ones.
+        """
+        reading = MarkdownInvoiceArchiveReader().read_archive(directory)
+        known = self._numbers_already_stored()
+        customers_created = 0
+        imported = 0
+        anomalies: list[Anomaly] = []
 
-    return ImportReport(
-        imported=imported,
-        already_known=len(reading.invoices) - imported,
-        customers_created=customers_created,
-        lowest_number=min(numbers, default=None),
-        highest_number=max(numbers, default=None),
-        conflicts=reading.conflicts,
-        anomalies=tuple(anomalies),
-    )
+        for parsed in reading.invoices:
+            anomalies.extend(self._anomalies_in(parsed))
+            if parsed.number in known:
+                continue
+            customer = self._find_customer(parsed.recipient.name)
+            if customer is None:
+                customer = self._create_customer(parsed)
+                customers_created += 1
+            self._session.add(self._as_issued_invoice(parsed, customer))
+            imported += 1
 
+        numbers = [parsed.number for parsed in reading.invoices]
+        self._remember_numbering(numbers, next_number)
 
-def _anomalies_in(parsed: ParsedInvoice) -> list[Anomaly]:
-    found: list[Anomaly] = []
-    if parsed.printed_total != parsed.computed_total:
-        found.append(
-            Anomaly(
-                parsed.number,
-                parsed.source_file,
-                f"printed total {parsed.printed_total} but the rows add up to "
-                f"{parsed.computed_total}",
-            )
+        return ImportReport(
+            imported=imported,
+            already_known=len(reading.invoices) - imported,
+            customers_created=customers_created,
+            lowest_number=min(numbers, default=None),
+            highest_number=max(numbers, default=None),
+            conflicts=reading.conflicts,
+            anomalies=tuple(anomalies),
         )
-    for line in parsed.lessons_outside_the_printed_period():
-        found.append(
-            Anomaly(
-                parsed.number,
-                parsed.source_file,
-                f"lesson on {line.taught_on:%d.%m.%Y} lies outside the stated "
-                f"period {parsed.printed_from:%d.%m.%Y} to "
-                f"{parsed.printed_to:%d.%m.%Y}",
+
+    @staticmethod
+    def _anomalies_in(parsed: ParsedInvoice) -> list[Anomaly]:
+        found: list[Anomaly] = []
+        if parsed.printed_total != parsed.computed_total:
+            found.append(
+                Anomaly(
+                    parsed.number,
+                    parsed.source_file,
+                    f"printed total {parsed.printed_total} but the rows add up to "
+                    f"{parsed.computed_total}",
+                )
             )
+        for line in parsed.lessons_outside_the_printed_period():
+            found.append(
+                Anomaly(
+                    parsed.number,
+                    parsed.source_file,
+                    f"lesson on {line.taught_on:%d.%m.%Y} lies outside the stated "
+                    f"period {parsed.printed_from:%d.%m.%Y} to "
+                    f"{parsed.printed_to:%d.%m.%Y}",
+                )
+            )
+        if parsed.issued_on < parsed.printed_to:
+            found.append(
+                Anomaly(
+                    parsed.number,
+                    parsed.source_file,
+                    f"dated {parsed.issued_on:%d.%m.%Y}, before its period ended on "
+                    f"{parsed.printed_to:%d.%m.%Y}",
+                )
+            )
+        return found
+
+    def _numbers_already_stored(self) -> set[int]:
+        return set(self._session.exec(select(IssuedInvoice.number)).all())
+
+    def _find_customer(self, name: str) -> Customer | None:
+        return self._session.exec(select(Customer).where(Customer.name == name)).first()
+
+    def _create_customer(self, parsed: ParsedInvoice) -> Customer:
+        customer = Customer(
+            name=parsed.recipient.name,
+            street=parsed.recipient.street,
+            city=parsed.recipient.city,
+            status=CustomerStatus.ARCHIVED,
         )
-    if parsed.issued_on < parsed.printed_to:
-        found.append(
-            Anomaly(
-                parsed.number,
-                parsed.source_file,
-                f"dated {parsed.issued_on:%d.%m.%Y}, before its period ended on "
-                f"{parsed.printed_to:%d.%m.%Y}",
-            )
+        self._session.add(customer)
+        self._session.flush()
+        return customer
+
+    @classmethod
+    def _as_issued_invoice(
+        cls, parsed: ParsedInvoice, customer: Customer
+    ) -> IssuedInvoice:
+        return IssuedInvoice(
+            number=parsed.number,
+            customer_id=cls._identity_of(customer),
+            issued_on=parsed.issued_on,
+            period_printed_from=parsed.printed_from,
+            period_printed_to=parsed.printed_to,
+            column_labels=(
+                [parsed.extra_column_label] if parsed.extra_column_label else []
+            ),
+            printed_total=parsed.printed_total,
+            computed_total=parsed.computed_total,
+            paid_on=parsed.paid_on,
+            source_file=parsed.source_file,
+            lines=[
+                IssuedInvoiceLine(
+                    ordinal=ordinal,
+                    taught_on=line.taught_on,
+                    quantity=line.quantity,
+                    unit=line.unit,
+                    description=line.description,
+                    unit_price=line.unit_price,
+                    extra_values=(
+                        {parsed.extra_column_label: line.extra_printed}
+                        if parsed.extra_column_label
+                        else {}
+                    ),
+                    total=line.total,
+                )
+                for ordinal, line in enumerate(parsed.lines)
+            ],
         )
-    return found
 
-
-def _numbers_already_stored(session: Session) -> set[int]:
-    return set(session.exec(select(IssuedInvoice.number)).all())
-
-
-def _find_customer(session: Session, name: str) -> Customer | None:
-    return session.exec(select(Customer).where(Customer.name == name)).first()
-
-
-def _create_customer(session: Session, parsed: ParsedInvoice) -> Customer:
-    customer = Customer(
-        name=parsed.recipient.name,
-        street=parsed.recipient.street,
-        city=parsed.recipient.city,
-        status=CustomerStatus.ARCHIVED,
-    )
-    session.add(customer)
-    session.flush()
-    return customer
-
-
-def _as_issued_invoice(parsed: ParsedInvoice, customer: Customer) -> IssuedInvoice:
-    return IssuedInvoice(
-        number=parsed.number,
-        customer_id=_identity_of(customer),
-        issued_on=parsed.issued_on,
-        period_printed_from=parsed.printed_from,
-        period_printed_to=parsed.printed_to,
-        column_labels=[parsed.extra_column_label] if parsed.extra_column_label else [],
-        printed_total=parsed.printed_total,
-        computed_total=parsed.computed_total,
-        paid_on=parsed.paid_on,
-        source_file=parsed.source_file,
-        lines=[
-            IssuedInvoiceLine(
-                ordinal=ordinal,
-                taught_on=line.taught_on,
-                quantity=line.quantity,
-                unit=line.unit,
-                description=line.description,
-                unit_price=line.unit_price,
-                extra_values=(
-                    {parsed.extra_column_label: line.extra_printed}
-                    if parsed.extra_column_label
-                    else {}
-                ),
-                total=line.total,
+    @staticmethod
+    def _identity_of(customer: Customer) -> int:
+        if customer.id is None:
+            raise ValueError(
+                f"customer {customer.name} was not written to the database"
             )
-            for ordinal, line in enumerate(parsed.lines)
-        ],
-    )
+        return customer.id
 
-
-def _identity_of(customer: Customer) -> int:
-    if customer.id is None:
-        raise ValueError(f"customer {customer.name} was not written to the database")
-    return customer.id
-
-
-def _remember_numbering(
-    session: Session, numbers: list[int], next_number: int | None
-) -> None:
-    if not numbers:
-        return
-    highest = max(numbers)
-    state = session.exec(select(NumberState)).first()
-    if state is None:
-        state = NumberState(start=next_number or highest + 1, last_assigned=highest)
-        session.add(state)
-        return
-    state.last_assigned = max(highest, state.last_assigned or highest)
-    if next_number is not None:
-        state.start = next_number
-    session.add(state)
+    def _remember_numbering(self, numbers: list[int], next_number: int | None) -> None:
+        if not numbers:
+            return
+        highest = max(numbers)
+        state = self._session.exec(select(NumberState)).first()
+        if state is None:
+            state = NumberState(start=next_number or highest + 1, last_assigned=highest)
+            self._session.add(state)
+            return
+        state.last_assigned = max(highest, state.last_assigned or highest)
+        if next_number is not None:
+            state.start = next_number
+        self._session.add(state)

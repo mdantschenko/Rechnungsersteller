@@ -1,10 +1,9 @@
 """Reading the invoices that were written before this application existed."""
 
-from invoicing.legacy.import_history import import_history
-from invoicing.legacy.markdown_invoices import read_archive, read_document
+from invoicing.legacy.import_history import HistoryImporter
+from invoicing.legacy.markdown_invoices import MarkdownInvoiceArchiveReader
 
 __all__ = [
-    "import_history",
-    "read_archive",
-    "read_document",
+    "HistoryImporter",
+    "MarkdownInvoiceArchiveReader",
 ]

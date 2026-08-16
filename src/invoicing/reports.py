@@ -26,48 +26,56 @@ from invoicing.german_formatter import german_formatter
 from invoicing.storage.models import Customer, IssuedInvoice
 
 
-def revenue_rows(session: Session) -> tuple[RevenueRow, ...]:
-    """Every year and customer that has invoices, oldest and A to Z first."""
-    counts: dict[tuple[int, str], int] = {}
-    totals: dict[tuple[int, str], Decimal] = {}
-    for invoice, customer in session.exec(
-        select(IssuedInvoice, Customer).where(IssuedInvoice.customer_id == Customer.id)
-    ):
-        key = (invoice.issued_on.year, customer.name)
-        counts[key] = counts.get(key, 0) + 1
-        totals[key] = totals.get(key, ZERO) + invoice.printed_total
-    return tuple(
-        RevenueRow(
-            year=year,
-            customer=name,
-            invoice_count=counts[year, name],
-            total=totals[year, name],
-        )
-        for year, name in sorted(counts)
-    )
+class RevenueReport:
+    """Summarises the stored invoices per year and customer."""
 
+    def __init__(self, session: Session) -> None:
+        self._session = session
 
-def yearly_totals(rows: Sequence[RevenueRow]) -> dict[int, Decimal]:
-    """The sum per year across all customers."""
-    totals: dict[int, Decimal] = {}
-    for row in rows:
-        totals[row.year] = totals.get(row.year, ZERO) + row.total
-    return totals
-
-
-def write_csv(rows: Sequence[RevenueRow], destination: Path) -> Path:
-    """Write the summary as a semicolon separated file, as German Excel expects."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.writer(handle, delimiter=";")
-        writer.writerow(REVENUE_CSV_HEADER)
-        for row in rows:
-            writer.writerow(
-                [
-                    row.year,
-                    row.customer,
-                    row.invoice_count,
-                    german_formatter.format_euro(row.total),
-                ]
+    def rows(self) -> tuple[RevenueRow, ...]:
+        """Every year and customer that has invoices, oldest and A to Z first."""
+        counts: dict[tuple[int, str], int] = {}
+        totals: dict[tuple[int, str], Decimal] = {}
+        for invoice, customer in self._session.exec(
+            select(IssuedInvoice, Customer).where(
+                IssuedInvoice.customer_id == Customer.id
             )
-    return destination
+        ):
+            key = (invoice.issued_on.year, customer.name)
+            counts[key] = counts.get(key, 0) + 1
+            totals[key] = totals.get(key, ZERO) + invoice.printed_total
+        return tuple(
+            RevenueRow(
+                year=year,
+                customer=name,
+                invoice_count=counts[year, name],
+                total=totals[year, name],
+            )
+            for year, name in sorted(counts)
+        )
+
+    @staticmethod
+    def yearly_totals(rows: Sequence[RevenueRow]) -> dict[int, Decimal]:
+        """The sum per year across all customers."""
+        totals: dict[int, Decimal] = {}
+        for row in rows:
+            totals[row.year] = totals.get(row.year, ZERO) + row.total
+        return totals
+
+    @staticmethod
+    def write_csv(rows: Sequence[RevenueRow], destination: Path) -> Path:
+        """Write the summary as a semicolon separated file, as German Excel expects."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.writer(handle, delimiter=";")
+            writer.writerow(REVENUE_CSV_HEADER)
+            for row in rows:
+                writer.writerow(
+                    [
+                        row.year,
+                        row.customer,
+                        row.invoice_count,
+                        german_formatter.format_euro(row.total),
+                    ]
+                )
+        return destination
