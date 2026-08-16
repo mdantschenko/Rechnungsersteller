@@ -31,11 +31,7 @@ from invoicing.data_classes import (
     ReleasedInvoice,
     TaughtLesson,
 )
-from invoicing.domain.billing_period import (
-    next_closing_day,
-    period_closing_on,
-    period_containing,
-)
+from invoicing.domain.billing_period import BillingCalendar
 from invoicing.domain.extra_column_rules import ExtraColumnRules
 from invoicing.domain.invoice import build_invoice, build_line_item, column_shares
 from invoicing.domain.invoice_numbers import NumberSequence
@@ -51,7 +47,7 @@ def draft_for(
 ) -> BillingRun:
     """Collect a customer's lessons for the period closing on ``closing_day``."""
     terms = _terms_of(session, customer)
-    period = period_closing_on(terms.cycle, closing_day)
+    period = BillingCalendar(terms.cycle).period_closing_on(closing_day)
     return _run(session, customer, terms, period, closing_day, issued_on)
 
 
@@ -119,15 +115,15 @@ def open_runs(
     oldest = _oldest_unbilled(session, customer)
     if oldest is None:
         return []
-    cycle = _terms_of(session, customer).cycle
+    calendar = BillingCalendar(_terms_of(session, customer).cycle)
     latest = last_closing_day(session, customer, today)
-    closing = next_closing_day(cycle, period_containing(cycle, oldest).last_day)
+    closing = calendar.next_closing_day(calendar.period_containing(oldest).last_day)
     runs: list[BillingRun] = []
     while closing <= latest:
         run = draft_for(session, customer, closing, today)
         if run.billable or run.unanswered:
             runs.append(run)
-        closing = next_closing_day(cycle, closing + ONE_DAY)
+        closing = calendar.next_closing_day(closing + ONE_DAY)
     return runs
 
 

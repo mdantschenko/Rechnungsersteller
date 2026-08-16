@@ -5,16 +5,13 @@ from datetime import date
 import pytest
 
 from invoicing.constant import BillingCycle
-from invoicing.domain.billing_period import (
-    is_closing_day,
-    next_closing_day,
-    period_closing_on,
-    period_containing,
-)
+from invoicing.domain.billing_period import BillingCalendar
 
 
 def test_month_start_covers_the_previous_calendar_month() -> None:
-    period = period_closing_on(BillingCycle.MONTH_START, date(2026, 8, 1))
+    period = BillingCalendar(BillingCycle.MONTH_START).period_closing_on(
+        date(2026, 8, 1)
+    )
 
     assert period.printed_from == date(2026, 7, 1)
     assert period.first_day == date(2026, 7, 1)
@@ -22,7 +19,9 @@ def test_month_start_covers_the_previous_calendar_month() -> None:
 
 
 def test_month_midpoint_runs_from_the_day_after_the_printed_start() -> None:
-    period = period_closing_on(BillingCycle.MONTH_MIDPOINT, date(2026, 7, 15))
+    period = BillingCalendar(BillingCycle.MONTH_MIDPOINT).period_closing_on(
+        date(2026, 7, 15)
+    )
 
     assert period.printed_from == date(2026, 6, 15)
     assert period.first_day == date(2026, 6, 16)
@@ -30,7 +29,9 @@ def test_month_midpoint_runs_from_the_day_after_the_printed_start() -> None:
 
 
 def test_both_ends_of_the_printed_range_are_billed() -> None:
-    period = period_closing_on(BillingCycle.MONTH_START, date(2026, 8, 1))
+    period = BillingCalendar(BillingCycle.MONTH_START).period_closing_on(
+        date(2026, 8, 1)
+    )
 
     assert period.covers(date(2026, 7, 1))
     assert period.covers(date(2026, 7, 31))
@@ -39,8 +40,9 @@ def test_both_ends_of_the_printed_range_are_billed() -> None:
 
 
 def test_a_lesson_on_the_boundary_belongs_to_the_period_ending_there() -> None:
-    ending_there = period_closing_on(BillingCycle.MONTH_MIDPOINT, date(2026, 7, 15))
-    starting_there = period_closing_on(BillingCycle.MONTH_MIDPOINT, date(2026, 8, 15))
+    calendar = BillingCalendar(BillingCycle.MONTH_MIDPOINT)
+    ending_there = calendar.period_closing_on(date(2026, 7, 15))
+    starting_there = calendar.period_closing_on(date(2026, 8, 15))
 
     assert ending_there.covers(date(2026, 7, 15))
     assert not starting_there.covers(date(2026, 7, 15))
@@ -51,15 +53,18 @@ def test_consecutive_periods_leave_no_gap_and_no_overlap() -> None:
         (BillingCycle.MONTH_START, date(2026, 7, 1), date(2026, 8, 1)),
         (BillingCycle.MONTH_MIDPOINT, date(2026, 7, 15), date(2026, 8, 15)),
     ]:
-        earlier = period_closing_on(cycle, first_close)
-        later = period_closing_on(cycle, second_close)
+        calendar = BillingCalendar(cycle)
+        earlier = calendar.period_closing_on(first_close)
+        later = calendar.period_closing_on(second_close)
 
         assert earlier.last_day.toordinal() + 1 == later.first_day.toordinal()
 
 
 def test_closing_on_a_day_that_closes_nothing_is_refused() -> None:
     with pytest.raises(ValueError, match="does not close"):
-        period_closing_on(BillingCycle.MONTH_MIDPOINT, date(2026, 6, 20))
+        BillingCalendar(BillingCycle.MONTH_MIDPOINT).period_closing_on(
+            date(2026, 6, 20)
+        )
 
 
 @pytest.mark.parametrize(
@@ -76,17 +81,23 @@ def test_closing_on_a_day_that_closes_nothing_is_refused() -> None:
 def test_finds_the_next_closing_day(
     cycle: BillingCycle, day: date, expected: date
 ) -> None:
-    assert next_closing_day(cycle, day) == expected
+    assert BillingCalendar(cycle).next_closing_day(day) == expected
 
 
 def test_recognises_closing_days() -> None:
-    assert is_closing_day(BillingCycle.MONTH_MIDPOINT, date(2026, 6, 15))
-    assert is_closing_day(BillingCycle.MONTH_START, date(2026, 6, 1))
+    assert BillingCalendar(BillingCycle.MONTH_MIDPOINT).is_closing_day(
+        date(2026, 6, 15)
+    )
+    assert BillingCalendar(BillingCycle.MONTH_START).is_closing_day(date(2026, 6, 1))
 
 
 def test_rejects_days_that_close_nothing() -> None:
-    assert not is_closing_day(BillingCycle.MONTH_MIDPOINT, date(2026, 6, 1))
-    assert not is_closing_day(BillingCycle.MONTH_START, date(2026, 6, 15))
+    assert not BillingCalendar(BillingCycle.MONTH_MIDPOINT).is_closing_day(
+        date(2026, 6, 1)
+    )
+    assert not BillingCalendar(BillingCycle.MONTH_START).is_closing_day(
+        date(2026, 6, 15)
+    )
 
 
 @pytest.mark.parametrize(
@@ -103,7 +114,7 @@ def test_rejects_days_that_close_nothing() -> None:
 def test_assigns_a_lesson_to_its_period(
     cycle: BillingCycle, lesson_date: date, expected_last_day: date
 ) -> None:
-    period = period_containing(cycle, lesson_date)
+    period = BillingCalendar(cycle).period_containing(lesson_date)
 
     assert period.last_day == expected_last_day
     assert period.covers(lesson_date)

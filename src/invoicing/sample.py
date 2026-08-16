@@ -20,7 +20,7 @@ from invoicing.data_classes import (
     Issuer,
     TaughtLesson,
 )
-from invoicing.domain.billing_period import period_closing_on
+from invoicing.domain.billing_period import BillingCalendar
 from invoicing.domain.invoice import build_invoice
 
 ISSUER = Issuer(
@@ -73,6 +73,8 @@ def sample_invoice(issuer: Issuer | None = None) -> Invoice:
         issuer=issuer or ISSUER,
         recipient=RECIPIENT,
         template=TEMPLATE,
-        period=period_closing_on(BillingCycle.MONTH_MIDPOINT, date(2026, 6, 15)),
+        period=BillingCalendar(BillingCycle.MONTH_MIDPOINT).period_closing_on(
+            date(2026, 6, 15)
+        ),
         lessons=LESSONS,
     )
