@@ -10,7 +10,7 @@ import pyzipper
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
-from invoicing import mail
+from invoicing.mail import SmtpMailer
 from invoicing.storage.models import (
     AppSettings,
     Customer,
@@ -60,7 +60,9 @@ def test_the_round_sends_due_invoices_and_reports(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     outbox: list[str] = []
-    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: outbox.append(str(k["to"])))
+    monkeypatch.setattr(
+        SmtpMailer, "send_pdf", lambda mailer, *a, **k: outbox.append(str(k["to"]))
+    )
     rung: list[dict[str, str]] = []
 
     morning_round(session, _settings(session), MORNING, rung.append)
@@ -74,7 +76,7 @@ def test_the_round_sends_due_invoices_and_reports(
 def test_without_the_switch_the_round_only_announces(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: pytest.fail("gesendet"))
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: pytest.fail("gesendet"))
     settings = _settings(session)
     settings.auto_send_invoices = False
     rung: list[dict[str, str]] = []
@@ -88,7 +90,7 @@ def test_without_the_switch_the_round_only_announces(
 def test_the_round_respects_the_clock_and_runs_once(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: None)
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
     rung: list[dict[str, str]] = []
 
     morning_round(
@@ -108,11 +110,11 @@ def test_monday_mails_a_sealed_backup(
 ) -> None:
     parcels: dict[str, object] = {}
 
-    def capture(settings: object, **parts: object) -> None:
+    def capture(mailer: SmtpMailer, **parts: object) -> None:
         parcels.update(parts)
 
-    monkeypatch.setattr(mail, "send_attachment", capture)
-    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: None)
+    monkeypatch.setattr(SmtpMailer, "send_attachment", capture)
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
     settings = _settings(session)
 
     morning_round(session, settings, datetime(2026, 6, 15, 7, 30), lambda m: None)
@@ -128,9 +130,11 @@ def test_other_days_mail_no_backup(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        mail, "send_attachment", lambda *a, **k: pytest.fail("Backup am Dienstag")
+        SmtpMailer,
+        "send_attachment",
+        lambda *a, **k: pytest.fail("Backup am Dienstag"),
     )
-    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: None)
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
 
     morning_round(session, _settings(session), MORNING, lambda m: None)
 
@@ -140,7 +144,7 @@ def test_other_days_mail_no_backup(
 def test_a_freshly_overdue_invoice_announces_itself(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(mail, "send_pdf", lambda *a, **k: None)
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
     rung: list[dict[str, str]] = []
     morning_round(session, _settings(session), MORNING, rung.append)
     record = session.exec(select(IssuedInvoice)).one()

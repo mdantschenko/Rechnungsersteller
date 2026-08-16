@@ -18,6 +18,7 @@ from invoicing.constant import (
     REMINDER_MINUTES_MAXIMUM,
 )
 from invoicing.data_classes import Issuer as DomainIssuer
+from invoicing.mail_error import MailError
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.sample import SampleInvoice
 from invoicing.storage.models import Issuer, NumberState
@@ -196,8 +197,8 @@ def send_test_invoice(
     request: Request, to: str = Form(...), session: Session = Depends(database)
 ) -> Response:
     """Render the sample invoice and send it to the given address."""
-    settings = settings_of(session)
-    if not mail.is_configured(settings):
+    mailer = mail.mailer_for(settings_of(session))
+    if not mailer.is_configured():
         return notice_redirect(
             request,
             "/einstellungen",
@@ -211,8 +212,7 @@ def send_test_invoice(
                 SampleInvoice.build(issuer),
                 Path(folder) / "Testrechnung.pdf",
             )
-            mail.send_pdf(
-                settings,
+            mailer.send_pdf(
                 sender_name=issuer.address.name if issuer else "",
                 to=to.strip(),
                 subject="Testrechnung aus dem Rechnungsersteller",
@@ -223,7 +223,7 @@ def send_test_invoice(
                 ),
                 pdf=pdf,
             )
-    except mail.MailError as error:
+    except MailError as error:
         return notice_redirect(request, "/einstellungen", str(error))
     return notice_redirect(
         request, "/einstellungen", f"Testrechnung an {to} geschickt."
@@ -288,14 +288,14 @@ def change_password(
     broken SMTP setting would lock the password forever.
     """
     settings = settings_of(session)
-    if not mail.is_configured(settings) or not security.is_configured(session):
+    mailer = mail.mailer_for(settings)
+    if not mailer.is_configured() or not security.is_configured(session):
         security.set_password(session, password)
         return notice_redirect(request, "/einstellungen", "Passwort geändert.")
     code = security.request_password_change(session, password)
     recipient = mailbox_address_of(settings)
     try:
-        mail.send_text(
-            settings,
+        mailer.send_text(
             to=recipient,
             subject="Bestätigungscode für die Passwortänderung",
             body=(
@@ -305,7 +305,7 @@ def change_password(
                 "hast, ändere das Passwort der Anwendung.\n"
             ),
         )
-    except mail.MailError as error:
+    except MailError as error:
         security.cancel_password_change(session)
         return notice_redirect(request, "/einstellungen", str(error))
     return notice_redirect(request, "/einstellungen", f"Code an {recipient} geschickt.")

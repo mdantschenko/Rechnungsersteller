@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import MORNING_ROUND_STARTS_AT, DeliverPushMessage
+from invoicing.mail_error import MailError
 from invoicing.pdf.invoice_document import write_pdf
 from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
 from invoicing.utils import (
@@ -67,6 +68,7 @@ def _send_due_invoices(
     sent = 0
     waiting = 0
     orchestrator = BillingRunOrchestrator(session)
+    mailer = mail.mailer_for(settings)
     for run in due_runs(session, today):
         if run.invoice is None and not run.is_blocked:
             continue
@@ -76,7 +78,7 @@ def _send_due_invoices(
             and run.invoice is not None
             and run.customer.delivery is InvoiceDelivery.EMAIL
             and run.customer.email
-            and mail.is_configured(settings)
+            and mailer.is_configured()
         )
         if not may_leave:
             waiting += 1
@@ -86,15 +88,14 @@ def _send_due_invoices(
         target = pdf_path(session, released.record, run.customer.name)
         write_pdf(released.document, target)
         try:
-            mail.send_pdf(
-                settings,
+            mailer.send_pdf(
                 to=run.customer.email or "",
                 subject=f"Rechnung Nr. {released.record.number}",
                 body=invoice_mail_body(session, released.record),
                 pdf=target,
                 sender_name=issuer_name(session),
             )
-        except mail.MailError:
+        except MailError:
             waiting += 1
             continue
         released.record.sent_on = today
@@ -108,7 +109,8 @@ def _mail_weekly_backup(session: Session, settings: AppSettings, today: date) ->
     never mean losing the books."""
     if today.weekday() != 0 or settings.last_backup_mailed == today:
         return False
-    if not mail.is_configured(settings):
+    mailer = mail.mailer_for(settings)
+    if not mailer.is_configured():
         return False
     database = Path(str(session.get_bind().engine.url.database or ""))
     if not database.exists():
@@ -117,8 +119,7 @@ def _mail_weekly_backup(session: Session, settings: AppSettings, today: date) ->
     session.add(settings)
     passphrase = ensure_backup_passphrase(session, settings)
     try:
-        mail.send_attachment(
-            settings,
+        mailer.send_attachment(
             to=mailbox_address_of(settings),
             subject=f"Datenbank-Backup {today:%d.%m.%Y}",
             body=(
@@ -130,7 +131,7 @@ def _mail_weekly_backup(session: Session, settings: AppSettings, today: date) ->
             file_name=f"invoicing-{today}.zip",
             subtype="zip",
         )
-    except mail.MailError:
+    except MailError:
         return False
     return True
 

@@ -22,6 +22,7 @@ from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import INVOICE_PDF_FILE_NAME_PATTERN
 from invoicing.data_classes import BillingRun
 from invoicing.german_formatter import german_formatter
+from invoicing.mail_error import MailError
 from invoicing.pdf import preview
 from invoicing.pdf.invoice_document import to_html, write_pdf
 from invoicing.storage.models import (
@@ -399,15 +400,14 @@ def send_invoice(
             request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
         )
     try:
-        mail.send_pdf(
-            settings_of(session),
+        mail.mailer_for(settings_of(session)).send_pdf(
             to=customer.email,
             subject=f"Rechnung Nr. {number}",
             body=invoice_mail_body(session, record),
             pdf=pdf,
             sender_name=issuer_name(session),
         )
-    except mail.MailError as error:
+    except MailError as error:
         return notice_redirect(request, "/rechnungen", str(error))
     record.sent_on = date.today()
     session.add(record)
@@ -532,15 +532,14 @@ def send_payment_reminder(
                 request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
             )
         try:
-            mail.send_pdf(
-                settings_of(session),
+            mail.mailer_for(settings_of(session)).send_pdf(
                 to=customer.email,
                 subject=f"Zahlungserinnerung zur Rechnung Nr. {number}",
                 body=_reminder_mail_body(session, record, count),
                 pdf=pdf,
                 sender_name=issuer_name(session),
             )
-        except mail.MailError as error:
+        except MailError as error:
             return notice_redirect(request, "/rechnungen", str(error))
         message = f"{count}. Erinnerung an {customer.email} geschickt."
     else:

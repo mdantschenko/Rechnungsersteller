@@ -586,10 +586,10 @@ def test_the_reminder_letter_can_be_the_customers_own(
 ) -> None:
     sent: dict[str, str] = {}
 
-    def capture(settings: object, **mail_parts: object) -> None:
+    def capture(mailer: object, **mail_parts: object) -> None:
         sent["body"] = str(mail_parts["body"])
 
-    monkeypatch.setattr("invoicing.web.invoices_page.mail.send_pdf", capture)
+    monkeypatch.setattr("invoicing.mail.SmtpMailer.send_pdf", capture)
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
     client.post(
@@ -1247,13 +1247,11 @@ def test_with_mail_set_up_the_password_waits_for_the_code(
 ) -> None:
     sent: dict[str, str] = {}
 
-    def capture(
-        settings: object, to: str, subject: str, body: str, **_: object
-    ) -> None:
+    def capture(mailer: object, to: str, subject: str, body: str, **_: object) -> None:
         sent["to"] = to
         sent["code"] = body.split("Code lautet: ")[1].split("\n")[0]
 
-    monkeypatch.setattr("invoicing.web.settings_page.mail.send_text", capture)
+    monkeypatch.setattr("invoicing.mail.SmtpMailer.send_text", capture)
     _configure_mail(client)
     client.post("/einstellungen/passwort", data={"password": "noch-ein-passwort"})
 
@@ -1280,9 +1278,7 @@ def test_with_mail_set_up_the_password_waits_for_the_code(
 def test_a_wrong_code_changes_nothing(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "invoicing.web.settings_page.mail.send_text", lambda *a, **k: None
-    )
+    monkeypatch.setattr("invoicing.mail.SmtpMailer.send_text", lambda *a, **k: None)
     _configure_mail(client)
     client.post("/einstellungen/passwort", data={"password": "noch-ein-passwort"})
 
