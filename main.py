@@ -16,10 +16,10 @@ from invoicing.constant import (
 from invoicing.data_classes import ImportReport, RevenueRow
 from invoicing.german_formatter import german_formatter
 from invoicing.legacy.import_history import HistoryImporter
-from invoicing.pdf.invoice_document import write_pdf
+from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.reports import RevenueReport
 from invoicing.sample import SampleInvoice
-from invoicing.storage.database import open_database, session_for
+from invoicing.storage.database import InvoiceDatabase
 from invoicing.web.security import is_configured, set_password
 
 
@@ -29,15 +29,14 @@ def main() -> None:
 
 
 def _render_sample(arguments: argparse.Namespace) -> None:
-    written_to = write_pdf(
-        SampleInvoice.build(), arguments.destination, arguments.renderer
+    written_to = InvoiceDocumentWriter(arguments.renderer).write_pdf(
+        SampleInvoice.build(), arguments.destination
     )
     _report(f"Written: {written_to.resolve()}")
 
 
 def _import_history(arguments: argparse.Namespace) -> None:
-    engine = open_database(arguments.database)
-    with session_for(engine) as session:
+    with InvoiceDatabase(arguments.database).session() as session:
         report = HistoryImporter(session).import_from(
             arguments.directory, arguments.next_number
         )
@@ -45,8 +44,7 @@ def _import_history(arguments: argparse.Namespace) -> None:
 
 
 def _show_summary(arguments: argparse.Namespace) -> None:
-    engine = open_database(arguments.database)
-    with session_for(engine) as session:
+    with InvoiceDatabase(arguments.database).session() as session:
         rows = RevenueReport(session).rows()
     _describe_revenue(rows)
     if arguments.csv is not None:
@@ -97,8 +95,7 @@ def _describe_revenue(rows: Sequence[RevenueRow]) -> None:
 
 
 def _set_password(arguments: argparse.Namespace) -> None:
-    engine = open_database(arguments.database)
-    with session_for(engine) as session:
+    with InvoiceDatabase(arguments.database).session() as session:
         set_password(session, arguments.password)
     _report("Password set. Start the app with: uv run python main.py serve")
 
@@ -108,8 +105,7 @@ def _serve(arguments: argparse.Namespace) -> None:
 
     from invoicing.web import create_app
 
-    engine = open_database(arguments.database)
-    with session_for(engine) as session:
+    with InvoiceDatabase(arguments.database).session() as session:
         if not is_configured(session):
             _report("No password set yet. Run: uv run python main.py set-password ...")
             return

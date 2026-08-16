@@ -11,7 +11,6 @@ import zipfile
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlmodel import Session, col, select
@@ -23,8 +22,7 @@ from invoicing.constant import INVOICE_PDF_FILE_NAME_PATTERN
 from invoicing.data_classes import BillingRun
 from invoicing.german_formatter import german_formatter
 from invoicing.mail_error import MailError
-from invoicing.pdf import preview
-from invoicing.pdf.invoice_document import to_html, write_pdf
+from invoicing.pdf import InvoiceDocumentWriter, PdfPreview
 from invoicing.storage.models import (
     Customer,
     CustomerStatus,
@@ -184,7 +182,9 @@ def release_manual_invoice(
         )
     released = orchestrator.release(run)
     session.flush()
-    write_pdf(released.document, pdf_path(session, released.record, customer.name))
+    InvoiceDocumentWriter().write_pdf(
+        released.document, pdf_path(session, released.record, customer.name)
+    )
     return notice_redirect(
         request,
         "/rechnungen",
@@ -198,7 +198,7 @@ def view_invoice(
 ) -> Response:
     """The invoice's pages as images inside the app's own chrome."""
     path = _stored_pdf(session, number)
-    pages = preview.page_count(path) if path else 0
+    pages = PdfPreview(path).page_count() if path else 0
     return templates.TemplateResponse(
         request,
         "pdf_view.html",
@@ -218,7 +218,7 @@ def invoice_page_image(
     number: int, index: int, session: Session = Depends(database)
 ) -> Response:
     path = _stored_pdf(session, number)
-    image = preview.page_png(path, index) if path else None
+    image = PdfPreview(path).page_png(index) if path else None
     if image is None:
         raise HTTPException(status_code=404)
     return Response(image, media_type="image/png")
@@ -339,7 +339,10 @@ def _draft_html(run: BillingRun) -> Response:
             detail="In diesem Zeitraum gibt es keine fertige Rechnung — offene "
             "Termine beantworten oder Stunden abhaken.",
         )
-    return Response(to_html(run.invoice), media_type="text/html; charset=utf-8")
+    return Response(
+        InvoiceDocumentWriter().to_html(run.invoice),
+        media_type="text/html; charset=utf-8",
+    )
 
 
 def _draft_pdf(run: BillingRun) -> Response:
@@ -349,11 +352,8 @@ def _draft_pdf(run: BillingRun) -> Response:
             detail="In diesem Zeitraum gibt es keine fertige Rechnung — offene "
             "Termine beantworten oder Stunden abhaken.",
         )
-    with TemporaryDirectory() as folder:
-        rendered = write_pdf(run.invoice, Path(folder) / "Vorschau.pdf")
-        content = rendered.read_bytes()
     return Response(
-        content,
+        InvoiceDocumentWriter().pdf_bytes(run.invoice),
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="Vorschau.pdf"'},
     )
@@ -370,7 +370,9 @@ def release_invoice(
     run = orchestrator.draft_for(customer, closing_day, date.today())
     released = orchestrator.release(run)
     session.flush()
-    write_pdf(released.document, pdf_path(session, released.record, customer.name))
+    InvoiceDocumentWriter().write_pdf(
+        released.document, pdf_path(session, released.record, customer.name)
+    )
     return RedirectResponse("/rechnungen", status_code=303)
 
 

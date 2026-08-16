@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from fastapi import APIRouter, Depends, Form, Request
 from sqlmodel import Session, select
@@ -21,7 +19,7 @@ from invoicing.data_classes import Issuer as DomainIssuer
 from invoicing.feiertage import HolidayCalendar
 from invoicing.holiday_fetch_error import HolidayFetchError
 from invoicing.mail_error import MailError
-from invoicing.pdf.invoice_document import write_pdf
+from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.sample import SampleInvoice
 from invoicing.storage.models import Issuer, NumberState
 from invoicing.utils import (
@@ -209,22 +207,19 @@ def send_test_invoice(
         )
     issuer = _real_issuer(session)
     try:
-        with TemporaryDirectory() as folder:
-            pdf = write_pdf(
-                SampleInvoice.build(issuer),
-                Path(folder) / "Testrechnung.pdf",
-            )
-            mailer.send_pdf(
-                sender_name=issuer.address.name if issuer else "",
-                to=to.strip(),
-                subject="Testrechnung aus dem Rechnungsersteller",
-                body=(
-                    "Guten Tag,\n\n"
-                    "dies ist eine Testrechnung mit erfundenen Daten. Wenn sie "
-                    "ankommt, ist der E-Mail-Versand fertig eingerichtet.\n"
-                ),
-                pdf=pdf,
-            )
+        mailer.send_attachment(
+            sender_name=issuer.address.name if issuer else "",
+            to=to.strip(),
+            subject="Testrechnung aus dem Rechnungsersteller",
+            body=(
+                "Guten Tag,\n\n"
+                "dies ist eine Testrechnung mit erfundenen Daten. Wenn sie "
+                "ankommt, ist der E-Mail-Versand fertig eingerichtet.\n"
+            ),
+            content=InvoiceDocumentWriter().pdf_bytes(SampleInvoice.build(issuer)),
+            file_name="Testrechnung.pdf",
+            subtype="pdf",
+        )
     except MailError as error:
         return notice_redirect(request, "/einstellungen", str(error))
     return notice_redirect(

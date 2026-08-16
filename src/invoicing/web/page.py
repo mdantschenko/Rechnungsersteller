@@ -10,7 +10,6 @@ from sqlmodel import Session, col, select
 
 from invoicing.constant import WEB_STATIC_DIRECTORY, WEB_TEMPLATES_DIRECTORY
 from invoicing.german_formatter import german_formatter
-from invoicing.storage.database import session_for
 from invoicing.storage.models import AppSettings, Customer, CustomerStatus, LessonSeries
 from invoicing.templating import GermanTemplateFilters
 from invoicing.utils import recurrence_label, recurrence_words
@@ -35,7 +34,7 @@ templates.env.globals["static_version"] = _static_version()
 
 def database(request: Request) -> Iterator[Session]:
     """A session that commits when the request finishes without an error."""
-    with session_for(request.app.state.engine) as session:
+    with request.app.state.database.session() as session:
         yield session
 
 

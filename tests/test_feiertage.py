@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from invoicing.feiertage import HolidayCalendar
-from invoicing.storage.database import open_database
+from invoicing.storage.database import InvoiceDatabase
 from invoicing.storage.models import AppSettings, SchoolHoliday
 
 
@@ -31,7 +31,7 @@ def test_public_holidays_know_allerheiligen() -> None:
 
 
 def test_school_holidays_cover_every_day_of_a_stretch(tmp_path: Path) -> None:
-    engine = open_database(tmp_path / "test.db")
+    engine = InvoiceDatabase(tmp_path / "test.db").open()
     with Session(engine) as session:
         session.add(
             SchoolHoliday(
@@ -53,7 +53,7 @@ def test_school_holidays_cover_every_day_of_a_stretch(tmp_path: Path) -> None:
 
 
 def test_refreshing_replaces_the_cache(tmp_path: Path) -> None:
-    engine = open_database(tmp_path / "test.db")
+    engine = InvoiceDatabase(tmp_path / "test.db").open()
 
     def fake_fetch(state: str, first: date, last: date) -> list[dict]:
         return [

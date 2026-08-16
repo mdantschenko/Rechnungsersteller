@@ -16,8 +16,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import Engine
-from sqlmodel import Session
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
@@ -30,7 +28,7 @@ from invoicing.constant import (
     WEB_STATIC_DIRECTORY,
 )
 from invoicing.push import WebPushSender
-from invoicing.storage.database import open_database
+from invoicing.storage.database import InvoiceDatabase
 from invoicing.web import (
     calendar_page,
     customers_page,
@@ -47,8 +45,9 @@ from invoicing.web.security import signing_key
 
 def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
     """Build the application against the database at ``location``."""
-    engine = open_database(location)
-    with Session(engine) as session:
+    database = InvoiceDatabase(location)
+    database.open()
+    with database.session() as session:
         secret = signing_key(session)
 
     app = FastAPI(
@@ -57,7 +56,7 @@ def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
         redoc_url=None,
         lifespan=_with_ticking_alarm_clock,
     )
-    app.state.engine = engine
+    app.state.database = database
     # Starlette runs the last middleware added on the outside, so the guard is
     # registered first in order to run inside the session cookie handling.
     app.middleware("http")(_send_strangers_to_the_sign_in_page)
@@ -78,30 +77,29 @@ def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
 
 @asynccontextmanager
 async def _with_ticking_alarm_clock(app: FastAPI) -> AsyncGenerator[None]:
-    ticking = asyncio.create_task(_ring_forever(app.state.engine))
+    ticking = asyncio.create_task(_ring_forever(app.state.database))
     yield
     ticking.cancel()
     with suppress(asyncio.CancelledError):
         await ticking
 
 
-async def _ring_forever(engine: Engine) -> None:
+async def _ring_forever(database: InvoiceDatabase) -> None:
     while True:
         try:
-            await asyncio.to_thread(_ring_once, engine)
+            await asyncio.to_thread(_ring_once, database)
         except Exception:
             logging.getLogger(__name__).exception("Weckrunde fehlgeschlagen")
         await asyncio.sleep(ALARM_CHECK_INTERVAL_SECONDS)
 
 
-def _ring_once(engine: Engine) -> None:
-    with Session(engine) as session:
+def _ring_once(database: InvoiceDatabase) -> None:
+    with database.session() as session:
         settings = settings_of(session)
         now = datetime.now()
         send = WebPushSender(session, settings).send_to_all
         LessonAlarmClock(session, settings, send).ring_all_due(now)
         daily.morning_round(session, settings, now, send)
-        session.commit()
 
 
 async def _send_strangers_to_the_sign_in_page(

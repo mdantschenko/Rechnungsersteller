@@ -16,7 +16,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session
 
 from invoicing.constant import BillingCycle, TotalRule, ValueSource
-from invoicing.storage.database import open_database
+from invoicing.storage.database import InvoiceDatabase
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -123,7 +123,7 @@ def archive(tmp_path: Path, collected_document: str) -> Path:
 @pytest.fixture
 def engine(tmp_path: Path) -> Engine:
     """An empty database with the schema brought up to date."""
-    return open_database(tmp_path / "invoicing.db")
+    return InvoiceDatabase(tmp_path / "invoicing.db").open()
 
 
 @pytest.fixture

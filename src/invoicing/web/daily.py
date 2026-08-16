@@ -17,7 +17,7 @@ from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import MORNING_ROUND_STARTS_AT, DeliverPushMessage
 from invoicing.mail_error import MailError
-from invoicing.pdf.invoice_document import write_pdf
+from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
 from invoicing.utils import (
     ensure_backup_passphrase,
@@ -86,7 +86,7 @@ def _send_due_invoices(
         released = orchestrator.release(run)
         session.flush()
         target = pdf_path(session, released.record, run.customer.name)
-        write_pdf(released.document, target)
+        InvoiceDocumentWriter().write_pdf(released.document, target)
         try:
             mailer.send_pdf(
                 to=run.customer.email or "",

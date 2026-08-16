@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from invoicing.storage.database import open_database
+from invoicing.storage.database import InvoiceDatabase
 from invoicing.storage.models import (
     AppSettings,
     IssuedInvoice,
@@ -26,7 +26,7 @@ PASSWORD = "ein-gutes-passwort"
 @pytest.fixture
 def location(tmp_path: Path) -> Path:
     place = tmp_path / "invoicing.db"
-    engine = open_database(place)
+    engine = InvoiceDatabase(place).open()
     with Session(engine) as session:
         set_password(session, PASSWORD)
         settings = session.exec(select(AppSettings)).one()
@@ -160,7 +160,7 @@ def test_an_answer_can_be_taken_back(client: TestClient, location: Path) -> None
     client.post(f"/termine/{lesson_id}/ausgefallen", data={"back": "/"})
     client.post(f"/termine/{lesson_id}/offen", data={"back": "/"})
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         lesson = session.get(Lesson, lesson_id)
         assert lesson is not None
         assert lesson.status.value == "planned"
@@ -175,7 +175,7 @@ def test_a_lesson_can_be_deleted_until_it_is_billed(
 
     client.post(f"/termine/{lesson_id}/loeschen", data={"back": "/"})
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         assert session.get(Lesson, lesson_id) is None
 
 
@@ -219,7 +219,7 @@ def test_a_series_fills_the_lesson_list(client: TestClient, location: Path) -> N
 
     assert client.get("/").status_code == 200
     assert "Jeden Montag" in client.get(f"/kunden/{customer_id}").text
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         assert session.exec(select(Lesson)).all()
 
 
@@ -315,7 +315,7 @@ def test_a_lesson_can_be_moved_and_shortened(
     client.post(f"/termine/{lesson_id}/verschieben", data={"taught_on": "2026-05-27"})
     client.post(f"/termine/{lesson_id}/stunden", data={"quantity": "1.5"})
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         lesson = session.get(Lesson, lesson_id)
         assert lesson is not None
         assert lesson.taught_on == date(2026, 5, 27)
@@ -364,7 +364,7 @@ def test_a_whitespace_password_does_not_replace_the_stored_one(
         },
     )
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         settings = session.exec(select(AppSettings)).one()
         assert settings.smtp_password == "geheim"
 
@@ -385,7 +385,7 @@ def test_the_mail_account_can_be_deleted_again(
 
     client.post("/einstellungen/email-loeschen")
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         settings = session.exec(select(AppSettings)).one()
         assert settings.smtp_password is None
         assert settings.smtp_host is None
@@ -513,7 +513,7 @@ def test_an_unpaid_invoice_past_the_due_date_is_flagged(
     )
     assert "überfällig" not in client.get("/rechnungen").text
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         record = session.exec(select(IssuedInvoice)).one()
         record.issued_on = date.today() - timedelta(days=30)
         session.add(record)
@@ -572,7 +572,7 @@ def test_a_reminder_is_recorded_and_counted(client: TestClient, location: Path) 
     assert "2. Erinnerung" in page
     assert "Erneut erinnern" not in page
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         record = session.exec(select(IssuedInvoice)).one()
         record.issued_on = date.today() - timedelta(days=30)
         session.add(record)
@@ -645,7 +645,7 @@ def test_a_customer_without_invoices_can_be_deleted(
     page = client.post(f"/kunden/{customer_id}/loeschen").text
 
     assert "gelöscht" in page
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         assert session.exec(select(Lesson)).all() == []
 
 
@@ -794,7 +794,7 @@ def test_a_series_can_be_reshaped_from_today_on(
     )
 
     assert "Jeden Mittwoch" in client.get(f"/kunden/{customer_id}").text
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         future = [
             lesson
             for lesson in session.exec(select(Lesson)).all()
@@ -829,7 +829,7 @@ def test_a_device_can_subscribe_to_the_alarm(
     )
 
     assert answer.status_code == 204
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         stored = session.exec(select(PushSubscription)).one()
         assert stored.endpoint == "https://push.example.com/geraet-1"
 
@@ -844,13 +844,13 @@ def test_opening_a_day_silences_its_alarms(client: TestClient, location: Path) -
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
     lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         session.add(LessonAlarm(lesson_id=lesson_id, rings=1))
         session.commit()
 
     client.get("/tag/2026-05-20")
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         assert session.exec(select(LessonAlarm)).one().acknowledged
 
 
@@ -914,7 +914,7 @@ def test_holidays_appear_once_a_state_is_chosen(
     ).text
 
     assert "Gespeichert" in page
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         assert session.exec(select(AppSettings)).one().holiday_states == "NW"
     assert "is-holiday" in client.get("/kalender/2026/11").text
 
@@ -1156,7 +1156,7 @@ def test_the_custom_letter_fills_its_placeholders(
         f"/rechnungen/{customer_id}/freigeben", data={"closing_day": "2026-06-15"}
     )
 
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         record = session.exec(select(IssuedInvoice)).one()
         body = invoice_mail_body(session, record)
 
@@ -1182,7 +1182,7 @@ def test_the_reminder_clock_time_is_kept(client: TestClient) -> None:
 def test_the_settings_show_the_true_next_number(
     client: TestClient, location: Path
 ) -> None:
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         state = session.exec(select(NumberState)).one()
         state.last_assigned = 119
         session.add(state)
@@ -1203,7 +1203,7 @@ def test_the_next_number_can_be_moved_forward(client: TestClient) -> None:
 def test_an_already_assigned_number_is_refused(
     client: TestClient, location: Path
 ) -> None:
-    with Session(open_database(location)) as session:
+    with Session(InvoiceDatabase(location).open()) as session:
         state = session.exec(select(NumberState)).one()
         state.last_assigned = 119
         session.add(state)

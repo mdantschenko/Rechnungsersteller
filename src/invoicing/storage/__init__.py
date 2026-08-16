@@ -1,6 +1,6 @@
 """Persistence: the tables, and how the database file is opened."""
 
-from invoicing.storage.database import open_database, session_for
+from invoicing.storage.database import InvoiceDatabase
 from invoicing.storage.models import (
     BillingTemplate,
     Customer,
@@ -19,6 +19,7 @@ __all__ = [
     "BillingTemplate",
     "Customer",
     "CustomerStatus",
+    "InvoiceDatabase",
     "IssuedInvoice",
     "IssuedInvoiceLine",
     "Issuer",
@@ -27,6 +28,4 @@ __all__ = [
     "LessonStatus",
     "NumberState",
     "TemplateColumn",
-    "open_database",
-    "session_for",
 ]

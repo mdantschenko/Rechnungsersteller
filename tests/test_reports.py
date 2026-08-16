@@ -8,15 +8,16 @@ from sqlmodel import Session
 
 from invoicing.legacy.import_history import HistoryImporter
 from invoicing.reports import RevenueReport
-from invoicing.storage.database import open_database, session_for
+from invoicing.storage.database import InvoiceDatabase
 
 
 def _stored(tmp_path: Path, document: str) -> Session:
     archive = tmp_path / "archive"
     archive.mkdir()
     (archive / "collected.md").write_text(document, encoding="utf-8")
-    engine = open_database(tmp_path / "invoicing.db")
-    with session_for(engine) as session:
+    database = InvoiceDatabase(tmp_path / "invoicing.db")
+    engine = database.open()
+    with database.session() as session:
         HistoryImporter(session).import_from(archive)
     return Session(engine)
 
@@ -51,7 +52,7 @@ def test_adds_the_years_up(tmp_path: Path, collected_document: str) -> None:
 
 
 def test_an_empty_database_reports_nothing(tmp_path: Path) -> None:
-    with Session(open_database(tmp_path / "invoicing.db")) as session:
+    with Session(InvoiceDatabase(tmp_path / "invoicing.db").open()) as session:
         assert RevenueReport(session).rows() == ()
 
 

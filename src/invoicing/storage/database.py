@@ -19,28 +19,36 @@ from sqlmodel import Session, create_engine
 from invoicing.constant import DATABASE_MIGRATIONS_DIRECTORY, DEFAULT_DATABASE_LOCATION
 
 
-def open_database(location: Path = DEFAULT_DATABASE_LOCATION) -> Engine:
-    """Open the database, creating and migrating the file when necessary."""
-    location.parent.mkdir(parents=True, exist_ok=True)
-    url = f"sqlite:///{location}"
-    command.upgrade(_alembic_config(url), "head")
-    return create_engine(url)
+class InvoiceDatabase:
+    """The database file: opening, migrating and handing out sessions."""
 
+    def __init__(self, location: Path = DEFAULT_DATABASE_LOCATION) -> None:
+        self._location = location
+        self._engine: Engine | None = None
 
-@contextmanager
-def session_for(engine: Engine) -> Iterator[Session]:
-    """A session that commits on success and rolls back on failure."""
-    with Session(engine) as session:
-        try:
-            yield session
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
+    def open(self) -> Engine:
+        """Open the database, creating and migrating the file when necessary."""
+        self._location.parent.mkdir(parents=True, exist_ok=True)
+        url = f"sqlite:///{self._location}"
+        command.upgrade(self._alembic_configuration(url), "head")
+        self._engine = create_engine(url)
+        return self._engine
 
+    @contextmanager
+    def session(self) -> Iterator[Session]:
+        """A session that commits on success and rolls back on failure."""
+        engine = self._engine if self._engine is not None else self.open()
+        with Session(engine) as session:
+            try:
+                yield session
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
-def _alembic_config(url: str) -> Config:
-    config = Config()
-    config.set_main_option("script_location", str(DATABASE_MIGRATIONS_DIRECTORY))
-    config.set_main_option("sqlalchemy.url", url)
-    return config
+    @staticmethod
+    def _alembic_configuration(url: str) -> Config:
+        config = Config()
+        config.set_main_option("script_location", str(DATABASE_MIGRATIONS_DIRECTORY))
+        config.set_main_option("sqlalchemy.url", url)
+        return config

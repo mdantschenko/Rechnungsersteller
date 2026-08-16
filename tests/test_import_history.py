@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlmodel import Session, col, select
 
 from invoicing.legacy.import_history import HistoryImporter
-from invoicing.storage.database import open_database, session_for
+from invoicing.storage.database import InvoiceDatabase
 from invoicing.storage.models import (
     Customer,
     CustomerStatus,
@@ -20,8 +20,9 @@ def _imported(tmp_path: Path, document: str, name: str = "collected.md") -> Sess
     archive = tmp_path / "archive"
     archive.mkdir()
     (archive / name).write_text(document, encoding="utf-8")
-    engine = open_database(tmp_path / "invoicing.db")
-    with session_for(engine) as session:
+    database = InvoiceDatabase(tmp_path / "invoicing.db")
+    engine = database.open()
+    with database.session() as session:
         HistoryImporter(session).import_from(archive)
     return Session(engine)
 
@@ -92,11 +93,12 @@ def test_running_the_import_twice_changes_nothing(
     archive = tmp_path / "archive"
     archive.mkdir()
     (archive / "collected.md").write_text(collected_document, encoding="utf-8")
-    engine = open_database(tmp_path / "invoicing.db")
+    database = InvoiceDatabase(tmp_path / "invoicing.db")
+    engine = database.open()
 
-    with session_for(engine) as session:
+    with database.session() as session:
         first = HistoryImporter(session).import_from(archive)
-    with session_for(engine) as session:
+    with database.session() as session:
         second = HistoryImporter(session).import_from(archive)
 
     assert first.imported == 2
@@ -112,9 +114,8 @@ def test_reports_what_does_not_add_up(
     archive = tmp_path / "archive"
     archive.mkdir()
     (archive / "wrong.md").write_text(self_contradicting_document, encoding="utf-8")
-    engine = open_database(tmp_path / "invoicing.db")
 
-    with session_for(engine) as session:
+    with InvoiceDatabase(tmp_path / "invoicing.db").session() as session:
         report = HistoryImporter(session).import_from(archive)
 
     descriptions = " | ".join(anomaly.description for anomaly in report.anomalies)
@@ -129,9 +130,8 @@ def test_a_sound_document_produces_no_anomalies(
     archive = tmp_path / "archive"
     archive.mkdir()
     (archive / "collected.md").write_text(collected_document, encoding="utf-8")
-    engine = open_database(tmp_path / "invoicing.db")
 
-    with session_for(engine) as session:
+    with InvoiceDatabase(tmp_path / "invoicing.db").session() as session:
         report = HistoryImporter(session).import_from(archive)
 
     assert report.anomalies == ()
@@ -155,9 +155,10 @@ def test_the_caller_can_say_where_numbering_continues(
     archive = tmp_path / "archive"
     archive.mkdir()
     (archive / "collected.md").write_text(collected_document, encoding="utf-8")
-    engine = open_database(tmp_path / "invoicing.db")
+    database = InvoiceDatabase(tmp_path / "invoicing.db")
+    engine = database.open()
 
-    with session_for(engine) as session:
+    with database.session() as session:
         HistoryImporter(session).import_from(archive, next_number=115)
 
     with Session(engine) as session:

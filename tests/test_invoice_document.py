@@ -19,7 +19,7 @@ import pytest
 from pdfplumber.page import Page
 
 from invoicing.data_classes import Address
-from invoicing.pdf.invoice_document import to_html, write_pdf
+from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.sample import SampleInvoice
 
 MILLIMETRE = 72 / 25.4
@@ -58,7 +58,7 @@ TABLE_BOTTOM_MM = 140.0
 @pytest.fixture(scope="module")
 def rendered_page(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Page]:
     destination = tmp_path_factory.mktemp("pdf") / "invoice.pdf"
-    write_pdf(SampleInvoice.build(), destination)
+    InvoiceDocumentWriter().write_pdf(SampleInvoice.build(), destination)
     with pdfplumber.open(destination) as document:
         assert len(document.pages) == 1
         yield document.pages[0]
@@ -125,7 +125,7 @@ def test_the_columns_keep_their_edges(rendered_page: Page) -> None:
 def test_a_settled_invoice_replaces_the_payment_terms() -> None:
     settled = replace(SampleInvoice.build(), paid_on=date(2026, 6, 20))
 
-    html = to_html(settled)
+    html = InvoiceDocumentWriter().to_html(settled)
 
     assert "wurde bereits am 20.06.2026 dankend erhalten" in html
     assert "Zahlungsbedingungen" not in html
@@ -137,7 +137,7 @@ def test_recipient_details_cannot_inject_markup() -> None:
         recipient=Address(name="<script>alert(1)</script>", street="a & b", city="X"),
     )
 
-    html = to_html(hostile)
+    html = InvoiceDocumentWriter().to_html(hostile)
 
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
@@ -145,7 +145,7 @@ def test_recipient_details_cannot_inject_markup() -> None:
 
 
 def test_the_document_carries_its_fonts_and_styles_inside_itself() -> None:
-    html = to_html(SampleInvoice.build())
+    html = InvoiceDocumentWriter().to_html(SampleInvoice.build())
 
     assert "data:font/ttf;base64," in html
     assert "<link" not in html
@@ -154,7 +154,7 @@ def test_the_document_carries_its_fonts_and_styles_inside_itself() -> None:
 def test_writing_creates_missing_directories(tmp_path: Path) -> None:
     destination = tmp_path / "does" / "not" / "exist" / "invoice.pdf"
 
-    written = write_pdf(SampleInvoice.build(), destination)
+    written = InvoiceDocumentWriter().write_pdf(SampleInvoice.build(), destination)
 
     assert written.exists()
 
