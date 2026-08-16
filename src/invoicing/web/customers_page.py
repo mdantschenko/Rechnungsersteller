@@ -38,12 +38,9 @@ from invoicing.utils import (
     planning_horizon,
 )
 from invoicing.web.earnings import monthly_earnings
-from invoicing.web.page import (
-    customer_of,
-    database,
-    settings_of,
-    templates,
-)
+from invoicing.web.page import database
+from invoicing.web.store_queries import StoreQueries
+from invoicing.web.template_renderer import template_renderer
 
 router = APIRouter()
 
@@ -51,7 +48,7 @@ router = APIRouter()
 @router.get("/kunden")
 def customer_list(request: Request, session: Session = Depends(database)) -> Response:
     everyone = session.exec(select(Customer).order_by(col(Customer.name))).all()
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "customers.html",
         {
@@ -93,9 +90,9 @@ def add_customer(
 def customer_detail(
     customer_id: int, request: Request, session: Session = Depends(database)
 ) -> Response:
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     earnings_rows, earnings_total = monthly_earnings(session, customer)
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "customer.html",
         {
@@ -197,7 +194,7 @@ def delete_customer(
     customer_id: int, request: Request, session: Session = Depends(database)
 ) -> Response:
     """Remove a customer for good — unless invoices depend on them."""
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     has_invoices = session.exec(
         select(IssuedInvoice).where(IssuedInvoice.customer_id == customer_id)
     ).first()
@@ -245,7 +242,7 @@ def save_customer(
     reminder_text: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     customer.name = name
     customer.street = street
     customer.city = city
@@ -389,7 +386,7 @@ def add_series(
 def _remember_reminder(session: Session, customer_id: int, reminder_at: str) -> None:
     """The reminder time lives on the customer: one wake-up call per pupil,
     however many series they have."""
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     customer.reminder_at = parse_optional_clock_time(reminder_at)
     session.add(customer)
 
@@ -432,7 +429,7 @@ def change_series(
     session.flush()
 
     LessonSeriesMaterialiser(session).materialise_all_active(
-        until=planning_horizon(settings_of(session), today)
+        until=planning_horizon(StoreQueries(session).app_settings(), today)
     )
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 

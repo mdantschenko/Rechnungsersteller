@@ -20,7 +20,7 @@ from invoicing.pdf import InvoiceDocumentWriter
 from invoicing.reports import RevenueReport
 from invoicing.sample import SampleInvoice
 from invoicing.storage.database import InvoiceDatabase
-from invoicing.web.security import is_configured, set_password
+from invoicing.web.security import PasswordGate
 
 
 def main() -> None:
@@ -96,7 +96,7 @@ def _describe_revenue(rows: Sequence[RevenueRow]) -> None:
 
 def _set_password(arguments: argparse.Namespace) -> None:
     with InvoiceDatabase(arguments.database).session() as session:
-        set_password(session, arguments.password)
+        PasswordGate(session).set_password(arguments.password)
     _report("Password set. Start the app with: uv run python main.py serve")
 
 
@@ -106,7 +106,7 @@ def _serve(arguments: argparse.Namespace) -> None:
     from invoicing.web import create_app
 
     with InvoiceDatabase(arguments.database).session() as session:
-        if not is_configured(session):
+        if not PasswordGate(session).is_configured():
             _report("No password set yet. Run: uv run python main.py set-password ...")
             return
     uvicorn.run(

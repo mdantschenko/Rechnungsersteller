@@ -7,15 +7,16 @@ from sqlmodel import Session
 from starlette.responses import RedirectResponse, Response
 
 from invoicing.constant import SIGNED_IN_SESSION_KEY
-from invoicing.web.page import database, templates
-from invoicing.web.security import password_matches
+from invoicing.web.page import database
+from invoicing.web.security import PasswordGate
+from invoicing.web.template_renderer import template_renderer
 
 router = APIRouter()
 
 
 @router.get("/anmelden")
 def sign_in_form(request: Request) -> Response:
-    return templates.TemplateResponse(request, "sign_in.html", {"failed": False})
+    return template_renderer.render(request, "sign_in.html", {"failed": False})
 
 
 @router.post("/anmelden")
@@ -24,8 +25,8 @@ def sign_in(
     password: str = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    if not password_matches(session, password):
-        return templates.TemplateResponse(
+    if not PasswordGate(session).matches(password):
+        return template_renderer.render(
             request, "sign_in.html", {"failed": True}, status_code=401
         )
     request.session[SIGNED_IN_SESSION_KEY] = True

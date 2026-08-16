@@ -18,7 +18,7 @@ from invoicing.storage.models import (
     PushSubscription,
 )
 from invoicing.web import create_app
-from invoicing.web.security import set_password
+from invoicing.web.security import PasswordGate
 
 PASSWORD = "ein-gutes-passwort"
 
@@ -28,7 +28,7 @@ def location(tmp_path: Path) -> Path:
     place = tmp_path / "invoicing.db"
     engine = InvoiceDatabase(place).open()
     with Session(engine) as session:
-        set_password(session, PASSWORD)
+        PasswordGate(session).set_password(PASSWORD)
         settings = session.exec(select(AppSettings)).one()
         settings.invoice_folder = str(tmp_path / "invoices")
         session.add(settings)

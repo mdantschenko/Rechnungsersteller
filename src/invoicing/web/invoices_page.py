@@ -33,19 +33,16 @@ from invoicing.storage.models import (
 )
 from invoicing.utils import notice_redirect, whatsapp_number
 from invoicing.web.earnings import monthly_earnings
-from invoicing.web.page import (
-    active_customers,
-    customer_of,
-    database,
-    settings_of,
-    templates,
-)
+from invoicing.web.page import database
+from invoicing.web.store_queries import StoreQueries
+from invoicing.web.template_renderer import template_renderer
 
 router = APIRouter()
 
 
 @router.get("/rechnungen")
 def invoice_list(request: Request, session: Session = Depends(database)) -> Response:
+    store = StoreQueries(session)
     today = date.today()
     everyone = session.exec(select(Customer)).all()
     issued = session.exec(
@@ -54,7 +51,7 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
     unpaid = [record for record in issued if record.paid_on is None]
     signature = issuer_name(session)
     earnings_rows, earnings_total = monthly_earnings(session)
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "invoices.html",
         {
@@ -75,10 +72,10 @@ def invoice_list(request: Request, session: Session = Depends(database)) -> Resp
                 customer.id or 0: whatsapp_number(customer.phone)
                 for customer in everyone
             },
-            "customers": active_customers(session),
+            "customers": store.active_customers(),
             "earnings": earnings_rows,
             "earnings_total": earnings_total,
-            "overdue": _overdue_days(unpaid, settings_of(session).payment_days),
+            "overdue": _overdue_days(unpaid, store.app_settings().payment_days),
             "paid_years": _paid_years(issued),
         },
     )
@@ -130,7 +127,7 @@ def customer_zip(customer_id: int, session: Session = Depends(database)) -> Resp
     ).all()
     if not records:
         raise HTTPException(status_code=404, detail="keine Rechnung für diesen Kunden")
-    name = customer_of(session, customer_id).name
+    name = StoreQueries(session).customer(customer_id).name
     return _zip_response(session, list(records), f"Rechnungen {name}.zip")
 
 
@@ -164,7 +161,7 @@ def release_manual_invoice(
         return notice_redirect(
             request, "/rechnungen", "Das „Bis“-Datum liegt vor dem „Von“-Datum."
         )
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     orchestrator = BillingRunOrchestrator(session)
     run = orchestrator.manual_draft(customer, first_day, last_day, date.today())
     if run.is_blocked:
@@ -199,7 +196,7 @@ def view_invoice(
     """The invoice's pages as images inside the app's own chrome."""
     path = _stored_pdf(session, number)
     pages = PdfPreview(path).page_count() if path else 0
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "pdf_view.html",
         {
@@ -225,9 +222,7 @@ def invoice_page_image(
 
 
 def _stored_pdf(session: Session, number: int) -> Path | None:
-    record = session.exec(
-        select(IssuedInvoice).where(IssuedInvoice.number == number)
-    ).first()
+    record = StoreQueries(session).issued_invoice_by_number(number)
     if record is None:
         return None
     return find_pdf(session, record, record.customer.name)
@@ -239,7 +234,7 @@ def view_due_preview(
     closing_day: date,
     request: Request,
 ) -> Response:
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "pdf_view.html",
         {
@@ -264,7 +259,7 @@ def view_manual_preview(
     last_day: date,
     request: Request,
 ) -> Response:
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "pdf_view.html",
         {
@@ -288,7 +283,7 @@ def preview_due_invoice(
 ) -> Response:
     """The draft as PDF, exactly as releasing would print it — nothing is written."""
     run = BillingRunOrchestrator(session).draft_for(
-        customer_of(session, customer_id), closing_day, date.today()
+        StoreQueries(session).customer(customer_id), closing_day, date.today()
     )
     return _draft_pdf(run)
 
@@ -300,7 +295,7 @@ def preview_manual_invoice(
     last_day: date,
     session: Session = Depends(database),
 ) -> Response:
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     run = BillingRunOrchestrator(session).manual_draft(
         customer, first_day, last_day, date.today()
     )
@@ -313,7 +308,7 @@ def preview_due_html(
 ) -> Response:
     """The same draft as HTML: the phone can zoom it with two fingers."""
     run = BillingRunOrchestrator(session).draft_for(
-        customer_of(session, customer_id), closing_day, date.today()
+        StoreQueries(session).customer(customer_id), closing_day, date.today()
     )
     return _draft_html(run)
 
@@ -325,7 +320,7 @@ def preview_manual_html(
     last_day: date,
     session: Session = Depends(database),
 ) -> Response:
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     run = BillingRunOrchestrator(session).manual_draft(
         customer, first_day, last_day, date.today()
     )
@@ -365,7 +360,7 @@ def release_invoice(
     closing_day: date = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    customer = customer_of(session, customer_id)
+    customer = StoreQueries(session).customer(customer_id)
     orchestrator = BillingRunOrchestrator(session)
     run = orchestrator.draft_for(customer, closing_day, date.today())
     released = orchestrator.release(run)
@@ -381,9 +376,7 @@ def send_invoice(
     number: int, request: Request, session: Session = Depends(database)
 ) -> Response:
     """Email the issued invoice to its customer, PDF attached."""
-    record = session.exec(
-        select(IssuedInvoice).where(IssuedInvoice.number == number)
-    ).first()
+    record = StoreQueries(session).issued_invoice_by_number(number)
     if record is None:
         return notice_redirect(
             request, "/rechnungen", f"Es gibt keine Rechnung Nr. {number}."
@@ -402,7 +395,7 @@ def send_invoice(
             request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
         )
     try:
-        mail.mailer_for(settings_of(session)).send_pdf(
+        mail.mailer_for(StoreQueries(session).app_settings()).send_pdf(
             to=customer.email,
             subject=f"Rechnung Nr. {number}",
             body=invoice_mail_body(session, record),
@@ -422,7 +415,7 @@ def send_invoice(
 def mark_sent(
     number: int, request: Request, session: Session = Depends(database)
 ) -> Response:
-    record = _issued(session, number)
+    record = StoreQueries(session).issued_invoice_by_number(number)
     if record is not None:
         record.sent_on = date.today()
         session.add(record)
@@ -482,7 +475,7 @@ def _filled_in(
 def mark_paid(
     number: int, request: Request, session: Session = Depends(database)
 ) -> Response:
-    record = _issued(session, number)
+    record = StoreQueries(session).issued_invoice_by_number(number)
     if record is None:
         return notice_redirect(
             request, "/rechnungen", f"Es gibt keine Rechnung Nr. {number}."
@@ -498,7 +491,7 @@ def mark_paid(
 def mark_unpaid(
     number: int, request: Request, session: Session = Depends(database)
 ) -> Response:
-    record = _issued(session, number)
+    record = StoreQueries(session).issued_invoice_by_number(number)
     if record is not None:
         record.paid_on = None
         session.add(record)
@@ -512,7 +505,7 @@ def send_payment_reminder(
     number: int, request: Request, session: Session = Depends(database)
 ) -> Response:
     """Send (or record) one more payment reminder for an unpaid invoice."""
-    record = _issued(session, number)
+    record = StoreQueries(session).issued_invoice_by_number(number)
     if record is None or record.id is None:
         return notice_redirect(
             request, "/rechnungen", f"Es gibt keine Rechnung Nr. {number}."
@@ -534,7 +527,7 @@ def send_payment_reminder(
                 request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
             )
         try:
-            mail.mailer_for(settings_of(session)).send_pdf(
+            mail.mailer_for(StoreQueries(session).app_settings()).send_pdf(
                 to=customer.email,
                 subject=f"Zahlungserinnerung zur Rechnung Nr. {number}",
                 body=_reminder_mail_body(session, record, count),
@@ -550,12 +543,6 @@ def send_payment_reminder(
         )
     session.add(PaymentReminder(invoice_id=record.id, sent_on=date.today()))
     return notice_redirect(request, "/rechnungen", message)
-
-
-def _issued(session: Session, number: int) -> IssuedInvoice | None:
-    return session.exec(
-        select(IssuedInvoice).where(IssuedInvoice.number == number)
-    ).first()
 
 
 def _reminder_mail_body(session: Session, record: IssuedInvoice, count: int) -> str:
@@ -610,7 +597,9 @@ def due_runs(session: Session, today: date) -> list[BillingRun]:
 
 
 def pdf_path(session: Session, record: IssuedInvoice, customer_name: str) -> Path:
-    folder = Path(settings_of(session).invoice_folder) / str(record.issued_on.year)
+    folder = Path(StoreQueries(session).app_settings().invoice_folder) / str(
+        record.issued_on.year
+    )
     stem = INVOICE_PDF_FILE_NAME_PATTERN.format(number=record.number)
     return folder / f"{stem} {customer_name}.pdf"
 

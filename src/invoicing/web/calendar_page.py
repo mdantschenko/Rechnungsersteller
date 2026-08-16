@@ -31,15 +31,11 @@ from invoicing.german_formatter import german_formatter
 from invoicing.lesson_pricing import StoredLessonPricer
 from invoicing.push import WebPushSender
 from invoicing.scheduling import LessonSeriesMaterialiser
-from invoicing.storage.models import Customer, Lesson, LessonStatus
+from invoicing.storage.models import Lesson, LessonStatus
 from invoicing.utils import billing_templates_by_customer, planning_horizon
-from invoicing.web.page import (
-    active_customers,
-    database,
-    series_labels,
-    settings_of,
-    templates,
-)
+from invoicing.web.page import database
+from invoicing.web.store_queries import StoreQueries
+from invoicing.web.template_renderer import template_renderer
 
 router = APIRouter()
 
@@ -65,16 +61,17 @@ def a_week(
 
 
 def _week_page(request: Request, session: Session, on: date) -> Response:
+    store = StoreQueries(session)
     today = date.today()
     monday = on - timedelta(days=on.weekday())
     sunday = monday + timedelta(days=6)
-    horizon = planning_horizon(settings_of(session), today)
+    horizon = planning_horizon(store.app_settings(), today)
     LessonSeriesMaterialiser(session).materialise_all_active(until=max(sunday, horizon))
     session.flush()
     lessons = _lessons_between(session, monday, sunday)
     public, school = _holiday_notes(session, monday, sunday)
-    names = _customer_names(session)
-    return templates.TemplateResponse(
+    names = store.pupil_names_by_customer_id()
+    return template_renderer.render(
         request,
         "week.html",
         {
@@ -96,9 +93,9 @@ def _week_page(request: Request, session: Session, on: date) -> Response:
             "next": monday + timedelta(days=7),
             "today": today,
             "names": names,
-            "places": _lesson_places(session),
+            "places": store.lesson_places_by_customer_id(),
             "extras": _lesson_extras(session, lessons),
-            "series": series_labels(session),
+            "series": store.series_labels(),
             "overdue": _open_lessons_before(session, today),
             "colors": FEDERAL_STATE_COLORS,
             "back": f"/woche/{monday}",
@@ -108,12 +105,13 @@ def _week_page(request: Request, session: Session, on: date) -> Response:
 
 @router.get("/tag/{on}")
 def a_day(on: date, request: Request, session: Session = Depends(database)) -> Response:
-    settings = settings_of(session)
+    store = StoreQueries(session)
+    settings = store.app_settings()
     deliver = WebPushSender(session, settings).send_to_all
     LessonAlarmClock(session, settings, deliver).acknowledge_day(on)
     public, school = _holiday_notes(session, on, on)
     lessons = _lessons_between(session, on, on)
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "day.html",
         {
@@ -123,11 +121,11 @@ def a_day(on: date, request: Request, session: Session = Depends(database)) -> R
             "next": on + timedelta(days=1),
             "today": date.today(),
             "lessons": lessons,
-            "names": _customer_names(session),
-            "places": _lesson_places(session),
+            "names": store.pupil_names_by_customer_id(),
+            "places": store.lesson_places_by_customer_id(),
             "extras": _lesson_extras(session, lessons),
-            "series": series_labels(session),
-            "customers": active_customers(session),
+            "series": store.series_labels(),
+            "customers": store.active_customers(),
             "holiday": public.get(on),
             "vacations": school.get(on, []),
             "colors": FEDERAL_STATE_COLORS,
@@ -137,18 +135,19 @@ def a_day(on: date, request: Request, session: Session = Depends(database)) -> R
 
 
 def _month_page(request: Request, session: Session, year: int, month: int) -> Response:
+    store = StoreQueries(session)
     today = date.today()
     first_of_month = date(year, month, 1)
     weeks = Calendar(WEEK_STARTS_ON_MONDAY).monthdatescalendar(year, month)
-    horizon = planning_horizon(settings_of(session), today)
+    horizon = planning_horizon(store.app_settings(), today)
     LessonSeriesMaterialiser(session).materialise_all_active(
         until=max(weeks[-1][-1], horizon)
     )
     session.flush()
     lessons = _lessons_between(session, weeks[0][0], weeks[-1][-1])
     public, school = _holiday_notes(session, weeks[0][0], weeks[-1][-1])
-    names = _customer_names(session)
-    return templates.TemplateResponse(
+    names = store.pupil_names_by_customer_id()
+    return template_renderer.render(
         request,
         "calendar.html",
         {
@@ -215,7 +214,7 @@ def _summary(lessons: tuple[Lesson, ...], names: dict[int, str]) -> str:
 def _holiday_notes(
     session: Session, first: date, last: date
 ) -> tuple[dict[date, str], dict[date, list[tuple[str, str]]]]:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     states = HolidayCalendar.chosen_states(settings)
     if not states:
         return {}, {}
@@ -233,7 +232,7 @@ def _holiday_notes(
 
 
 def _school_states(session: Session) -> list[str]:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     if not settings.show_school_holidays:
         return []
     return HolidayCalendar.chosen_states(settings)
@@ -257,14 +256,6 @@ def _open_lessons_before(session: Session, day: date) -> list[Lesson]:
         .order_by(col(Lesson.taught_on))
     )
     return list(session.exec(statement).all())
-
-
-def _customer_names(session: Session) -> dict[int, str]:
-    """The pupil's name where one is set; the calendar is about the child."""
-    return {
-        customer.id or 0: customer.pupil_name
-        for customer in session.exec(select(Customer)).all()
-    }
 
 
 def _lesson_extras(
@@ -297,11 +288,3 @@ def _lesson_extras(
             for column, value, contribution in shares
         ]
     return found
-
-
-def _lesson_places(session: Session) -> dict[int, str]:
-    """What to print under the name: the lesson address, or Online."""
-    return {
-        customer.id or 0: customer.lesson_place
-        for customer in session.exec(select(Customer)).all()
-    }

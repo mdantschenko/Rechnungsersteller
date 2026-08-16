@@ -11,7 +11,8 @@ from starlette.responses import FileResponse, JSONResponse, Response
 from invoicing.constant import PWA_MANIFEST, WEB_STATIC_DIRECTORY
 from invoicing.push import WebPushSender
 from invoicing.utils import notice_redirect
-from invoicing.web.page import database, settings_of
+from invoicing.web.page import database
+from invoicing.web.store_queries import StoreQueries
 
 router = APIRouter()
 
@@ -33,7 +34,9 @@ class Subscription(BaseModel):
 
 @router.get("/push/schluessel")
 def subscription_key(session: Session = Depends(database)) -> Response:
-    key = WebPushSender(session, settings_of(session)).application_server_key()
+    key = WebPushSender(
+        session, StoreQueries(session).app_settings()
+    ).application_server_key()
     return JSONResponse({"key": key})
 
 
@@ -41,7 +44,7 @@ def subscription_key(session: Session = Depends(database)) -> Response:
 def store_subscription(
     subscription: Subscription, session: Session = Depends(database)
 ) -> None:
-    WebPushSender(session, settings_of(session)).subscribe(
+    WebPushSender(session, StoreQueries(session).app_settings()).subscribe(
         endpoint=subscription.endpoint,
         p256dh=subscription.keys.get("p256dh", ""),
         auth=subscription.keys.get("auth", ""),
@@ -52,12 +55,16 @@ def store_subscription(
 def drop_subscription(
     subscription: Subscription, session: Session = Depends(database)
 ) -> None:
-    WebPushSender(session, settings_of(session)).unsubscribe(subscription.endpoint)
+    WebPushSender(session, StoreQueries(session).app_settings()).unsubscribe(
+        subscription.endpoint
+    )
 
 
 @router.post("/push/test")
 def test_ring(request: Request, session: Session = Depends(database)) -> Response:
-    delivered = WebPushSender(session, settings_of(session)).send_to_all(
+    delivered = WebPushSender(
+        session, StoreQueries(session).app_settings()
+    ).send_to_all(
         {"title": "Probeweckruf", "body": "So klingelt der Wecker.", "url": "/"}
     )
     if not delivered:

@@ -39,8 +39,8 @@ from invoicing.web import (
     settings_page,
     sign_in,
 )
-from invoicing.web.page import settings_of
-from invoicing.web.security import signing_key
+from invoicing.web.security import PasswordGate
+from invoicing.web.store_queries import StoreQueries
 
 
 def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
@@ -48,7 +48,7 @@ def create_app(location: Path = DEFAULT_DATABASE_LOCATION) -> FastAPI:
     database = InvoiceDatabase(location)
     database.open()
     with database.session() as session:
-        secret = signing_key(session)
+        secret = PasswordGate(session).signing_key()
 
     app = FastAPI(
         title="Rechnungsersteller",
@@ -95,7 +95,7 @@ async def _ring_forever(database: InvoiceDatabase) -> None:
 
 def _ring_once(database: InvoiceDatabase) -> None:
     with database.session() as session:
-        settings = settings_of(session)
+        settings = StoreQueries(session).app_settings()
         now = datetime.now()
         send = WebPushSender(session, settings).send_to_all
         LessonAlarmClock(session, settings, send).ring_all_due(now)

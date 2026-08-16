@@ -27,18 +27,20 @@ from invoicing.utils import (
     mailbox_address_of,
     notice_redirect,
 )
-from invoicing.web import security
-from invoicing.web.page import database, settings_of, templates
+from invoicing.web.page import database
+from invoicing.web.security import PasswordGate
+from invoicing.web.store_queries import StoreQueries
+from invoicing.web.template_renderer import template_renderer
 
 router = APIRouter()
 
 
 @router.get("/einstellungen")
 def settings_form(request: Request, session: Session = Depends(database)) -> Response:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     ensure_backup_passphrase(session, settings)
     numbering = session.exec(select(NumberState)).first()
-    return templates.TemplateResponse(
+    return template_renderer.render(
         request,
         "settings.html",
         {
@@ -50,7 +52,7 @@ def settings_form(request: Request, session: Session = Depends(database)) -> Res
             "settings": settings,
             "states": GERMAN_FEDERAL_STATES,
             "chosen_states": HolidayCalendar.chosen_states(settings),
-            "pending_password": security.has_pending_password(session),
+            "pending_password": PasswordGate(session).has_pending_change(),
         },
     )
 
@@ -63,7 +65,7 @@ def save_holidays(
     states: list[str] = Form([]),
     session: Session = Depends(database),
 ) -> Response:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     settings.show_public_holidays = bool(show_public_holidays)
     settings.show_school_holidays = bool(show_school_holidays)
     chosen = [code for code in states if code in GERMAN_FEDERAL_STATES]
@@ -86,7 +88,7 @@ def save_automation(
     auto_send_invoices: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     settings.auto_send_invoices = bool(auto_send_invoices)
     session.add(settings)
     return notice_redirect(request, "/einstellungen", "Automatik gespeichert.")
@@ -98,7 +100,7 @@ def save_payment_terms(
     payment_days: int = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     settings.payment_days = max(0, min(payment_days, PAYMENT_DAYS_MAXIMUM))
     session.add(settings)
     return notice_redirect(request, "/einstellungen", "Zahlungsziel gespeichert.")
@@ -110,7 +112,7 @@ def save_reminders(
     reminder_minutes: int = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     settings.reminder_minutes = max(0, min(reminder_minutes, REMINDER_MINUTES_MAXIMUM))
     session.add(settings)
     return notice_redirect(request, "/einstellungen", "Erinnerungen gespeichert.")
@@ -165,7 +167,7 @@ def save_mail_account(
     smtp_from: str = Form(""),
     session: Session = Depends(database),
 ) -> Response:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     settings.smtp_host = smtp_host.strip() or None
     settings.smtp_port = smtp_port
     settings.smtp_user = smtp_user.strip() or None
@@ -183,7 +185,7 @@ def forget_mail_account(
     request: Request, session: Session = Depends(database)
 ) -> Response:
     """Remove the whole SMTP account, the stored password included."""
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     settings.smtp_host = None
     settings.smtp_user = None
     settings.smtp_password = None
@@ -197,7 +199,7 @@ def send_test_invoice(
     request: Request, to: str = Form(...), session: Session = Depends(database)
 ) -> Response:
     """Render the sample invoice and send it to the given address."""
-    mailer = mail.mailer_for(settings_of(session))
+    mailer = mail.mailer_for(StoreQueries(session).app_settings())
     if not mailer.is_configured():
         return notice_redirect(
             request,
@@ -269,7 +271,7 @@ def save_filing(
     lesson_horizon_days: int = Form(...),
     session: Session = Depends(database),
 ) -> Response:
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     settings.invoice_folder = invoice_folder
     settings.lesson_horizon_days = lesson_horizon_days
     session.add(settings)
@@ -285,12 +287,13 @@ def change_password(
     Without a working mail account the change happens directly — otherwise a
     broken SMTP setting would lock the password forever.
     """
-    settings = settings_of(session)
+    settings = StoreQueries(session).app_settings()
     mailer = mail.mailer_for(settings)
-    if not mailer.is_configured() or not security.is_configured(session):
-        security.set_password(session, password)
+    gate = PasswordGate(session)
+    if not mailer.is_configured() or not gate.is_configured():
+        gate.set_password(password)
         return notice_redirect(request, "/einstellungen", "Passwort geändert.")
-    code = security.request_password_change(session, password)
+    code = gate.request_change(password)
     recipient = mailbox_address_of(settings)
     try:
         mailer.send_text(
@@ -304,7 +307,7 @@ def change_password(
             ),
         )
     except MailError as error:
-        security.cancel_password_change(session)
+        gate.cancel_change()
         return notice_redirect(request, "/einstellungen", str(error))
     return notice_redirect(request, "/einstellungen", f"Code an {recipient} geschickt.")
 
@@ -313,7 +316,7 @@ def change_password(
 def confirm_password(
     request: Request, code: str = Form(...), session: Session = Depends(database)
 ) -> Response:
-    if security.confirm_password_change(session, code):
+    if PasswordGate(session).confirm_change(code):
         return notice_redirect(request, "/einstellungen", "Passwort geändert.")
     return notice_redirect(
         request,
@@ -326,5 +329,5 @@ def confirm_password(
 def abandon_password(
     request: Request, session: Session = Depends(database)
 ) -> Response:
-    security.cancel_password_change(session)
+    PasswordGate(session).cancel_change()
     return notice_redirect(request, "/einstellungen", "Passwortänderung verworfen.")
