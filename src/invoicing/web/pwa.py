@@ -9,13 +9,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlmodel import Session
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import JSONResponse, Response
 
-from invoicing.constant import PWA_MANIFEST, WEB_STATIC_DIRECTORY
+from invoicing.constant import (
+    OFFLINE_TEMPLATE_NAME,
+    PWA_MANIFEST,
+    SERVICE_WORKER_CACHE_CONTROL,
+    SERVICE_WORKER_MEDIA_TYPE,
+)
 from invoicing.push import WebPushSender
 from invoicing.utils import notice_redirect
 from invoicing.web.dependencies import database_session
+from invoicing.web.service_worker_script import ServiceWorkerScript
 from invoicing.web.store_queries import StoreQueries
+from invoicing.web.template_renderer import template_renderer
 
 router = APIRouter()
 
@@ -27,7 +34,16 @@ def manifest() -> Response:
 
 @router.get("/sw.js")
 def service_worker() -> Response:
-    return FileResponse(WEB_STATIC_DIRECTORY / "sw.js", media_type="text/javascript")
+    return Response(
+        ServiceWorkerScript().body(),
+        media_type=SERVICE_WORKER_MEDIA_TYPE,
+        headers={"Cache-Control": SERVICE_WORKER_CACHE_CONTROL},
+    )
+
+
+@router.get("/offline")
+def offline_page(request: Request) -> Response:
+    return template_renderer.render(request, OFFLINE_TEMPLATE_NAME, {})
 
 
 class PushSubscriptionPayload(BaseModel):

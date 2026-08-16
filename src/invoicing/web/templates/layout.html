@@ -91,5 +91,8 @@ window.addEventListener("pagereveal", function (event) {
   </a>
 </nav>
 <script src="/static/swipe.js?v={{ static_version }}"></script>
+<script>
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+</script>
 </body>
 </html>

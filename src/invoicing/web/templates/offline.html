@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <link rel="icon" href="/static/icon-32.png" type="image/png">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" sizes="any">
-<title>Anmelden</title>
+<title>Kein Netz</title>
 <script>
 try {
   var thema = localStorage.getItem("thema");
@@ -23,21 +23,17 @@ try {
 </head>
 <body>
 <main class="sign-in">
-  <h1 class="page-title">Rechnungen</h1>
-  {% if failed %}
-  <p class="warn">Passwort stimmt nicht.</p>
-  {% endif %}
-  <form method="post" action="/anmelden" class="stack">
-    <label>Passwort
-      <input type="password" name="password" autocomplete="current-password" required autofocus>
-    </label>
-    <button class="button button-fill button-large" type="submit">Anmelden</button>
-  </form>
+  <h1 class="page-title">Kein Netz</h1>
+  <p>Diese Seite ist nicht gespeichert. Stunden abhaken und Rechnungen brauchen Internet.</p>
+  <div class="stack">
+    <button class="button button-fill button-large" type="button" id="nochmal">Nochmal versuchen</button>
+    <a class="button button-large" href="/">Zum Kalender</a>
+  </div>
 </main>
 <script>
-if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-  navigator.serviceWorker.controller.postMessage({ typ: "{{ cache_clear_message }}" });
-}
+document.getElementById("nochmal").addEventListener("click", function () {
+  location.reload();
+});
 </script>
 </body>
 </html>

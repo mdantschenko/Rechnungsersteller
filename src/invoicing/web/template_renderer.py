@@ -8,20 +8,20 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
-from invoicing.constant import WEB_STATIC_DIRECTORY, WEB_TEMPLATES_DIRECTORY
+from invoicing.constant import (
+    CACHE_CLEAR_PAGES_MESSAGE,
+    WEB_TEMPLATES_DIRECTORY,
+)
 from invoicing.german_formatter import german_formatter
 from invoicing.german_template_filters import GermanTemplateFilters
 from invoicing.utils import recurrence_words
+from invoicing.web.static_version import STATIC_VERSION
 
 
 class GermanTemplateRenderer:
     """Renders the web pages with the German filters installed."""
 
-    def __init__(
-        self,
-        templates_folder: Path = WEB_TEMPLATES_DIRECTORY,
-        static_folder: Path = WEB_STATIC_DIRECTORY,
-    ) -> None:
+    def __init__(self, templates_folder: Path = WEB_TEMPLATES_DIRECTORY) -> None:
         self._templates = Jinja2Templates(directory=templates_folder)
         environment = self._templates.env
         GermanTemplateFilters(german_formatter).install_into(environment)
@@ -29,7 +29,8 @@ class GermanTemplateRenderer:
         environment.filters["long_weekday"] = german_formatter.long_weekday
         environment.filters["clock"] = german_formatter.clock
         environment.filters["serie"] = recurrence_words
-        environment.globals["static_version"] = self._static_version(static_folder)
+        environment.globals["static_version"] = STATIC_VERSION
+        environment.globals["cache_clear_message"] = CACHE_CLEAR_PAGES_MESSAGE
 
     def render(
         self,
@@ -41,15 +42,6 @@ class GermanTemplateRenderer:
         return self._templates.TemplateResponse(
             request, template_name, context, status_code=status_code
         )
-
-    @staticmethod
-    def _static_version(static_folder: Path) -> int:
-        """The newest change time among the static files.
-
-        Read once at import; every deploy restarts the server, and that
-        restart is what makes the phones drop their stale caches.
-        """
-        return max(int(entry.stat().st_mtime) for entry in static_folder.iterdir())
 
 
 template_renderer = GermanTemplateRenderer()

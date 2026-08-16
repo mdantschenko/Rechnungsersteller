@@ -11,54 +11,11 @@ from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
     AppSettings,
     IssuedInvoice,
-    Issuer,
     Lesson,
     LessonAlarm,
     NumberState,
     PushSubscription,
 )
-from invoicing.web import create_app
-from invoicing.web.password_gate import PasswordGate
-
-PASSWORD = "ein-gutes-passwort"
-
-
-@pytest.fixture
-def location(tmp_path: Path) -> Path:
-    place = tmp_path / "invoicing.db"
-    engine = InvoiceDatabase(place).open()
-    with Session(engine) as session:
-        PasswordGate(session).set_password(PASSWORD)
-        settings = session.exec(select(AppSettings)).one()
-        settings.invoice_folder = str(tmp_path / "invoices")
-        session.add(settings)
-        session.add(NumberState(start=115))
-        session.add(
-            Issuer(
-                name="Max Mustermann",
-                street="Musterstraße 19 B",
-                city="12345 Musterstadt",
-                bank="Musterbank",
-                iban="DE00 0000 0000 0000 0000 00",
-                bic="MUSTDEFFXXX",
-                tax_number="000/0000/0000",
-                email="max@example.com",
-                paypal="info@example.com",
-            )
-        )
-        session.commit()
-    return place
-
-
-@pytest.fixture
-def stranger(location: Path) -> TestClient:
-    return TestClient(create_app(location))
-
-
-@pytest.fixture
-def client(stranger: TestClient) -> TestClient:
-    stranger.post("/anmelden", data={"password": PASSWORD})
-    return stranger
 
 
 def test_a_stranger_is_sent_to_the_sign_in_page(stranger: TestClient) -> None:
@@ -913,15 +870,6 @@ def test_a_series_can_be_reshaped_from_today_on(
         assert all(str(lesson.quantity) == "2" for lesson in future)
 
 
-def test_the_service_worker_is_reachable_without_signing_in(
-    stranger: TestClient,
-) -> None:
-    answer = stranger.get("/sw.js")
-
-    assert answer.status_code == 200
-    assert "showNotification" in answer.text
-
-
 def test_a_device_can_subscribe_to_the_alarm(
     client: TestClient, location: Path
 ) -> None:
@@ -1355,7 +1303,7 @@ def _configure_mail(client: TestClient) -> None:
 
 
 def test_with_mail_set_up_the_password_waits_for_the_code(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, password: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sent: dict[str, str] = {}
 
@@ -1376,7 +1324,7 @@ def test_with_mail_set_up_the_password_waits_for_the_code(
         == 401
     )
 
-    client.post("/anmelden", data={"password": PASSWORD})
+    client.post("/anmelden", data={"password": password})
     client.post("/einstellungen/passwort-bestaetigen", data={"code": sent["code"]})
     client.post("/abmelden")
     assert (
@@ -1388,7 +1336,7 @@ def test_with_mail_set_up_the_password_waits_for_the_code(
 
 
 def test_a_wrong_code_changes_nothing(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, password: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("invoicing.mail.SmtpMailer.send_text", lambda *a, **k: None)
     _configure_mail(client)
@@ -1404,7 +1352,7 @@ def test_a_wrong_code_changes_nothing(
     client.post("/abmelden")
     assert (
         client.post(
-            "/anmelden", data={"password": PASSWORD}, follow_redirects=False
+            "/anmelden", data={"password": password}, follow_redirects=False
         ).status_code
         == 303
     )

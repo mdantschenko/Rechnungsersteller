@@ -12,18 +12,23 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import Engine
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from invoicing.constant import BillingCycle, TotalRule, ValueSource
 from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
+    AppSettings,
     BillingTemplate,
     Customer,
     CustomerStatus,
     Issuer,
+    NumberState,
     TemplateColumn,
 )
+from invoicing.web import create_app
+from invoicing.web.password_gate import PasswordGate
 
 COLLECTED = """\
 |      Erika Muster – Musterweg 1 - 12345 Musterstadt  |     |     |
@@ -170,6 +175,53 @@ def ready_to_bill(engine: Engine) -> Engine:
         )
         session.commit()
     return engine
+
+
+@pytest.fixture
+def password() -> str:
+    """The password the test application is locked with."""
+    return "ein-gutes-passwort"
+
+
+@pytest.fixture
+def location(tmp_path: Path, password: str) -> Path:
+    """A database ready for the web application: password, sender, numbers."""
+    place = tmp_path / "invoicing.db"
+    engine = InvoiceDatabase(place).open()
+    with Session(engine) as session:
+        PasswordGate(session).set_password(password)
+        settings = session.exec(select(AppSettings)).one()
+        settings.invoice_folder = str(tmp_path / "invoices")
+        session.add(settings)
+        session.add(NumberState(start=115))
+        session.add(
+            Issuer(
+                name="Max Mustermann",
+                street="Musterstraße 19 B",
+                city="12345 Musterstadt",
+                bank="Musterbank",
+                iban="DE00 0000 0000 0000 0000 00",
+                bic="MUSTDEFFXXX",
+                tax_number="000/0000/0000",
+                email="max@example.com",
+                paypal="info@example.com",
+            )
+        )
+        session.commit()
+    return place
+
+
+@pytest.fixture
+def stranger(location: Path) -> TestClient:
+    """A browser that has not signed in."""
+    return TestClient(create_app(location))
+
+
+@pytest.fixture
+def client(stranger: TestClient, password: str) -> TestClient:
+    """A browser that has signed in."""
+    stranger.post("/anmelden", data={"password": password})
+    return stranger
 
 
 @pytest.fixture
