@@ -192,9 +192,8 @@
 {% if paid %}
 <ul class="plain list-card">
   {% for invoice in paid %}
-  <li class="swipe-away" data-action="/rechnungen/{{ invoice.number }}/ausblenden">
-    <div class="swipe-away-note">Ausblenden</div>
-    <div class="reminder lesson-done swipe-away-face">
+  <li>
+    <div class="reminder lesson-done">
       <div class="reminder-body">
         <a class="reminder-link" href="/rechnungen/{{ invoice.number }}/ansehen">
           <div class="reminder-title">
@@ -283,5 +282,4 @@
 </div>
 
 <script src="/static/share-pdf.js?v={{ asset_version }}"></script>
-<script src="/static/swipe-away.js?v={{ asset_version }}"></script>
 {% endblock %}

@@ -1202,30 +1202,6 @@ summary:focus-visible {
   padding-top: 1rem;
 }
 
-.swipe-away {
-  position: relative;
-  overflow: hidden;
-}
-
-.swipe-away-note {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 1.25rem;
-  background: var(--red);
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.swipe-away-face {
-  position: relative;
-  background: var(--group);
-  touch-action: pan-y;
-}
-
 .link-button {
   padding: 0;
   border: 0;

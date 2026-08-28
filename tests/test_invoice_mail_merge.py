@@ -200,6 +200,23 @@ def test_the_letter_keeps_its_line_breaks_without_running_off_the_screen(
     assert "overflow-wrap: anywhere" in stylesheet
 
 
+def test_the_paid_list_has_a_button_and_no_swipe_gesture(
+    client: TestClient, location: Path
+) -> None:
+    """The button is the only way in; a swipe would fight the page scroll."""
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    client.post("/rechnungen/115/bezahlt")
+
+    page = client.get("/rechnungen").text
+
+    assert "/rechnungen/115/ausblenden" in page
+    assert "swipe-away" not in page
+    assert client.get("/static/keep-scroll-position.js").status_code == 200
+
+
 def test_a_paid_invoice_can_be_taken_off_the_list(
     client: TestClient, location: Path
 ) -> None:
