@@ -50,6 +50,10 @@ class InvoiceListViewBuilder:
             select(IssuedInvoice).order_by(col(IssuedInvoice.number).desc())
         ).all()
         unpaid = [record for record in issued if record.paid_on is None]
+        paid = [record for record in issued if record.paid_on is not None]
+        still_listed = [
+            record for record in paid if record.taken_off_the_list_on is None
+        ]
         composer = InvoiceMailComposer(self._session)
         signature = composer.issuer_name()
         earnings_rows, earnings_total = EarningsLedger(self._session).monthly_earnings()
@@ -58,7 +62,8 @@ class InvoiceListViewBuilder:
             "today": today,
             "due": self.open_billing_runs(today),
             "issued": unpaid,
-            "paid": [record for record in issued if record.paid_on is not None],
+            "paid": still_listed,
+            "hidden_paid_count": len(paid) - len(still_listed),
             "reminders": self._reminder_days(),
             "mail_bodies": {
                 record.number: composer.invoice_mail_body(record, signature)

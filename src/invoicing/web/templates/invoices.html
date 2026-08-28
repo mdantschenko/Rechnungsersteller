@@ -186,12 +186,15 @@
 </ul>
 {% endif %}
 
-{% if paid %}
+{% if paid or hidden_paid_count %}
 <div class="section-title">Bezahlt</div>
+{% endif %}
+{% if paid %}
 <ul class="plain list-card">
   {% for invoice in paid %}
-  <li>
-    <div class="reminder lesson-done">
+  <li class="swipe-away" data-action="/rechnungen/{{ invoice.number }}/ausblenden">
+    <div class="swipe-away-note">Ausblenden</div>
+    <div class="reminder lesson-done swipe-away-face">
       <div class="reminder-body">
         <a class="reminder-link" href="/rechnungen/{{ invoice.number }}/ansehen">
           <div class="reminder-title">
@@ -207,12 +210,24 @@
           <form method="post" action="/rechnungen/{{ invoice.number }}/unbezahlt">
             <button class="button button-small" type="submit">Doch nicht bezahlt</button>
           </form>
+          <form method="post" action="/rechnungen/{{ invoice.number }}/ausblenden">
+            <button class="button button-small" type="submit">Ausblenden</button>
+          </form>
         </div>
       </div>
     </div>
   </li>
   {% endfor %}
 </ul>
+{% endif %}
+{% if hidden_paid_count %}
+<form method="post" action="/rechnungen/bezahlt-wieder-zeigen">
+  <p class="hint">
+    {{ hidden_paid_count }} bezahlte Rechnung(en) ausgeblendet — sie zählen
+    weiter für Verdienst, Finanzamt-ZIP und DATEV-Export.
+    <button class="link-button" type="submit">Wieder zeigen</button>
+  </p>
+</form>
 {% endif %}
 
 <div class="section-title">Einnahmen</div>
@@ -268,4 +283,5 @@
 </div>
 
 <script src="/static/share-pdf.js?v={{ asset_version }}"></script>
+<script src="/static/swipe-away.js?v={{ asset_version }}"></script>
 {% endblock %}

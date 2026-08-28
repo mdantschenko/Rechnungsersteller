@@ -145,6 +145,10 @@ class IssuedInvoice(SQLModel, table=True):
     paid_on: date | None = None
     sent_on: date | None = None
     """When the invoice actually went out to the customer."""
+    taken_off_the_list_on: date | None = None
+    """When a paid invoice was swiped off the list. It keeps counting for the
+    books, the tax office ZIP and the DATEV export; only the screen is tidier."""
+
     source_file: str | None = None
 
     customer: Customer = Relationship(back_populates="invoices")

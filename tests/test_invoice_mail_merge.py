@@ -198,3 +198,72 @@ def test_the_letter_keeps_its_line_breaks_without_running_off_the_screen(
     assert "<pre" not in page
     assert "white-space: pre-wrap" in stylesheet
     assert "overflow-wrap: anywhere" in stylesheet
+
+
+def test_a_paid_invoice_can_be_taken_off_the_list(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    client.post("/rechnungen/115/bezahlt")
+    assert "bezahlt am" in client.get("/rechnungen").text
+
+    client.post("/rechnungen/115/ausblenden")
+
+    page = client.get("/rechnungen").text
+    assert "bezahlt am" not in page
+    assert "1 bezahlte Rechnung(en) ausgeblendet" in page
+
+
+def test_a_hidden_invoice_still_counts_for_the_books(
+    client: TestClient, location: Path
+) -> None:
+    """Hiding tidies the screen; it must never touch the records."""
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    client.post("/rechnungen/115/bezahlt")
+    client.post("/rechnungen/115/ausblenden")
+
+    with Session(InvoiceDatabase(location).open()) as session:
+        record = session.exec(
+            select(IssuedInvoice).where(IssuedInvoice.number == 115)
+        ).one()
+        assert record.paid_on is not None
+    assert client.get("/rechnungen/115.pdf").status_code == 200
+    assert client.get("/rechnungen/finanzamt/2026.zip").status_code == 200
+
+
+def test_hidden_invoices_can_be_brought_back(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    client.post("/rechnungen/115/bezahlt")
+    client.post("/rechnungen/115/ausblenden")
+
+    client.post("/rechnungen/bezahlt-wieder-zeigen")
+
+    page = client.get("/rechnungen").text
+    assert "bezahlt am" in page
+    assert "ausgeblendet" not in page
+
+
+def test_marking_it_unpaid_brings_a_hidden_invoice_back(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    client.post("/rechnungen/115/bezahlt")
+    client.post("/rechnungen/115/ausblenden")
+    client.post("/rechnungen/115/unbezahlt")
+    client.post("/rechnungen/115/bezahlt")
+
+    assert "bezahlt am" in client.get("/rechnungen").text

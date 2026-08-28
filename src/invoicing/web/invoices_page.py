@@ -380,6 +380,40 @@ def mark_paid(
     )
 
 
+@router.post("/rechnungen/{number}/ausblenden")
+def take_paid_invoice_off_the_list(
+    number: int, request: Request, session: Session = Depends(database_session)
+) -> Response:
+    """Tidy a paid invoice away from the list; the books keep it."""
+    record = StoreQueries(session).issued_invoice_by_number(number)
+    if record is None or record.paid_on is None:
+        return notice_redirect(
+            request, "/rechnungen", f"Rechnung Nr. {number} ist nicht bezahlt."
+        )
+    record.taken_off_the_list_on = date.today()
+    session.add(record)
+    return notice_redirect(
+        request, "/rechnungen", f"Rechnung Nr. {number} ausgeblendet."
+    )
+
+
+@router.post("/rechnungen/bezahlt-wieder-zeigen")
+def show_every_paid_invoice_again(
+    request: Request, session: Session = Depends(database_session)
+) -> Response:
+    hidden = session.exec(
+        select(IssuedInvoice).where(
+            col(IssuedInvoice.taken_off_the_list_on).is_not(None)
+        )
+    ).all()
+    for record in hidden:
+        record.taken_off_the_list_on = None
+        session.add(record)
+    return notice_redirect(
+        request, "/rechnungen", f"{len(hidden)} Rechnung(en) wieder eingeblendet."
+    )
+
+
 @router.post("/rechnungen/{number}/unbezahlt")
 def mark_unpaid(
     number: int, request: Request, session: Session = Depends(database_session)
@@ -387,6 +421,7 @@ def mark_unpaid(
     record = StoreQueries(session).issued_invoice_by_number(number)
     if record is not None:
         record.paid_on = None
+        record.taken_off_the_list_on = None
         session.add(record)
     return notice_redirect(
         request, "/rechnungen", f"Rechnung Nr. {number} ist wieder offen."
