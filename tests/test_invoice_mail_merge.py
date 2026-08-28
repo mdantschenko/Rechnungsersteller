@@ -179,3 +179,22 @@ def test_the_reminder_shows_its_letter_before_it_goes_out(
     assert "Zahlungserinnerung zur Rechnung Nr. 115" in page
     assert "erika@example.com" in page
     assert outbox == []
+
+
+def test_the_letter_keeps_its_line_breaks_without_running_off_the_screen(
+    client: TestClient, location: Path
+) -> None:
+    """The letter is styled text, not a code block that scrolls sideways."""
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _make_overdue(location, 115, 60)
+
+    page = client.get("/rechnungen/115/erinnerung").text
+    stylesheet = client.get("/static/app.css").text
+
+    assert '<p class="mail-body">' in page
+    assert "<pre" not in page
+    assert "white-space: pre-wrap" in stylesheet
+    assert "overflow-wrap: anywhere" in stylesheet
