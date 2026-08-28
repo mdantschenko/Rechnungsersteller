@@ -6,6 +6,7 @@ lessons as they stand right now. Only releasing writes anything down.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -312,20 +313,41 @@ def send_invoice(
             request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
         )
     composer = InvoiceMailComposer(session)
+    archive = InvoicePdfArchive(session)
+    today = date.today()
+    still_open = composer.still_unpaid_and_overdue(record, today)
+    open_pdfs = archive.pdfs_of(still_open, customer.name)
     try:
         mail.mailer_for(StoreQueries(session).app_settings()).send_pdf(
             to=customer.email,
-            subject=f"Rechnung Nr. {number}",
-            body=composer.invoice_mail_body(record),
+            subject=composer.subject_for(record, still_open),
+            body=composer.invoice_mail_with_open_invoices(record, still_open),
             pdf=pdf,
             sender_name=composer.issuer_name(),
+            more_pdfs=open_pdfs,
         )
     except MailError as error:
         return notice_redirect(request, "/rechnungen", str(error))
-    record.sent_on = date.today()
+    record.sent_on = today
     session.add(record)
+    for reminded in still_open:
+        session.add(PaymentReminder(invoice_id=reminded.id or 0, sent_on=today))
     return notice_redirect(
-        request, "/rechnungen", f"Rechnung Nr. {number} an {customer.email} geschickt."
+        request,
+        "/rechnungen",
+        _sent_message(number, customer.email, still_open),
+    )
+
+
+def _sent_message(
+    number: int, address: str, still_open: Sequence[IssuedInvoice]
+) -> str:
+    if not still_open:
+        return f"Rechnung Nr. {number} an {address} geschickt."
+    reminded = ", ".join(f"Nr. {invoice.number}" for invoice in still_open)
+    return (
+        f"Rechnung Nr. {number} an {address} geschickt — mit Erinnerung "
+        f"an {reminded} in derselben Mail."
     )
 
 
@@ -371,6 +393,54 @@ def mark_unpaid(
     )
 
 
+@router.get("/rechnungen/{number}/erinnerung")
+def preview_payment_reminder(
+    number: int, request: Request, session: Session = Depends(database_session)
+) -> Response:
+    """Show the reminder letter exactly as it would leave the house."""
+    record = StoreQueries(session).issued_invoice_by_number(number)
+    if record is None or record.id is None:
+        return notice_redirect(
+            request, "/rechnungen", f"Es gibt keine Rechnung Nr. {number}."
+        )
+    customer = session.get(Customer, record.customer_id)
+    composer = InvoiceMailComposer(session)
+    count = _reminders_so_far(session, record.id) + 1
+    pdf = (
+        InvoicePdfArchive(session).find_pdf(record, customer.name) if customer else None
+    )
+    goes_by_mail = (
+        customer is not None
+        and customer.delivery is InvoiceDelivery.EMAIL
+        and bool(customer.email)
+    )
+    return template_renderer.render(
+        request,
+        "mail_preview.html",
+        {
+            "heading": f"{count}. Zahlungserinnerung",
+            "subject": f"Zahlungserinnerung zur Rechnung Nr. {number}",
+            "body": composer.reminder_mail_body(record, count),
+            "attachments": [pdf.name] if pdf else [],
+            "recipient": (
+                customer.email
+                if goes_by_mail and customer
+                else "niemanden — für diesen Kunden ist kein E-Mail-Versand "
+                "eingestellt, die Erinnerung wird nur vermerkt"
+            ),
+            "send_action": f"/rechnungen/{number}/erinnern",
+        },
+    )
+
+
+def _reminders_so_far(session: Session, invoice_id: int) -> int:
+    return len(
+        session.exec(
+            select(PaymentReminder).where(PaymentReminder.invoice_id == invoice_id)
+        ).all()
+    )
+
+
 @router.post("/rechnungen/{number}/erinnern")
 def send_payment_reminder(
     number: int, request: Request, session: Session = Depends(database_session)
@@ -382,11 +452,7 @@ def send_payment_reminder(
             request, "/rechnungen", f"Es gibt keine Rechnung Nr. {number}."
         )
     customer = session.get(Customer, record.customer_id)
-    count = 1 + len(
-        session.exec(
-            select(PaymentReminder).where(PaymentReminder.invoice_id == record.id)
-        ).all()
-    )
+    count = _reminders_so_far(session, record.id) + 1
     if (
         customer is not None
         and customer.delivery is InvoiceDelivery.EMAIL

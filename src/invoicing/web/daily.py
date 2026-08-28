@@ -18,7 +18,12 @@ from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import MORNING_ROUND_STARTS_AT, DeliverPushMessage
 from invoicing.mail_error import MailError
 from invoicing.pdf import InvoiceDocumentWriter
-from invoicing.storage.models import AppSettings, InvoiceDelivery, IssuedInvoice
+from invoicing.storage.models import (
+    AppSettings,
+    InvoiceDelivery,
+    IssuedInvoice,
+    PaymentReminder,
+)
 from invoicing.user_data_digest import UserDataDigest
 from invoicing.utils import (
     ensure_backup_passphrase,
@@ -96,19 +101,29 @@ class MorningRound:
                 released.record, run.customer.name
             )
             InvoiceDocumentWriter().write_pdf(released.document, target)
+            still_open = composer.still_unpaid_and_overdue(released.record, today)
             try:
                 mailer.send_pdf(
                     to=run.customer.email or "",
-                    subject=f"Rechnung Nr. {released.record.number}",
-                    body=composer.invoice_mail_body(released.record),
+                    subject=composer.subject_for(released.record, still_open),
+                    body=composer.invoice_mail_with_open_invoices(
+                        released.record, still_open
+                    ),
                     pdf=target,
                     sender_name=composer.issuer_name(),
+                    more_pdfs=InvoicePdfArchive(self._session).pdfs_of(
+                        still_open, run.customer.name
+                    ),
                 )
             except MailError:
                 waiting += 1
                 continue
             released.record.sent_on = today
             self._session.add(released.record)
+            for reminded in still_open:
+                self._session.add(
+                    PaymentReminder(invoice_id=reminded.id or 0, sent_on=today)
+                )
             sent += 1
         return sent, waiting
 

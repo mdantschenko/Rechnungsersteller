@@ -53,6 +53,22 @@ class GermanFormatter:
         """The German name of the day's month: ``März``."""
         return format_date(day, "LLLL", locale=self.locale)
 
+    def months_covered(self, first: date, last: date) -> str:
+        """The months a stretch of days runs through: ``Juli bis September``.
+
+        A stretch inside one month is just that month. Months of different
+        years carry their year, so ``Dezember 2026 bis Januar 2027`` stays
+        unambiguous.
+        """
+        if (first.year, first.month) == (last.year, last.month):
+            return self.month_name(first)
+        if first.year == last.year:
+            return f"{self.month_name(first)} bis {self.month_name(last)}"
+        return (
+            f"{self.month_name(first)} {first.year} bis "
+            f"{self.month_name(last)} {last.year}"
+        )
+
     def clock(self, moment: time) -> str:
         """A clock time the way the calendar prints it: ``14:30``."""
         return f"{moment:%H:%M}"

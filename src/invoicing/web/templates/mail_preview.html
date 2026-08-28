@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% set tab = "invoices" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block heading %}{{ heading }}{% endblock %}
+{% block bar_left %}
+<a class="bar-button" href="/rechnungen" aria-label="Zurück">‹</a>
+{% endblock %}
+
+{% block content %}
+<div class="block">
+  <div class="section-title">Betreff</div>
+  <p class="mail-subject">{{ subject }}</p>
+
+  <div class="section-title">Text</div>
+  <pre class="mail-body">{{ body }}</pre>
+
+  {% if attachments %}
+  <div class="section-title">Anhang</div>
+  <ul class="mail-attachments">
+    {% for name in attachments %}<li>{{ name }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <p class="hint">Geht an {{ recipient }}.</p>
+
+  <div class="row-actions">
+    <form method="post" action="{{ send_action }}">
+      <button class="button" type="submit">Jetzt senden</button>
+    </form>
+    <a class="button button-small" href="/rechnungen">Abbrechen</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 """Sending an invoice PDF by email, straight over SMTP.
 
-No mail service SDK and no queue: one message with one attachment to one
-recipient at a time, which is exactly the shape of this application's traffic.
+No mail service SDK and no queue: one message to one recipient at a time,
+which is exactly the shape of this application's traffic.
 The SMTP account comes from the settings row, so it is entered once on the
 settings screen and never reaches the repository.
 """
@@ -50,17 +50,28 @@ class SmtpMailer:
         body: str,
         pdf: Path,
         sender_name: str = "",
+        more_pdfs: Sequence[Path] = (),
     ) -> None:
         """Send ``pdf`` as an attachment, with a copy into the Sent folder.
 
-        ``sender_name`` is what the recipient's inbox shows instead of the bare
-        mailbox name.
+        Args:
+            sender_name: What the recipient's inbox shows instead of the bare
+                mailbox name.
+            more_pdfs: Further documents for the same mail, so a new invoice
+                and an unpaid older one travel together.
 
         Raises:
             MailError: if the settings are incomplete or the server refuses.
         """
         message = self._checked_outgoing_message(
-            to, subject, body, sender_name, pdf.read_bytes(), pdf.name, "pdf"
+            to,
+            subject,
+            body,
+            sender_name,
+            pdf.read_bytes(),
+            pdf.name,
+            "pdf",
+            [(more.read_bytes(), more.name) for more in more_pdfs],
         )
         self._deliver(message)
         self._copy_into_sent(message)
@@ -114,6 +125,7 @@ class SmtpMailer:
         content: bytes | None = None,
         file_name: str = "",
         subtype: str = "pdf",
+        more_files: Sequence[tuple[bytes, str]] = (),
     ) -> EmailMessage:
         """The checked and addressed message every send goes through.
 
@@ -136,6 +148,7 @@ class SmtpMailer:
                 content=content,
                 file_name=file_name,
                 subtype=subtype,
+                more_files=more_files,
             )
         except ValueError as error:
             raise MailError(
@@ -156,8 +169,9 @@ class SmtpMailer:
         content: bytes | None = None,
         file_name: str = "",
         subtype: str = "pdf",
+        more_files: Sequence[tuple[bytes, str]] = (),
     ) -> EmailMessage:
-        """One plain-text message, with a single file attached when one is given."""
+        """One plain-text message carrying the files it was given."""
         message = EmailMessage()
         message["From"] = sender
         message["To"] = to
@@ -166,6 +180,10 @@ class SmtpMailer:
         if content is not None:
             message.add_attachment(
                 content, maintype="application", subtype=subtype, filename=file_name
+            )
+        for more_content, more_name in more_files:
+            message.add_attachment(
+                more_content, maintype="application", subtype="pdf", filename=more_name
             )
         return message
 

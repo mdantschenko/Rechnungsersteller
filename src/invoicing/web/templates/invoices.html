@@ -155,11 +155,10 @@
             <button class="button button-small" type="submit">✓ Geld erhalten</button>
           </form>
           {% if late %}
-          <form method="post" action="/rechnungen/{{ invoice.number }}/erinnern">
-            <button class="button button-small color-red" type="submit">
-              {{ 'Erneut erinnern' if sent else 'Zahlungserinnerung' }}
-            </button>
-          </form>
+          <a class="button button-small color-red"
+             href="/rechnungen/{{ invoice.number }}/erinnerung">
+            {{ 'Erneut erinnern' if sent else 'Zahlungserinnerung' }}
+          </a>
           {% endif %}
           <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf?herunterladen=1" download
              data-pdf="/rechnungen/{{ invoice.number }}.pdf"

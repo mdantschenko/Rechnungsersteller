@@ -58,3 +58,17 @@ def test_weekday_names_start_on_monday() -> None:
     names = formatter.weekday_names()
     assert names[0] == "Mo."
     assert len(names) == 7
+
+
+def test_a_stretch_inside_one_month_is_named_once() -> None:
+    assert formatter.months_covered(date(2026, 5, 1), date(2026, 5, 31)) == "Mai"
+
+
+def test_a_stretch_over_two_months_names_both() -> None:
+    covered = formatter.months_covered(date(2026, 5, 16), date(2026, 6, 15))
+    assert covered == "Mai bis Juni"
+
+
+def test_a_stretch_over_the_turn_of_the_year_carries_the_years() -> None:
+    covered = formatter.months_covered(date(2026, 12, 16), date(2027, 1, 15))
+    assert covered == "Dezember 2026 bis Januar 2027"

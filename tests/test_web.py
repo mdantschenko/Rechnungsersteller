@@ -1222,7 +1222,7 @@ def test_the_custom_letter_fills_its_placeholders(
         record = session.exec(select(IssuedInvoice)).one()
         body = InvoiceMailComposer(session).invoice_mail_body(record)
 
-    assert "Rechnung für Mai über 33,33\xa0€, Gruß Max Mustermann" in body
+    assert "Rechnung für Mai bis Juni über 33,33\xa0€, Gruß Max Mustermann" in body
 
 
 def test_the_reminder_clock_time_is_kept(client: TestClient) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -49,6 +50,13 @@ class InvoicePdfArchive:
             exact.parent.glob(f"{stem} *.pdf"),
             None,
         )
+
+    def pdfs_of(
+        self, records: Sequence[IssuedInvoice], customer_name: str
+    ) -> list[Path]:
+        """The stored PDFs of these invoices, silently skipping missing ones."""
+        found = (self.find_pdf(record, customer_name) for record in records)
+        return [pdf for pdf in found if pdf is not None]
 
     def stored_pdf(self, number: int) -> Path | None:
         record = self._store.issued_invoice_by_number(number)
