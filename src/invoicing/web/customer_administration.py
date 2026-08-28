@@ -30,6 +30,7 @@ from invoicing.storage.models import (
     TemplateColumn,
 )
 from invoicing.utils import (
+    forget_skipped_occurrences_from,
     parse_german_amount,
     parse_optional_clock_time,
     planning_horizon,
@@ -266,6 +267,7 @@ class CustomerAdministration:
         )
         for lesson in self._session.exec(replaceable).all():
             self._session.delete(lesson)
+        forget_skipped_occurrences_from(series, today)
         self._session.flush()
 
         LessonSeriesMaterialiser(self._session).materialise_all_active(

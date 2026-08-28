@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -10,6 +10,7 @@ import pyzipper
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
+from invoicing.lesson_series import LessonSeriesMaterialiser
 from invoicing.mail import SmtpMailer
 from invoicing.mail_error import MailError
 from invoicing.storage.models import (
@@ -17,9 +18,11 @@ from invoicing.storage.models import (
     Customer,
     IssuedInvoice,
     Lesson,
+    LessonSeries,
     LessonStatus,
 )
 from invoicing.web.daily import MorningRound
+from invoicing.web.lesson_editor import LessonEditor
 
 MORNING = datetime(2026, 6, 16, 7, 30)
 MONDAY = datetime(2026, 6, 15, 7, 30)
@@ -251,3 +254,37 @@ def test_a_freshly_overdue_invoice_announces_itself(
         MORNING + timedelta(days=2)
     )
     assert len(rung) == 2
+
+
+def test_a_moved_series_lesson_mails_a_fresh_backup(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A lesson dragged to another day is real work, not mere materialisation."""
+    backups: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        SmtpMailer, "send_attachment", lambda mailer, **parts: backups.append(parts)
+    )
+    monkeypatch.setattr(SmtpMailer, "send_pdf", lambda *a, **k: None)
+    series = LessonSeries(
+        customer_id=session.exec(select(Customer)).one().id or 0,
+        recurrence="RRULE:FREQ=WEEKLY;BYDAY=TU",
+        quantity=Decimal("1"),
+        starts_on=date(2026, 6, 2),
+        starts_at=time(16, 0),
+    )
+    session.add(series)
+    session.commit()
+    LessonSeriesMaterialiser(session).materialise_all_active(until=date(2026, 6, 16))
+    session.commit()
+
+    MorningRound(session, _settings(session), lambda m: None).run(MONDAY)
+    fingerprint = _settings(session).backup_digest
+    moved = session.exec(
+        select(Lesson).where(Lesson.taught_on == date(2026, 6, 9))
+    ).one()
+    LessonEditor(session).reschedule(moved.id or 0, date(2026, 6, 11), "")
+    session.commit()
+    MorningRound(session, _settings(session), lambda m: None).run(NEXT_MONDAY)
+
+    assert len(backups) == 2
+    assert _settings(session).backup_digest != fingerprint

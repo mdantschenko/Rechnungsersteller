@@ -4,10 +4,11 @@ from datetime import date, time
 from decimal import Decimal
 
 from sqlalchemy import Engine
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from invoicing.lesson_series import LessonSeriesMaterialiser
 from invoicing.storage.models import Lesson, LessonSeries, LessonStatus
+from invoicing.web.lesson_editor import LessonEditor
 
 EVERY_TUESDAY = "RRULE:FREQ=WEEKLY;BYDAY=TU"
 
@@ -137,3 +138,86 @@ def test_finds_lessons_that_are_overdue_and_still_unanswered(
             date(2026, 6, 9),
             date(2026, 6, 16),
         ]
+
+
+def test_a_moved_lesson_does_not_come_back_on_its_old_day(
+    ready_to_bill: Engine,
+) -> None:
+    with Session(ready_to_bill) as session:
+        _series(session)
+        materialiser = LessonSeriesMaterialiser(session)
+        materialiser.materialise_all_active(until=date(2026, 6, 30))
+        session.commit()
+
+        moved = session.exec(
+            select(Lesson).where(Lesson.taught_on == date(2026, 6, 9))
+        ).one()
+        LessonEditor(session).reschedule(moved.id or 0, date(2026, 6, 11), "")
+        session.commit()
+
+        assert materialiser.materialise_all_active(until=date(2026, 6, 30)) == ()
+        session.commit()
+        days = list(session.exec(select(col(Lesson.taught_on))))
+        assert date(2026, 6, 9) not in days
+
+
+def test_a_deleted_lesson_is_not_written_out_again(ready_to_bill: Engine) -> None:
+    with Session(ready_to_bill) as session:
+        _series(session)
+        materialiser = LessonSeriesMaterialiser(session)
+        materialiser.materialise_all_active(until=date(2026, 6, 30))
+        session.commit()
+
+        dropped = session.exec(
+            select(Lesson).where(Lesson.taught_on == date(2026, 6, 16))
+        ).one()
+        LessonEditor(session).remove(dropped.id or 0)
+        session.commit()
+
+        assert materialiser.materialise_all_active(until=date(2026, 6, 30)) == ()
+        session.commit()
+        days = list(session.exec(select(col(Lesson.taught_on))))
+        assert date(2026, 6, 16) not in days
+        assert len(days) == 4
+
+
+def test_a_deleted_lesson_stays_gone_when_the_horizon_grows(
+    ready_to_bill: Engine,
+) -> None:
+    with Session(ready_to_bill) as session:
+        _series(session)
+        materialiser = LessonSeriesMaterialiser(session)
+        materialiser.materialise_all_active(until=date(2026, 6, 16))
+        session.commit()
+
+        dropped = session.exec(
+            select(Lesson).where(Lesson.taught_on == date(2026, 6, 9))
+        ).one()
+        LessonEditor(session).remove(dropped.id or 0)
+        session.commit()
+
+        materialiser.materialise_all_active(until=date(2026, 7, 31))
+        session.commit()
+
+        days = list(session.exec(select(col(Lesson.taught_on))))
+        assert date(2026, 6, 9) not in days
+
+
+def test_a_moved_lesson_keeps_the_series_day_it_was_written_for(
+    ready_to_bill: Engine,
+) -> None:
+    with Session(ready_to_bill) as session:
+        _series(session)
+        LessonSeriesMaterialiser(session).materialise_all_active(
+            until=date(2026, 6, 10)
+        )
+        session.commit()
+
+        moved = session.exec(
+            select(Lesson).where(Lesson.taught_on == date(2026, 6, 2))
+        ).one()
+        LessonEditor(session).reschedule(moved.id or 0, date(2026, 6, 4), "17:30")
+        session.commit()
+
+        assert moved.taught_on == date(2026, 6, 4)
+        assert moved.series_occurrence_on == date(2026, 6, 2)

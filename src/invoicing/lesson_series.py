@@ -13,6 +13,7 @@ from dateutil.rrule import rrulestr
 from sqlmodel import Session, col, select
 
 from invoicing.storage.models import Lesson, LessonSeries, LessonStatus
+from invoicing.utils import skipped_occurrence_days
 
 
 class LessonSeriesMaterialiser:
@@ -44,15 +45,16 @@ class LessonSeriesMaterialiser:
         return tuple(self._session.exec(statement).all())
 
     def _materialise_one(self, series: LessonSeries, until: date) -> list[Lesson]:
-        already_there = self._dates_already_written(series)
+        settled = self._occurrences_already_settled(series)
         created: list[Lesson] = []
         for occurrence in self._occurrences(series, until):
-            if occurrence in already_there:
+            if occurrence in settled:
                 continue
             lesson = Lesson(
                 customer_id=series.customer_id,
                 series_id=series.id,
                 taught_on=occurrence,
+                series_occurrence_on=occurrence,
                 starts_at=series.starts_at,
                 quantity=series.quantity,
                 status=LessonStatus.PLANNED,
@@ -61,9 +63,18 @@ class LessonSeriesMaterialiser:
             created.append(lesson)
         return created
 
-    def _dates_already_written(self, series: LessonSeries) -> set[date]:
-        statement = select(col(Lesson.taught_on)).where(Lesson.series_id == series.id)
-        return set(self._session.exec(statement).all())
+    def _occurrences_already_settled(self, series: LessonSeries) -> set[date]:
+        """The series days that already have an answer: written out or dropped.
+
+        A lesson counts by the day it was written out for, not by the day it
+        currently sits on — otherwise moving it would free its series day and
+        the next round would write the very same lesson again.
+        """
+        statement = select(col(Lesson.series_occurrence_on)).where(
+            Lesson.series_id == series.id
+        )
+        written = {day for day in self._session.exec(statement).all() if day}
+        return written | skipped_occurrence_days(series)
 
     @staticmethod
     def _occurrences(series: LessonSeries, until: date) -> list[date]:

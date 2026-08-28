@@ -8,8 +8,13 @@ from decimal import Decimal
 from sqlmodel import Session, select
 
 from invoicing.constant import ValueSource
-from invoicing.storage.models import BillingTemplate, Lesson, LessonStatus
-from invoicing.utils import parse_optional_clock_time
+from invoicing.storage.models import (
+    BillingTemplate,
+    Lesson,
+    LessonSeries,
+    LessonStatus,
+)
+from invoicing.utils import parse_optional_clock_time, remember_skipped_occurrence
 
 
 class LessonEditor:
@@ -69,8 +74,10 @@ class LessonEditor:
     def remove(self, lesson_id: int) -> None:
         """Delete a lesson that should never have existed.
 
-        Refused once the lesson has been billed, because the invoice would
-        then name a lesson that is no longer there.
+        A lesson out of a series leaves a note behind, so the series does not
+        write the very same day out again. Refused once the lesson has been
+        billed, because the invoice would then name a lesson that is no longer
+        there.
 
         Raises:
             ValueError: if the lesson is already on an invoice.
@@ -78,7 +85,17 @@ class LessonEditor:
         lesson = self._lesson(lesson_id)
         if lesson.invoice_id is not None:
             raise ValueError(f"lesson {lesson_id} is already on an invoice")
+        self._drop_from_its_series(lesson)
         self._session.delete(lesson)
+
+    def _drop_from_its_series(self, lesson: Lesson) -> None:
+        if lesson.series_id is None or lesson.series_occurrence_on is None:
+            return
+        series = self._session.get(LessonSeries, lesson.series_id)
+        if series is None:
+            return
+        remember_skipped_occurrence(series, lesson.series_occurrence_on)
+        self._session.add(series)
 
     def add(
         self, customer_id: int, taught_on: date, quantity: Decimal, starts_at: str

@@ -30,7 +30,7 @@ from invoicing.constant import (
     TEN_THOUSANDTH,
     ZERO,
 )
-from invoicing.storage.models import BillingTemplate
+from invoicing.storage.models import BillingTemplate, LessonSeries
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -205,3 +205,24 @@ def notice_redirect(request: Request, path: str, message: str) -> RedirectRespon
     """
     request.session[NOTICE_SESSION_KEY] = message
     return RedirectResponse(path, status_code=303)
+
+
+def skipped_occurrence_days(series: LessonSeries) -> set[date]:
+    """The series days the user deleted, which must never be written again."""
+    return {date.fromisoformat(day) for day in series.skipped_occurrences}
+
+
+def remember_skipped_occurrence(series: LessonSeries, day: date) -> None:
+    """Note that this series day was dropped on purpose."""
+    if day.isoformat() in series.skipped_occurrences:
+        return
+    series.skipped_occurrences = [*series.skipped_occurrences, day.isoformat()]
+
+
+def forget_skipped_occurrences_from(series: LessonSeries, day: date) -> None:
+    """Let the series write its days from ``day`` on out again."""
+    series.skipped_occurrences = [
+        skipped
+        for skipped in series.skipped_occurrences
+        if date.fromisoformat(skipped) < day
+    ]

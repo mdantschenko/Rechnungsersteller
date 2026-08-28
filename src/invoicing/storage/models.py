@@ -282,6 +282,8 @@ class LessonSeries(SQLModel, table=True):
     ends_on: date | None = None
     starts_at: time | None = None
     active: bool = Field(default=True, index=True)
+    skipped_occurrences: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    """Occurrence days the user deleted, so they are never written out again."""
 
 
 class Lesson(SQLModel, table=True):
@@ -295,6 +297,10 @@ class Lesson(SQLModel, table=True):
         default=None, foreign_key="lesson_series.id", index=True
     )
     taught_on: date = Field(index=True)
+    series_occurrence_on: date | None = Field(default=None, index=True)
+    """The series day this lesson was written out for; it survives a move, so
+    the series never writes the same day a second time."""
+
     starts_at: time | None = None
     quantity: Decimal = money_field()
     status: LessonStatus = Field(default=LessonStatus.PLANNED, index=True)

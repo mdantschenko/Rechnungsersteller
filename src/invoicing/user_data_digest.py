@@ -108,6 +108,7 @@ class UserDataDigest:
             or bool(lesson.column_values)
             or lesson.quantity != series.quantity
             or lesson.starts_at != series.starts_at
+            or lesson.taught_on != lesson.series_occurrence_on
         )
 
     @staticmethod
