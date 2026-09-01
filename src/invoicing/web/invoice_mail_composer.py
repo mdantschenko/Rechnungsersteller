@@ -217,7 +217,8 @@ class InvoiceMailComposer:
         }
         if reminder_count is not None:
             values["ANZAHL"] = str(reminder_count)
-        return replace_placeholders_once(open_invoices.resolved(text), values)
+        settled = open_invoices.one_line_per_invoice(open_invoices.resolved(text))
+        return replace_placeholders_once(settled, values)
 
     @staticmethod
     def _letter_with_greeting_and_signature(message: str, signature: str) -> str:

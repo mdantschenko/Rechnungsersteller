@@ -295,6 +295,9 @@ OPEN_INVOICE_PLACEHOLDER_NAMES = (
     "ALTER MONAT",
     "SUMME",
 )
+OPEN_INVOICE_NUMBER_PLACEHOLDER = "{ALTE RECHNUNG}"
+"""A line carrying this placeholder is written once per open invoice."""
+
 OPEN_INVOICE_NUMBER_SEPARATOR = ", "
 OPEN_INVOICE_LAST_NUMBER_SEPARATOR = " und "
 

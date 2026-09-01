@@ -14,12 +14,17 @@ from decimal import Decimal
 from invoicing.constant import (
     OPEN_INVOICE_BLOCK_MARKER_PATTERN,
     OPEN_INVOICE_LAST_NUMBER_SEPARATOR,
+    OPEN_INVOICE_NUMBER_PLACEHOLDER,
     OPEN_INVOICE_NUMBER_SEPARATOR,
     OPEN_INVOICE_PLACEHOLDER_NAMES,
 )
 from invoicing.german_formatter import german_formatter
 from invoicing.storage.models import IssuedInvoice
-from invoicing.utils import placeholder_names_in, sum_of_cents
+from invoicing.utils import (
+    placeholder_names_in,
+    replace_placeholders_once,
+    sum_of_cents,
+)
 
 
 class OpenInvoicesInTheLetter:
@@ -62,6 +67,37 @@ class OpenInvoicesInTheLetter:
         if keep_the_block or not inside_the_block:
             pieces.append(text[cursor:])
         return "".join(pieces)
+
+    def one_line_per_invoice(self, text: str) -> str:
+        """Write every line that names an old invoice once per open invoice.
+
+        A line carrying {ALTE RECHNUNG} belongs to a single invoice, so it is
+        repeated with each one's own number, amount and month. Lines that only
+        sum things up stay as they are.
+        """
+        written: list[str] = []
+        for line in text.split("\n"):
+            if OPEN_INVOICE_NUMBER_PLACEHOLDER not in line:
+                written.append(line)
+                continue
+            written.extend(
+                self._line_about(line, invoice)
+                for invoice in reversed(self._still_open)
+            )
+        return "\n".join(written)
+
+    @staticmethod
+    def _line_about(line: str, invoice: IssuedInvoice) -> str:
+        return replace_placeholders_once(
+            line,
+            {
+                "ALTE RECHNUNG": str(invoice.number),
+                "ALTER BETRAG": german_formatter.format_euro(invoice.printed_total),
+                "ALTER MONAT": german_formatter.months_covered(
+                    invoice.period_printed_from, invoice.period_printed_to
+                ),
+            },
+        )
 
     def _numbers_youngest_first(self) -> str:
         numbers = [str(invoice.number) for invoice in reversed(self._still_open)]
