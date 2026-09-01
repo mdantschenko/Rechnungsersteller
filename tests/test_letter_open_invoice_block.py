@@ -235,7 +235,8 @@ def test_two_open_invoices_are_listed_and_added_up(location: Path) -> None:
     )
 
     assert "letzte Rechnung Juni bis Juli." in letter
-    assert _as_the_app_prints_money("Rechnung Nr. 119 und 118: 220,00 €") in letter
+    assert _as_the_app_prints_money("Rechnung Nr. 119: 120,00 €") in letter
+    assert _as_the_app_prints_money("Rechnung Nr. 118: 100,00 €") in letter
     assert _as_the_app_prints_money("SUMME: 360,01 €") in letter
 
 
@@ -468,3 +469,62 @@ def test_the_customer_page_explains_the_new_placeholders(client: TestClient) -> 
     assert "{ALTER MONAT}" in page
     assert "{SUMME}" in page
     assert "Was zwischen {WENN OFFEN} und {ENDE} steht" in page
+
+
+def test_each_open_invoice_gets_its_own_line() -> None:
+    """A line naming an old invoice belongs to one invoice, so it repeats."""
+    from types import SimpleNamespace
+
+    from invoicing.web.open_invoices_in_the_letter import OpenInvoicesInTheLetter
+
+    def older(number: int, amount: str, month: int) -> Any:
+        return SimpleNamespace(
+            number=number,
+            printed_total=Decimal(amount),
+            period_printed_from=date(2026, month, 1),
+            period_printed_to=date(2026, month, 28),
+        )
+
+    open_invoices = OpenInvoicesInTheLetter(
+        [older(119, "120.00", 7), older(120, "140.01", 8)]
+    )
+    summary = "Rechnung Nr. {ALTE RECHNUNG}: {ALTER BETRAG}\nSUMME: bleibt"
+
+    written = open_invoices.one_line_per_invoice(summary)
+
+    assert written.split("\n") == [
+        f"Rechnung Nr. 120: 140,01{NON_BREAKING_SPACE}{EURO_SIGN}",
+        f"Rechnung Nr. 119: 120,00{NON_BREAKING_SPACE}{EURO_SIGN}",
+        "SUMME: bleibt",
+    ]
+
+
+def test_the_month_of_several_open_invoices_spans_them_all() -> None:
+    from types import SimpleNamespace
+
+    from invoicing.web.open_invoices_in_the_letter import OpenInvoicesInTheLetter
+
+    def older(number: int, month: int) -> Any:
+        return SimpleNamespace(
+            number=number,
+            printed_total=Decimal("100.00"),
+            period_printed_from=date(2026, month, 1),
+            period_printed_to=date(2026, month, 28),
+        )
+
+    values = OpenInvoicesInTheLetter([older(119, 7), older(120, 8)]).placeholder_values(
+        Decimal("150.00")
+    )
+
+    assert values["ALTER MONAT"] == "Juli bis August"
+    assert values["SUMME"] == f"350,00{NON_BREAKING_SPACE}{EURO_SIGN}"
+
+
+def test_a_line_about_an_old_invoice_disappears_when_nothing_is_open() -> None:
+    from invoicing.web.open_invoices_in_the_letter import OpenInvoicesInTheLetter
+
+    written = OpenInvoicesInTheLetter([]).one_line_per_invoice(
+        "Rechnung Nr. {ALTE RECHNUNG}: {ALTER BETRAG}\nPayPal: ich@example.com"
+    )
+
+    assert written == "PayPal: ich@example.com"

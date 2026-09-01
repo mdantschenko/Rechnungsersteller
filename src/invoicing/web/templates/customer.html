@@ -76,6 +76,12 @@ PayPal: ich@example.com</p>
         {WENN OFFEN} darf am Ende der Zeile davor stehen oder allein auf
         einer eigenen Zeile — beides ergibt denselben Brief.
       </p>
+      <p class="hint">
+        Sind mehrere Rechnungen offen, wird die Zeile mit
+        {ALTE RECHNUNG} für jede davon einmal geschrieben, mit ihrer
+        eigenen Nummer und ihrem eigenen Betrag. {SUMME} und
+        {ALTER MONAT} fassen weiterhin alle zusammen.
+      </p>
     </details>
     <label>E-Mail<input type="text" name="email" value="{{ customer.email or '' }}"></label>
     <label>WhatsApp<input type="text" name="phone" value="{{ customer.phone or '' }}"></label>
