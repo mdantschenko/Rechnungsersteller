@@ -284,3 +284,68 @@ def test_marking_it_unpaid_brings_a_hidden_invoice_back(
     client.post("/rechnungen/115/bezahlt")
 
     assert "bezahlt am" in client.get("/rechnungen").text
+
+
+def test_paying_one_invoice_offers_to_close_the_others(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+
+    page = client.post("/rechnungen/116/bezahlt").text
+
+    assert "Auch als bezahlt markieren" in page
+    assert "Nr. 115" in page
+
+
+def test_the_offer_closes_the_other_invoices_in_one_click(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+    client.post("/rechnungen/116/bezahlt")
+
+    client.post("/rechnungen/auch-bezahlt", data={"nummern": "115"})
+
+    with Session(InvoiceDatabase(location).open()) as session:
+        older = session.exec(
+            select(IssuedInvoice).where(IssuedInvoice.number == 115)
+        ).one()
+        assert older.paid_on is not None
+
+
+def test_the_offer_appears_only_once(client: TestClient, location: Path) -> None:
+    """It is a one-time question, not a banner that nags on every visit."""
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+    assert "Auch als bezahlt markieren" in client.post("/rechnungen/116/bezahlt").text
+
+    assert "Auch als bezahlt markieren" not in client.get("/rechnungen").text
+
+
+def test_nothing_is_offered_when_the_customer_owes_nothing_else(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+
+    page = client.post("/rechnungen/115/bezahlt").text
+
+    assert "Auch als bezahlt markieren" not in page

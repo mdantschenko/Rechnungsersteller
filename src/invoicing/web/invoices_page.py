@@ -15,7 +15,11 @@ from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
-from invoicing.constant import DATEV_CSV_MEDIA_TYPE
+from invoicing.constant import (
+    DATEV_CSV_MEDIA_TYPE,
+    STILL_OPEN_OFFER_NUMBER_SEPARATOR,
+    STILL_OPEN_OFFER_SESSION_KEY,
+)
 from invoicing.datev_export import DatevBookingBatchExport
 from invoicing.datev_export_error import DatevExportError
 from invoicing.mail_error import MailError
@@ -41,9 +45,9 @@ router = APIRouter()
 def invoice_list(
     request: Request, session: Session = Depends(database_session)
 ) -> Response:
-    return template_renderer.render(
-        request, "invoices.html", InvoiceListViewBuilder(session).list_context()
-    )
+    context = InvoiceListViewBuilder(session).list_context()
+    context["still_open_offer"] = request.session.pop(STILL_OPEN_OFFER_SESSION_KEY, "")
+    return template_renderer.render(request, "invoices.html", context)
 
 
 @router.get("/rechnungen/finanzamt/{year}.zip")
@@ -374,8 +378,40 @@ def mark_paid(
         )
     record.paid_on = date.today()
     session.add(record)
+    still_open = InvoiceMailComposer(session).still_unpaid(record)
+    request.session.pop(STILL_OPEN_OFFER_SESSION_KEY, None)
+    if still_open:
+        request.session[STILL_OPEN_OFFER_SESSION_KEY] = (
+            STILL_OPEN_OFFER_NUMBER_SEPARATOR.join(
+                str(invoice.number) for invoice in still_open
+            )
+        )
     return notice_redirect(
         request, "/rechnungen", f"Rechnung Nr. {number} ist bezahlt. 🎉"
+    )
+
+
+@router.post("/rechnungen/auch-bezahlt")
+def mark_the_other_open_invoices_paid(
+    request: Request,
+    nummern: str = Form(...),
+    session: Session = Depends(database_session),
+) -> Response:
+    """Close the invoices the offer named, in one click."""
+    store = StoreQueries(session)
+    closed = []
+    for number in nummern.split(STILL_OPEN_OFFER_NUMBER_SEPARATOR):
+        record = store.issued_invoice_by_number(int(number))
+        if record is None or record.paid_on is not None:
+            continue
+        record.paid_on = date.today()
+        session.add(record)
+        closed.append(record.number)
+    named = ", ".join(f"Nr. {number}" for number in closed)
+    return notice_redirect(
+        request,
+        "/rechnungen",
+        f"Auch {named} ist bezahlt. 🎉" if closed else "Nichts mehr offen.",
     )
 
 

@@ -28,6 +28,22 @@
 {% endmacro %}
 
 {% block content %}
+{% if still_open_offer %}
+<div class="block">
+  <p class="hint" style="margin-top: 0">
+    Von diesem Kunden {{ 'ist noch die Rechnung' if still_open_offer.split(',') | length == 1 else 'sind noch die Rechnungen' }}
+    {% for number in still_open_offer.split(',') %}Nr. {{ number }}{{ ', ' if not loop.last }}{% endfor %}
+    offen. Hat er alles zusammen überwiesen?
+  </p>
+  <div class="row-actions">
+    <form method="post" action="/rechnungen/auch-bezahlt">
+      <input type="hidden" name="nummern" value="{{ still_open_offer }}">
+      <button class="button" type="submit">Auch als bezahlt markieren</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="section-title">Fällig</div>
 {% if not due %}
 <p class="hint">Zurzeit ist nichts abzurechnen.</p>
