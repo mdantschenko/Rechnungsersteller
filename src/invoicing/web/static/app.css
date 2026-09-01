@@ -1174,11 +1174,11 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 
-.mail-preview .section-title {
+.letter-preview .section-title {
   margin: 1.125rem 0 0.375rem;
 }
 
-.mail-preview .section-title:first-child {
+.letter-preview .section-title:first-child {
   margin-top: 0;
 }
 
@@ -1198,7 +1198,7 @@ summary:focus-visible {
   padding-left: 1.25rem;
 }
 
-.mail-preview .row-actions {
+.letter-preview .row-actions {
   padding-top: 1rem;
 }
 
