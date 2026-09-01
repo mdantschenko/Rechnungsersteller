@@ -52,11 +52,29 @@
           <li><span>{SCHUELER}</span><span>{{ customer.pupil_name }}</span></li>
           <li><span>{ABSENDER}</span><span>dein Name aus den Einstellungen</span></li>
           <li><span>{ANZAHL}</span><span>2 — nur im Erinnerungstext</span></li>
+          <li><span>{ALTE RECHNUNG}</span><span>119 — die noch offene Rechnung</span></li>
+          <li><span>{ALTER BETRAG}</span><span>120,00&nbsp;€ — was davon offen ist</span></li>
+          <li><span>{ALTER MONAT}</span><span>Juli — ihr Monat</span></li>
+          <li><span>{SUMME}</span><span>260,01&nbsp;€ — neue Rechnung plus offene</span></li>
         </ul>
       </div>
       <p class="hint">
         Gilt für beide Anschreiben. Leer gelassen wird der eingebaute
         Standardtext verwendet.
+      </p>
+      <p class="hint">
+        Was zwischen {WENN OFFEN} und {ENDE} steht, kommt nur in den Brief,
+        wenn dieser Kunde eine ältere Rechnung noch nicht bezahlt hat. Sonst
+        fällt es weg, ohne eine Leerzeile zu hinterlassen:
+      </p>
+      <p class="mail-preview">Zusammenfassung:
+Rechnung Nr. {NUMMER}: {BETRAG}{WENN OFFEN}
+Rechnung Nr. {ALTE RECHNUNG}: {ALTER BETRAG}
+SUMME: {SUMME}{ENDE}
+PayPal: ich@example.com</p>
+      <p class="hint">
+        {WENN OFFEN} darf am Ende der Zeile davor stehen oder allein auf
+        einer eigenen Zeile — beides ergibt denselben Brief.
       </p>
     </details>
     <label>E-Mail<input type="text" name="email" value="{{ customer.email or '' }}"></label>

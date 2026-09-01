@@ -66,7 +66,9 @@ class InvoiceListViewBuilder:
             "hidden_paid_count": len(paid) - len(still_listed),
             "reminders": self._reminder_days(),
             "mail_bodies": {
-                record.number: composer.invoice_mail_body(record, signature)
+                record.number: composer.invoice_mail_body(
+                    record, signature, composer.still_unpaid(record)
+                )
                 for record in unpaid
             },
             "names": {customer.id or 0: customer.name for customer in everyone},

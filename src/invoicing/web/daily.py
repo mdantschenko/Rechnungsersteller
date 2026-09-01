@@ -101,18 +101,16 @@ class MorningRound:
                 released.record, run.customer.name
             )
             InvoiceDocumentWriter().write_pdf(released.document, target)
-            still_open = composer.still_unpaid_and_overdue(released.record, today)
+            outgoing = composer.mail_to_send(released.record, today)
             try:
                 mailer.send_pdf(
                     to=run.customer.email or "",
-                    subject=composer.subject_for(released.record, still_open),
-                    body=composer.invoice_mail_with_open_invoices(
-                        released.record, still_open
-                    ),
+                    subject=outgoing.subject,
+                    body=outgoing.body,
                     pdf=target,
                     sender_name=composer.issuer_name(),
                     more_pdfs=InvoicePdfArchive(self._session).pdfs_of(
-                        still_open, run.customer.name
+                        outgoing.rides_along, run.customer.name
                     ),
                 )
             except MailError:
@@ -120,7 +118,7 @@ class MorningRound:
                 continue
             released.record.sent_on = today
             self._session.add(released.record)
-            for reminded in still_open:
+            for reminded in outgoing.to_note_as_reminded:
                 self._session.add(
                     PaymentReminder(invoice_id=reminded.id or 0, sent_on=today)
                 )
