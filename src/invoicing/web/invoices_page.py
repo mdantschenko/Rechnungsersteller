@@ -315,27 +315,26 @@ def send_invoice(
     composer = InvoiceMailComposer(session)
     archive = InvoicePdfArchive(session)
     today = date.today()
-    still_open = composer.still_unpaid_and_overdue(record, today)
-    open_pdfs = archive.pdfs_of(still_open, customer.name)
+    outgoing = composer.mail_to_send(record, today)
     try:
         mail.mailer_for(StoreQueries(session).app_settings()).send_pdf(
             to=customer.email,
-            subject=composer.subject_for(record, still_open),
-            body=composer.invoice_mail_with_open_invoices(record, still_open),
+            subject=outgoing.subject,
+            body=outgoing.body,
             pdf=pdf,
             sender_name=composer.issuer_name(),
-            more_pdfs=open_pdfs,
+            more_pdfs=archive.pdfs_of(outgoing.rides_along, customer.name),
         )
     except MailError as error:
         return notice_redirect(request, "/rechnungen", str(error))
     record.sent_on = today
     session.add(record)
-    for reminded in still_open:
+    for reminded in outgoing.to_note_as_reminded:
         session.add(PaymentReminder(invoice_id=reminded.id or 0, sent_on=today))
     return notice_redirect(
         request,
         "/rechnungen",
-        _sent_message(number, customer.email, still_open),
+        _sent_message(number, customer.email, outgoing.rides_along),
     )
 
 
@@ -346,8 +345,8 @@ def _sent_message(
         return f"Rechnung Nr. {number} an {address} geschickt."
     reminded = ", ".join(f"Nr. {invoice.number}" for invoice in still_open)
     return (
-        f"Rechnung Nr. {number} an {address} geschickt — mit Erinnerung "
-        f"an {reminded} in derselben Mail."
+        f"Rechnung Nr. {number} an {address} geschickt — mit Hinweis "
+        f"auf {reminded} in derselben Mail."
     )
 
 

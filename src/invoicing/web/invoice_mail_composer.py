@@ -1,7 +1,8 @@
 """The letters that travel with an invoice or ask for its payment.
 
 A new invoice and an older unpaid one go out as one mail, so the customer
-never gets two letters on the same day.
+never gets two letters on the same day. A customer's own letter may say
+where the older invoice is mentioned; otherwise a postscript says it.
 """
 
 from __future__ import annotations
@@ -11,8 +12,11 @@ from datetime import date
 
 from sqlmodel import Session, col, select
 
+from invoicing.data_classes import InvoiceMailToSend
 from invoicing.german_formatter import german_formatter
 from invoicing.storage.models import Customer, IssuedInvoice, Issuer
+from invoicing.utils import replace_placeholders_once
+from invoicing.web.open_invoices_in_the_letter import OpenInvoicesInTheLetter
 from invoicing.web.store_queries import StoreQueries
 
 
@@ -26,8 +30,38 @@ class InvoiceMailComposer:
         issuer = self._session.exec(select(Issuer)).first()
         return issuer.name if issuer else ""
 
+    def mail_to_send(
+        self, record: IssuedInvoice, today: date, signature: str | None = None
+    ) -> InvoiceMailToSend:
+        """Everything one invoice mail needs, wherever it is sent from.
+
+        A letter that mentions the open invoices itself carries all of them;
+        a letter that does not keeps the postscript about the overdue ones.
+        """
+        still_unpaid = self.still_unpaid(record)
+        if OpenInvoicesInTheLetter.is_spoken_about_in(self.customer_letter(record)):
+            rides_along: Sequence[IssuedInvoice] = still_unpaid
+            body = self.invoice_mail_body(record, signature, rides_along)
+        else:
+            rides_along = self.overdue_among(still_unpaid, today)
+            body = self.invoice_mail_with_open_invoices(record, rides_along, signature)
+        return InvoiceMailToSend(
+            subject=self.subject_for(record, rides_along),
+            body=body,
+            rides_along=tuple(rides_along),
+            to_note_as_reminded=tuple(self.overdue_among(rides_along, today)),
+        )
+
+    def customer_letter(self, record: IssuedInvoice) -> str:
+        """The letter this customer wrote for their invoices, empty if none."""
+        customer = self._session.get(Customer, record.customer_id)
+        return customer.mail_text if customer and customer.mail_text else ""
+
     def invoice_mail_body(
-        self, record: IssuedInvoice, signature: str | None = None
+        self,
+        record: IssuedInvoice,
+        signature: str | None = None,
+        still_open: Sequence[IssuedInvoice] = (),
     ) -> str:
         """The letter accompanying the invoice.
 
@@ -39,7 +73,7 @@ class InvoiceMailComposer:
         customer = self._session.get(Customer, record.customer_id)
         if customer is not None and customer.mail_text:
             return self.fill_letter_placeholders(
-                customer.mail_text, record, customer, signature
+                customer.mail_text, record, customer, signature, still_open
             )
         return self._letter_with_greeting_and_signature(
             f"anbei die Rechnung Nr. {record.number} über "
@@ -53,10 +87,14 @@ class InvoiceMailComposer:
         signature = self.issuer_name()
         customer = self._session.get(Customer, record.customer_id)
         if customer is not None and customer.reminder_text:
-            text = self.fill_letter_placeholders(
-                customer.reminder_text, record, customer, signature
+            return self.fill_letter_placeholders(
+                customer.reminder_text,
+                record,
+                customer,
+                signature,
+                self.still_unpaid(record),
+                count,
             )
-            return text.replace("{ANZAHL}", str(count))
         return self._letter_with_greeting_and_signature(
             f"dies ist die {count}. Zahlungserinnerung zur Rechnung Nr. "
             f"{record.number} über "
@@ -68,24 +106,31 @@ class InvoiceMailComposer:
             signature,
         )
 
-    def still_unpaid_and_overdue(
-        self, record: IssuedInvoice, today: date
-    ) -> list[IssuedInvoice]:
-        """The customer's other invoices whose payment window has run out.
+    def still_unpaid(self, record: IssuedInvoice) -> list[IssuedInvoice]:
+        """The customer's other invoices that nobody has paid yet.
 
-        These ride along with the new invoice instead of asking for their
-        money in a letter of their own.
+        Whether their payment window has run out does not matter here; only
+        the payment reminders care about that.
         """
+        return list(
+            self._session.exec(
+                select(IssuedInvoice)
+                .where(IssuedInvoice.customer_id == record.customer_id)
+                .where(IssuedInvoice.id != record.id)
+                .where(col(IssuedInvoice.paid_on).is_(None))
+                .order_by(col(IssuedInvoice.number))
+            ).all()
+        )
+
+    def overdue_among(
+        self, invoices: Sequence[IssuedInvoice], today: date
+    ) -> list[IssuedInvoice]:
+        """Those of the invoices whose payment window has run out."""
         payment_days = StoreQueries(self._session).app_settings().payment_days
-        others = self._session.exec(
-            select(IssuedInvoice)
-            .where(IssuedInvoice.customer_id == record.customer_id)
-            .where(IssuedInvoice.id != record.id)
-            .where(col(IssuedInvoice.paid_on).is_(None))
-            .order_by(col(IssuedInvoice.number))
-        ).all()
         return [
-            other for other in others if other.days_overdue(payment_days, today) > 0
+            invoice
+            for invoice in invoices
+            if invoice.days_overdue(payment_days, today) > 0
         ]
 
     def subject_for(
@@ -112,7 +157,7 @@ class InvoiceMailComposer:
         The note goes after the closing, as a postscript, so a customer's own
         letter keeps its wording and its signature stays at the end.
         """
-        letter = self.invoice_mail_body(record, signature)
+        letter = self.invoice_mail_body(record, signature, still_open)
         if not still_open:
             return letter
         return f"{letter}\n{self.open_invoices_postscript(still_open)}"
@@ -139,9 +184,20 @@ class InvoiceMailComposer:
         return f"{opening}{named} — {closing}\n"
 
     def fill_letter_placeholders(
-        self, text: str, record: IssuedInvoice, customer: Customer, signature: str
+        self,
+        text: str,
+        record: IssuedInvoice,
+        customer: Customer,
+        signature: str,
+        still_open: Sequence[IssuedInvoice] = (),
+        reminder_count: int | None = None,
     ) -> str:
-        """The customer's own letter, its placeholders replaced with the facts."""
+        """The customer's own letter, its placeholders replaced with the facts.
+
+        The conditional block is settled first, so a filled-in value can never
+        be mistaken for a marker or for a placeholder of its own.
+        """
+        open_invoices = OpenInvoicesInTheLetter(still_open)
         values = {
             "MONAT": german_formatter.months_covered(
                 record.period_printed_from, record.period_printed_to
@@ -157,10 +213,11 @@ class InvoiceMailComposer:
             "NAME": customer.name,
             "SCHUELER": customer.pupil_name,
             "ABSENDER": signature,
+            **open_invoices.placeholder_values(record.printed_total),
         }
-        for key, value in values.items():
-            text = text.replace("{" + key + "}", value)
-        return text
+        if reminder_count is not None:
+            values["ANZAHL"] = str(reminder_count)
+        return replace_placeholders_once(open_invoices.resolved(text), values)
 
     @staticmethod
     def _letter_with_greeting_and_signature(message: str, signature: str) -> str:

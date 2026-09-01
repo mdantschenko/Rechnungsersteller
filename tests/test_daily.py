@@ -288,3 +288,39 @@ def test_a_moved_series_lesson_mails_a_fresh_backup(
 
     assert len(backups) == 2
     assert _settings(session).backup_digest != fingerprint
+
+
+def test_the_morning_round_fills_the_open_invoice_block_too(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The letter must read the same whoever presses send, machine included."""
+    bodies: list[str] = []
+    monkeypatch.setattr(
+        SmtpMailer,
+        "send_pdf",
+        lambda mailer, **parts: bodies.append(str(parts["body"])),
+    )
+    customer = session.exec(select(Customer)).one()
+    customer.mail_text = (
+        "Hallo {NAME}, Rechnung Nr. {NUMMER} über {BETRAG}."
+        "{WENN OFFEN} Offen ist noch Nr. {ALTE RECHNUNG} über {ALTER BETRAG}, "
+        "zusammen {SUMME}.{ENDE}"
+    )
+    session.add(customer)
+    session.add(
+        IssuedInvoice(
+            number=114,
+            customer_id=customer.id or 0,
+            issued_on=date(2026, 5, 31),
+            period_printed_from=date(2026, 5, 1),
+            period_printed_to=date(2026, 5, 31),
+            printed_total=Decimal("20.00"),
+            computed_total=Decimal("20.00"),
+        )
+    )
+    session.commit()
+
+    MorningRound(session, _settings(session), lambda message: None).run(MORNING)
+
+    assert "Offen ist noch Nr. 114 über 20,00" in bodies[0]
+    assert "{WENN OFFEN}" not in bodies[0]

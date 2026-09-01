@@ -12,7 +12,7 @@ import io
 import re
 import secrets
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
@@ -26,6 +26,7 @@ from invoicing.constant import (
     BACKUP_PASSPHRASE_LENGTH,
     CENT,
     GERMAN_WEEKDAY_NAMES,
+    LETTER_PLACEHOLDER_PATTERN,
     NOTICE_SESSION_KEY,
     TEN_THOUSANDTH,
     ZERO,
@@ -51,6 +52,30 @@ def round_quantity(amount: Decimal) -> Decimal:
 def sum_of_cents(amounts: Iterable[Decimal]) -> Decimal:
     """Sum amounts starting from the project-wide two-decimal zero."""
     return sum(amounts, start=ZERO)
+
+
+def placeholder_names_in(text: str) -> set[str]:
+    """The ``{NAME}`` placeholders a letter uses, their spelling smoothed out."""
+    return {
+        _placeholder_name(match.group(1))
+        for match in re.finditer(LETTER_PLACEHOLDER_PATTERN, text)
+    }
+
+
+def replace_placeholders_once(text: str, values: Mapping[str, str]) -> str:
+    """Fill every ``{NAME}`` in one pass, so a filled-in value is never reread.
+
+    A placeholder nobody knows is left standing exactly as it was written.
+    """
+
+    def value_for(match: re.Match[str]) -> str:
+        return values.get(_placeholder_name(match.group(1)), match.group(0))
+
+    return re.sub(LETTER_PLACEHOLDER_PATTERN, value_for, text)
+
+
+def _placeholder_name(written: str) -> str:
+    return " ".join(written.upper().split())
 
 
 def parse_german_amount(value: str) -> Decimal | None:

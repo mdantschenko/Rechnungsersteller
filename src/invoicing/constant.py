@@ -285,6 +285,19 @@ MAIL_NOT_CONFIGURED_MESSAGE = (
     "Benutzername und Passwort in den Einstellungen ein."
 )
 
+OPEN_INVOICE_BLOCK_MARKER_PATTERN = (
+    r"\{\s*(?P<block_start>WENN\s+OFFEN)\s*\}|\{\s*(?P<block_end>ENDE)\s*\}"
+)
+LETTER_PLACEHOLDER_PATTERN = r"\{([^{}\n]*)\}"
+OPEN_INVOICE_PLACEHOLDER_NAMES = (
+    "ALTE RECHNUNG",
+    "ALTER BETRAG",
+    "ALTER MONAT",
+    "SUMME",
+)
+OPEN_INVOICE_NUMBER_SEPARATOR = ", "
+OPEN_INVOICE_LAST_NUMBER_SEPARATOR = " und "
+
 # --- Push ---
 
 PUSH_SUBSCRIPTION_DEAD_STATUS_CODES = (403, 404, 410)

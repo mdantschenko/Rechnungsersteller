@@ -326,3 +326,16 @@ class ReleasedInvoice:
 
     document: Invoice
     record: models.IssuedInvoice
+
+
+@dataclass(frozen=True, slots=True)
+class InvoiceMailToSend:
+    """One outgoing invoice mail: what to write, what to attach, what to note."""
+
+    subject: str
+    body: str
+    rides_along: tuple[models.IssuedInvoice, ...]
+    """The still open invoices whose PDFs travel in the same mail."""
+
+    to_note_as_reminded: tuple[models.IssuedInvoice, ...]
+    """Only the overdue ones — a friendly hint is not a payment reminder."""
