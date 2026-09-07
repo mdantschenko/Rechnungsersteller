@@ -1,8 +1,8 @@
-"""What the ticked-off lessons of one month are worth.
+"""What the ticked-off lessons of a stretch of days are worth.
 
 Counted from the lessons themselves rather than from issued invoices, so the
-figure grows with every lesson ticked off instead of jumping once a month
-when the invoices go out. Each month starts again at nothing.
+figure grows with every lesson ticked off instead of jumping when the
+invoices go out. Every stretch starts again at nothing.
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from dateutil.relativedelta import relativedelta
 from sqlmodel import Session, col, select
 
 from invoicing.constant import ZERO
@@ -19,24 +18,22 @@ from invoicing.storage.models import Lesson, LessonStatus
 from invoicing.utils import billing_templates_by_customer, sum_of_cents
 
 
-class LessonsEarnedInTheMonth:
-    """Adds up what the lessons of one month have earned so far."""
+class LessonsEarnedBetween:
+    """Adds up what the lessons of a stretch of days have earned so far."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def total_for(self, year: int, month: int) -> Decimal:
-        """The worth of every lesson ticked off in that month.
+    def total(self, first: date, last: date) -> Decimal:
+        """The worth of every lesson ticked off from ``first`` to ``last``.
 
         Lessons whose customer has no terms yet are worth nothing and are
         quietly left out.
         """
-        first_of_month = date(year, month, 1)
-        last_of_month = first_of_month + relativedelta(months=1, days=-1)
         lessons = self._session.exec(
             select(Lesson)
             .where(Lesson.status == LessonStatus.DONE)
-            .where(col(Lesson.taught_on).between(first_of_month, last_of_month))
+            .where(col(Lesson.taught_on).between(first, last))
         ).all()
         if not lessons:
             return ZERO
