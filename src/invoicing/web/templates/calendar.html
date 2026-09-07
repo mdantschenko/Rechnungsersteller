@@ -3,6 +3,9 @@
 {% set tab = "calendar" %}
 {% block title %}{{ heading }}{% endblock %}
 {% block heading %}{{ heading }}{% endblock %}
+{% block subheading %}
+<p class="page-subtitle">{{ earned }} in diesem Monat abgehakt</p>
+{% endblock %}
 {% block bar_action %}
 <span class="bar-buttons">
   <a class="bar-button" href="/kalender/{{ previous.year }}/{{ previous.month }}" aria-label="Voriger Monat">‹</a>

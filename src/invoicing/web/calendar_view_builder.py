@@ -31,6 +31,7 @@ from invoicing.lesson_series import LessonSeriesMaterialiser
 from invoicing.push import WebPushSender
 from invoicing.storage.models import Lesson, LessonStatus
 from invoicing.utils import billing_templates_by_customer, planning_horizon
+from invoicing.web.lessons_earned_in_the_month import LessonsEarnedInTheMonth
 from invoicing.web.store_queries import StoreQueries
 
 
@@ -71,6 +72,10 @@ class CalendarViewBuilder:
             "previous": monday - timedelta(days=7),
             "next": monday + timedelta(days=7),
             "today": today,
+            "reference": today if monday <= today <= sunday else monday,
+            "earned": self._earned_in_the_month_of(
+                today if monday <= today <= sunday else monday
+            ),
             "names": names,
             "places": self._store.lesson_places_by_customer_id(),
             "extras": self._lesson_extras(lessons),
@@ -108,6 +113,7 @@ class CalendarViewBuilder:
             "next": first_of_month + relativedelta(months=1),
             "today": today,
             "reference": today if today.month == month else first_of_month,
+            "earned": self._earned_in_the_month_of(first_of_month),
             "names": names,
             "colors": FEDERAL_STATE_COLORS,
             "school_states": self._school_states(),
@@ -141,6 +147,11 @@ class CalendarViewBuilder:
             "colors": FEDERAL_STATE_COLORS,
             "back": f"/tag/{on}",
         }
+
+    def _earned_in_the_month_of(self, day: date) -> str:
+        """What this day's month has earned so far, ready to print."""
+        earned = LessonsEarnedInTheMonth(self._session).total_for(day.year, day.month)
+        return german_formatter.format_euro(earned)
 
     def _calendar_day_cell(
         self,
