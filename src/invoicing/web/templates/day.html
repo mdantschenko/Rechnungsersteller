@@ -3,6 +3,9 @@
 {% set tab = "calendar" %}
 {% block title %}{{ heading }}{% endblock %}
 {% block heading %}{{ heading }}{% endblock %}
+{% block subheading %}
+<p class="page-subtitle">{{ earned }} an diesem Tag abgehakt</p>
+{% endblock %}
 {% block bar_action %}
 <span class="bar-buttons">
   <a class="bar-button" href="/tag/{{ previous }}" aria-label="Voriger Tag">‹</a>

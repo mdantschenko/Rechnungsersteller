@@ -14,7 +14,7 @@ from test_web import _add_customer, _add_lesson, _set_terms
 from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import AppSettings, Lesson
 from invoicing.web.calendar_view_builder import CalendarViewBuilder
-from invoicing.web.lessons_earned_in_the_month import LessonsEarnedInTheMonth
+from invoicing.web.lessons_earned_between import LessonsEarnedBetween
 
 
 def _lesson_id_on(location: Path, taught_on: date) -> int:
@@ -70,44 +70,63 @@ def test_a_week_without_today_keeps_its_own_monday(
     assert context["reference"] == monday_far_away
 
 
-def test_a_ticked_off_lesson_counts_towards_its_month(
+WEDNESDAY = date(2026, 5, 20)
+THE_FRIDAY_AFTER = date(2026, 5, 22)
+
+
+def _a_lesson_ticked_off(client: TestClient, location: Path, on: date) -> None:
+    customer_id = 1
+    _add_lesson(client, customer_id, on)
+    client.post(f"/termine/{_lesson_id_on(location, on)}/erledigt")
+
+
+def test_a_ticked_off_lesson_counts_only_for_its_own_days(
     client: TestClient, location: Path
 ) -> None:
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
-    _add_lesson(client, customer_id, date(2026, 5, 20))
+    _add_lesson(client, customer_id, WEDNESDAY)
 
     with Session(InvoiceDatabase(location).open()) as session:
-        assert LessonsEarnedInTheMonth(session).total_for(2026, 5) == 0
+        assert LessonsEarnedBetween(session).total(WEDNESDAY, WEDNESDAY) == 0
 
-    client.post(f"/termine/{_lesson_id_on(location, date(2026, 5, 20))}/erledigt")
+    client.post(f"/termine/{_lesson_id_on(location, WEDNESDAY)}/erledigt")
 
     with Session(InvoiceDatabase(location).open()) as session:
-        earned = LessonsEarnedInTheMonth(session)
-        assert str(earned.total_for(2026, 5)) == "33.33"
-        assert earned.total_for(2026, 6) == 0
+        earned = LessonsEarnedBetween(session)
+        assert str(earned.total(WEDNESDAY, WEDNESDAY)) == "33.33"
+        assert earned.total(THE_FRIDAY_AFTER, THE_FRIDAY_AFTER) == 0
+        assert earned.total(date(2026, 6, 1), date(2026, 6, 30)) == 0
 
 
-def test_the_month_view_prints_what_the_month_earned(
+def test_each_view_counts_its_own_stretch_of_days(
+    client: TestClient, location: Path
+) -> None:
+    """Two lessons in one week: the day shows one, the week and month both."""
+    customer_id = _add_customer(client)
+    _set_terms(client, customer_id)
+    _a_lesson_ticked_off(client, location, WEDNESDAY)
+    _a_lesson_ticked_off(client, location, THE_FRIDAY_AFTER)
+
+    day = client.get(f"/tag/{WEDNESDAY}").text
+    week = client.get(f"/woche/{WEDNESDAY}").text
+    month = client.get("/kalender/2026/5").text
+
+    assert "33,33" in day
+    assert "an diesem Tag abgehakt" in day
+    assert "66,66" in week
+    assert "in dieser Woche abgehakt" in week
+    assert "66,66" in month
+    assert "in diesem Monat abgehakt" in month
+
+
+def test_every_stretch_starts_again_at_nothing(
     client: TestClient, location: Path
 ) -> None:
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
-    _add_lesson(client, customer_id, date(2026, 5, 20))
-    client.post(f"/termine/{_lesson_id_on(location, date(2026, 5, 20))}/erledigt")
-
-    page = client.get("/kalender/2026/5").text
-
-    assert "33,33" in page
-    assert "in diesem Monat abgehakt" in page
-
-
-def test_every_month_starts_again_at_nothing(
-    client: TestClient, location: Path
-) -> None:
-    customer_id = _add_customer(client)
-    _set_terms(client, customer_id)
-    _add_lesson(client, customer_id, date(2026, 5, 20))
-    client.post(f"/termine/{_lesson_id_on(location, date(2026, 5, 20))}/erledigt")
+    _a_lesson_ticked_off(client, location, WEDNESDAY)
 
     assert "0,00" in client.get("/kalender/2026/6").text
+    assert "0,00" in client.get(f"/tag/{THE_FRIDAY_AFTER}").text
+    assert "0,00" in client.get("/woche/2026-06-01").text
