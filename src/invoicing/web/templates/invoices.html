@@ -10,40 +10,38 @@
 </p>
 {% endblock %}
 
-{% macro send_buttons(invoice, mode) %}
+{% macro send_invoice_button(invoice, mode) %}
 {% if mode == 'email' %}
-<form method="post" action="/rechnungen/{{ invoice.number }}/senden">
-  <button class="button button-small" type="submit">Per E-Mail senden</button>
-</form>
+<a class="button button-fill" href="/rechnungen/{{ invoice.number }}/versand">Rechnung ansehen und senden</a>
 {% elif mode == 'whatsapp' %}
-<button class="button button-small" type="button"
+<button class="button button-fill" type="button"
         data-pdf="/rechnungen/{{ invoice.number }}.pdf"
         data-title="Rechnung Nr. {{ invoice.number }}"
         data-phone="{{ whatsapp.get(invoice.customer_id, '') }}"
         data-text="{{ mail_bodies.get(invoice.number, '') }}"
         onclick="sendWhatsApp(this)">
-  Per WhatsApp senden
+  Rechnung per WhatsApp senden
 </button>
 {% endif %}
 {% endmacro %}
 
-{% block content %}
-{% if still_open_offer %}
-<div class="block">
-  <p class="hint" style="margin-top: 0">
-    Von diesem Kunden {{ 'ist noch die Rechnung' if still_open_offer.split(',') | length == 1 else 'sind noch die Rechnungen' }}
-    {% for number in still_open_offer.split(',') %}Nr. {{ number }}{{ ', ' if not loop.last }}{% endfor %}
-    offen. Hat er alles zusammen überwiesen?
-  </p>
-  <div class="row-actions">
-    <form method="post" action="/rechnungen/auch-bezahlt">
-      <input type="hidden" name="nummern" value="{{ still_open_offer }}">
-      <button class="button" type="submit">Auch als bezahlt markieren</button>
-    </form>
-  </div>
-</div>
-{% endif %}
+{% macro pdf_button(invoice) %}
+<a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf?herunterladen=1" download
+   data-pdf="/rechnungen/{{ invoice.number }}.pdf"
+   data-title="Rechnung Nr. {{ invoice.number }}"
+   onclick="return savePdf(this)">PDF</a>
+{% endmacro %}
 
+{% macro letter_fold(invoice, mode) %}
+{% if mode in ('email', 'whatsapp') %}
+<details class="reminder-actions">
+  <summary>Text ansehen</summary>
+  <p class="mail-preview">{{ mail_bodies.get(invoice.number, '') }}</p>
+</details>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
 <div class="section-title">Fällig</div>
 {% if not due %}
 <p class="hint">Zurzeit ist nichts abzurechnen.</p>
@@ -131,72 +129,120 @@
 <p class="hint">Noch keine Rechnung ausgestellt.</p>
 {% else %}
 <ul class="plain list-card">
-  {% for invoice in issued %}
-  {% set late = overdue.get(invoice.number) %}
-  <li>
-    <div class="reminder{{ ' is-overdue' if late }}">
-      <div class="reminder-body">
-        <a class="reminder-link" href="/rechnungen/{{ invoice.number }}/ansehen">
-          <div class="reminder-title">
-            {% if late %}<span class="priority">!!!</span>{% endif %}
-            <strong>Nr. {{ invoice.number }} · {{ names[invoice.customer_id] }}</strong>
-            <span class="spread"></span>
-            <span class="amount">{{ invoice.printed_total | euro }}</span>
-          </div>
-          <div class="reminder-meta">
-            <span class="meta-date">{{ invoice.issued_on | german_date }}</span>
-            {% if late %}
-            <span class="meta-date"><strong>überfällig seit {{ late }} Tag{{ 'en' if late != 1 }}</strong></span>
-            {% endif %}
-            {% if invoice.sent_on %}
-            <span class="tag">#Gesendet {{ invoice.sent_on | german_date }}</span>
-            {% else %}
-            <span class="tag">#Rechnung</span>
-            {% endif %}
-            {% set sent = reminders.get(invoice.id, []) %}
-            {% if sent %}
-            <span class="repeat">{{ sent | length }}. Erinnerung am {{ sent[-1] | german_date }}</span>
-            {% endif %}
-          </div>
-        </a>
+  {% for card in open_cards %}
+  {% set mode = deliveries.get(card.customer_id, 'email') %}
+  {% set several = card.invoices | length > 1 %}
+  {% set single = card.invoices[0] %}
+  {% set single_reminders = reminders.get(single.id, []) %}
+  <li class="customer-card{{ ' is-overdue' if card.overdue_count }}">
+    <div class="customer-card-top">
+      {% if several %}
+      <div class="customer-card-head" data-toggles-fold>
+      {% else %}
+      <a class="customer-card-head" href="/rechnungen/{{ single.number }}/ansehen">
+      {% endif %}
+        <div class="reminder-title">
+          {% if card.overdue_count %}<span class="priority">!!!</span>{% endif %}
+          <strong>{% if several %}{{ names[card.customer_id] }}{% else %}Nr. {{ single.number }} · {{ names[card.customer_id] }}{% endif %}</strong>
+          <span class="spread"></span>
+          <span class="amount">{{ card.open_total | euro }}</span>
+        </div>
+        <div class="reminder-meta">
+          {% if several %}
+          <span class="meta-date">{{ card.invoices | length }} Rechnungen offen ({% for invoice in card.invoices %}Nr. {{ invoice.number }}{{ ', ' if not loop.last }}{% endfor %})</span>
+          {% else %}
+          <span class="meta-date">{{ single.issued_on | german_date }}</span>
+          {% endif %}
+          {% if card.overdue_count and several %}
+          <span class="meta-date"><strong>{{ card.overdue_count }} davon überfällig</strong></span>
+          {% elif card.overdue_count %}
+          <span class="meta-date"><strong>überfällig seit {{ overdue[single.number] }} Tag{{ 'en' if overdue[single.number] != 1 }}</strong></span>
+          {% elif card.to_send %}
+          <span class="tag">#Rechnung</span>
+          {% elif card.next_due_on %}
+          <span class="meta-date">fällig am {{ card.next_due_on | german_date }}</span>
+          {% endif %}
+          {% if not several and single.sent_on %}
+          <span class="tag">#Gesendet {{ single.sent_on | german_date }}</span>
+          {% endif %}
+          {% if several and card.last_reminded_on %}
+          <span class="repeat">letzte Erinnerung {{ card.last_reminded_on | german_date }}</span>
+          {% elif single_reminders %}
+          <span class="repeat">{{ single_reminders | length }}. Erinnerung am {{ single_reminders[-1] | german_date }}</span>
+          {% endif %}
+        </div>
+      {% if several %}</div>{% else %}</a>{% endif %}
+      <div class="customer-card-icons">
+        {% if several %}
+        <form method="post" action="/rechnungen/mehrere-bezahlt">
+          <input type="hidden" name="nummern" value="{{ card.invoices | map(attribute='number') | join(',') }}">
+          <button class="button button-small" type="submit" title="Alle als bezahlt markieren">✓ alle</button>
+        </form>
+        {% else %}
+        <form method="post" action="/rechnungen/{{ single.number }}/bezahlt">
+          <button class="button button-small" type="submit" title="Geld erhalten">✓</button>
+        </form>
+        {{ pdf_button(single) }}
+        {% endif %}
+      </div>
+    </div>
+    <div class="customer-card-action">
+      {% if card.to_remind %}
+      <a class="button button-fill color-red" href="/rechnungen/{{ card.to_remind.number }}/erinnerung">
+        {{ 'Sammel-Erinnerung' if several else 'Erinnerung' }} ansehen und {{ 'senden' if mode == 'email' else 'vermerken' }}
+      </a>
+      {% elif card.to_send %}
+      {{ send_invoice_button(card.to_send, mode) }}
+      {% endif %}
+      {% if card.to_send %}
+      <form method="post" action="/rechnungen/{{ card.to_send.number }}/gesendet">
+        <button class="link-button" type="submit">Schon anders verschickt — als gesendet vermerken</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if several %}
+    <details class="customer-card-fold">
+      <summary><span class="when-closed">Rechnungen anzeigen ▾</span><span class="when-open">Rechnungen ausblenden ▴</span></summary>
+      {% for invoice in card.invoices %}
+      {% set late = overdue.get(invoice.number) %}
+      {% set sent = reminders.get(invoice.id, []) %}
+      <div class="invoice-row">
+        <div class="reminder-title">
+          <a class="reminder-link" href="/rechnungen/{{ invoice.number }}/ansehen"><strong>Nr. {{ invoice.number }}</strong> · {{ invoice.issued_on | german_date }}</a>
+          <span class="spread"></span>
+          <span class="amount">{{ invoice.printed_total | euro }}</span>
+        </div>
+        <div class="reminder-meta">
+          {% if late %}<span class="meta-date"><strong>überfällig seit {{ late }} Tag{{ 'en' if late != 1 }}</strong></span>{% endif %}
+          {% if invoice.sent_on %}<span class="tag">#Gesendet {{ invoice.sent_on | german_date }}</span>{% else %}<span class="tag">#Rechnung</span>{% endif %}
+          {% if sent %}<span class="repeat">{{ sent | length }}. Erinnerung am {{ sent[-1] | german_date }}</span>{% endif %}
+        </div>
         <div class="row-actions">
-          {% set mode = deliveries.get(invoice.customer_id, 'email') %}
+          <form method="post" action="/rechnungen/{{ invoice.number }}/bezahlt">
+            <button class="button button-small" type="submit" title="Geld erhalten">✓ bezahlt</button>
+          </form>
+          {{ pdf_button(invoice) }}
           {% if not invoice.sent_on %}
-          {{ send_buttons(invoice, mode) }}
           <form method="post" action="/rechnungen/{{ invoice.number }}/gesendet">
             <button class="button button-small" type="submit">✓ Gesendet</button>
           </form>
           {% endif %}
-          <form method="post" action="/rechnungen/{{ invoice.number }}/bezahlt">
-            <button class="button button-small" type="submit">✓ Geld erhalten</button>
-          </form>
-          {% if late %}
-          <a class="button button-small color-red"
-             href="/rechnungen/{{ invoice.number }}/erinnerung">
-            {{ 'Erneut erinnern' if sent else 'Zahlungserinnerung' }}
-          </a>
-          {% endif %}
-          <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf?herunterladen=1" download
-             data-pdf="/rechnungen/{{ invoice.number }}.pdf"
-             data-title="Rechnung Nr. {{ invoice.number }}"
-             onclick="return savePdf(this)">PDF</a>
         </div>
-        {% if sent | length > 1 %}
-        <details class="reminder-actions">
-          <summary>Alle Erinnerungen</summary>
-          <div class="reminder-meta">
-            {% for day in sent %}<span>{{ loop.index }}. am {{ day | german_date }}</span>{% endfor %}
-          </div>
-        </details>
-        {% endif %}
-        {% if mode in ('email', 'whatsapp') %}
-        <details class="reminder-actions">
-          <summary>Text ansehen</summary>
-          <p class="mail-preview">{{ mail_bodies.get(invoice.number, '') }}</p>
-        </details>
-        {% endif %}
+        {{ letter_fold(invoice, mode) }}
       </div>
-    </div>
+      {% endfor %}
+    </details>
+    {% else %}
+    {% if single_reminders | length > 1 %}
+    <details class="reminder-actions">
+      <summary>Alle Erinnerungen</summary>
+      <div class="reminder-meta">
+        {% for day in single_reminders %}<span>{{ loop.index }}. am {{ day | german_date }}</span>{% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    {{ letter_fold(single, mode) }}
+    {% endif %}
   </li>
   {% endfor %}
 </ul>
@@ -298,4 +344,12 @@
 </div>
 
 <script src="/static/share-pdf.js?v={{ asset_version }}"></script>
+<script>
+document.querySelectorAll("[data-toggles-fold]").forEach(function (head) {
+  head.addEventListener("click", function () {
+    var fold = head.parentNode.parentNode.querySelector(".customer-card-fold");
+    if (fold) fold.open = !fold.open;
+  });
+});
+</script>
 {% endblock %}
