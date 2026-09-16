@@ -533,7 +533,7 @@ def test_a_reminder_is_recorded_and_counted(client: TestClient, location: Path) 
     page = client.post("/rechnungen/115/erinnern").text
 
     assert "2. Erinnerung" in page
-    assert "Erinnerung ansehen" not in page
+    assert "Erinnerung Vorschau" not in page
 
     with Session(InvoiceDatabase(location).open()) as session:
         record = session.exec(select(IssuedInvoice)).one()
@@ -541,7 +541,7 @@ def test_a_reminder_is_recorded_and_counted(client: TestClient, location: Path) 
         session.add(record)
         session.commit()
 
-    assert "Erinnerung ansehen und vermerken" in client.get("/rechnungen").text
+    assert "Erinnerung Vorschau" in client.get("/rechnungen").text
 
 
 def test_the_reminder_letter_can_be_the_customers_own(

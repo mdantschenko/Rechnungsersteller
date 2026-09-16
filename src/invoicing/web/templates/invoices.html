@@ -12,7 +12,7 @@
 
 {% macro send_invoice_button(invoice, mode) %}
 {% if mode == 'email' %}
-<a class="button button-fill" href="/rechnungen/{{ invoice.number }}/versand">Rechnung ansehen und senden</a>
+<a class="button button-fill" href="/rechnungen/{{ invoice.number }}/versand">Rechnung Vorschau</a>
 {% elif mode == 'whatsapp' %}
 <button class="button button-fill" type="button"
         data-pdf="/rechnungen/{{ invoice.number }}.pdf"
@@ -176,7 +176,7 @@
         {% if several %}
         <form method="post" action="/rechnungen/mehrere-bezahlt">
           <input type="hidden" name="nummern" value="{{ card.invoices | map(attribute='number') | join(',') }}">
-          <button class="button button-small" type="submit" title="Alle als bezahlt markieren">✓ alle</button>
+          <button class="button button-small" type="submit" title="Alle als bezahlt markieren">✓ bezahlt</button>
         </form>
         {% else %}
         <form method="post" action="/rechnungen/{{ single.number }}/bezahlt">
@@ -189,7 +189,7 @@
     <div class="customer-card-action">
       {% if card.to_remind %}
       <a class="button button-fill color-red" href="/rechnungen/{{ card.to_remind.number }}/erinnerung">
-        {{ 'Sammel-Erinnerung' if several else 'Erinnerung' }} ansehen und {{ 'senden' if mode == 'email' else 'vermerken' }}
+        {{ 'Sammel-Erinnerung' if several else 'Erinnerung' }} Vorschau
       </a>
       {% elif card.to_send %}
       {{ send_invoice_button(card.to_send, mode) }}
@@ -248,10 +248,8 @@
 </ul>
 {% endif %}
 
-{% if paid or hidden_paid_count %}
-<div class="section-title">Bezahlt</div>
-{% endif %}
 {% if paid %}
+<div class="section-title">Bezahlt</div>
 <ul class="plain list-card">
   {% for invoice in paid %}
   <li>
@@ -280,15 +278,6 @@
   </li>
   {% endfor %}
 </ul>
-{% endif %}
-{% if hidden_paid_count %}
-<form method="post" action="/rechnungen/bezahlt-wieder-zeigen">
-  <p class="hint">
-    {{ hidden_paid_count }} bezahlte Rechnung(en) ausgeblendet — sie zählen
-    weiter für Verdienst, Finanzamt-ZIP und DATEV-Export.
-    <button class="link-button" type="submit">Wieder zeigen</button>
-  </p>
-</form>
 {% endif %}
 
 <div class="section-title">Einnahmen</div>

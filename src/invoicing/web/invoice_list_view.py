@@ -68,7 +68,6 @@ class InvoiceListViewBuilder:
             "due": self.open_billing_runs(today),
             "issued": unpaid,
             "paid": still_listed,
-            "hidden_paid_count": len(paid) - len(still_listed),
             "reminders": reminders,
             "mail_bodies": {
                 record.number: composer.invoice_mail_body(

@@ -420,23 +420,6 @@ def take_paid_invoice_off_the_list(
     )
 
 
-@router.post("/rechnungen/bezahlt-wieder-zeigen")
-def show_every_paid_invoice_again(
-    request: Request, session: Session = Depends(database_session)
-) -> Response:
-    hidden = session.exec(
-        select(IssuedInvoice).where(
-            col(IssuedInvoice.taken_off_the_list_on).is_not(None)
-        )
-    ).all()
-    for record in hidden:
-        record.taken_off_the_list_on = None
-        session.add(record)
-    return notice_redirect(
-        request, "/rechnungen", f"{len(hidden)} Rechnung(en) wieder eingeblendet."
-    )
-
-
 @router.post("/rechnungen/{number}/unbezahlt")
 def mark_unpaid(
     number: int, request: Request, session: Session = Depends(database_session)

@@ -231,7 +231,7 @@ def test_a_paid_invoice_can_be_taken_off_the_list(
 
     page = client.get("/rechnungen").text
     assert "bezahlt am" not in page
-    assert "1 bezahlte Rechnung(en) ausgeblendet" in page
+    assert "Wieder zeigen" not in page
 
 
 def test_a_hidden_invoice_still_counts_for_the_books(
@@ -252,23 +252,6 @@ def test_a_hidden_invoice_still_counts_for_the_books(
         assert record.paid_on is not None
     assert client.get("/rechnungen/115.pdf").status_code == 200
     assert client.get("/rechnungen/finanzamt/2026.zip").status_code == 200
-
-
-def test_hidden_invoices_can_be_brought_back(
-    client: TestClient, location: Path
-) -> None:
-    customer_id = _customer_with_email(client)
-    _released_invoice(
-        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
-    )
-    client.post("/rechnungen/115/bezahlt")
-    client.post("/rechnungen/115/ausblenden")
-
-    client.post("/rechnungen/bezahlt-wieder-zeigen")
-
-    page = client.get("/rechnungen").text
-    assert "bezahlt am" in page
-    assert "ausgeblendet" not in page
 
 
 def test_marking_it_unpaid_brings_a_hidden_invoice_back(
@@ -307,7 +290,7 @@ def test_a_customer_with_several_open_invoices_gets_one_card(
     assert page.count('<li class="customer-card') == 1
     assert "2 Rechnungen offen (Nr. 116, Nr. 115)" in page
     assert 'name="nummern" value="116,115"' in page
-    assert "✓ alle" in page
+    assert "✓ bezahlt" in page
 
 
 def test_the_card_tick_closes_every_open_invoice(
@@ -340,7 +323,7 @@ def test_an_unsent_invoice_shows_its_mail_before_it_leaves(
     listing = client.get("/rechnungen").text
     preview = client.get("/rechnungen/115/versand").text
 
-    assert "Rechnung ansehen und senden" in listing
+    assert "Rechnung Vorschau" in listing
     assert "/rechnungen/115/versand" in listing
     assert "Rechnung Nr. 115 senden" in preview
     assert "Jetzt senden" in preview
@@ -467,7 +450,7 @@ def test_one_card_carries_one_reminder_for_every_overdue_invoice(
 
     assert page.count("/erinnerung") == 1
     assert "/rechnungen/115/erinnerung" in page
-    assert "Sammel-Erinnerung ansehen und senden" in page
+    assert "Sammel-Erinnerung Vorschau" in page
     assert "2 davon überfällig" in page
 
 
@@ -483,7 +466,7 @@ def test_a_single_open_invoice_keeps_its_plain_card(
     page = client.get("/rechnungen").text
 
     assert "/rechnungen/115/erinnerung" in page
-    assert "Erinnerung ansehen und senden" in page
+    assert "Erinnerung Vorschau" in page
     assert "Sammel-Erinnerung" not in page
 
 
