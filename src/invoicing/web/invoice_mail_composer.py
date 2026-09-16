@@ -106,18 +106,45 @@ class InvoiceMailComposer:
             signature,
         )
 
-    def named_in_the_reminder(self, record: IssuedInvoice) -> list[IssuedInvoice]:
-        """The other unpaid invoices a reminder letter speaks about itself.
+    def reminder_to_send(
+        self, record: IssuedInvoice, count: int, today: date
+    ) -> InvoiceMailToSend:
+        """Everything one payment reminder needs.
 
-        Only a customer's own reminder letter that uses the open-invoice block
-        or its placeholders names them; every other reminder stays about the
-        one invoice.
+        A reminder speaks for every unpaid invoice of the customer, so one
+        reminder covers them all and none is left without one. A letter that
+        names the open invoices itself places them; any other letter gets a
+        postscript listing them.
         """
+        still_open = self.still_unpaid(record)
+        body = self.reminder_mail_body(record, count)
+        names_them_itself = OpenInvoicesInTheLetter.is_spoken_about_in(
+            self.customer_reminder_letter(record)
+        )
+        if still_open and not names_them_itself:
+            body = f"{body}\n{self.open_invoices_postscript(still_open)}"
+        return InvoiceMailToSend(
+            subject=self.reminder_subject_for(record, still_open),
+            body=body,
+            rides_along=tuple(still_open),
+            to_note_as_reminded=(record, *self.overdue_among(still_open, today)),
+        )
+
+    def customer_reminder_letter(self, record: IssuedInvoice) -> str:
+        """The reminder letter this customer wrote, empty if none."""
         customer = self._session.get(Customer, record.customer_id)
-        letter = customer.reminder_text if customer and customer.reminder_text else ""
-        if not OpenInvoicesInTheLetter.is_spoken_about_in(letter):
-            return []
-        return self.still_unpaid(record)
+        return customer.reminder_text if customer and customer.reminder_text else ""
+
+    @staticmethod
+    def reminder_subject_for(
+        record: IssuedInvoice, still_open: Sequence[IssuedInvoice]
+    ) -> str:
+        """The subject line, naming every invoice the reminder speaks for."""
+        if not still_open:
+            return f"Zahlungserinnerung zur Rechnung Nr. {record.number}"
+        numbers = sorted(invoice.number for invoice in (record, *still_open))
+        named = ", ".join(str(number) for number in numbers[:-1])
+        return f"Zahlungserinnerung zu den Rechnungen Nr. {named} und {numbers[-1]}"
 
     def still_unpaid(self, record: IssuedInvoice) -> list[IssuedInvoice]:
         """The customer's other invoices that nobody has paid yet.

@@ -8,7 +8,7 @@ from datetime import date
 from sqlmodel import Session, col, select
 
 from invoicing.billing import BillingRunOrchestrator
-from invoicing.data_classes import BillingRun
+from invoicing.data_classes import BillingRun, OpenInvoicesOfOneCustomer
 from invoicing.storage.models import (
     Customer,
     CustomerStatus,
@@ -16,7 +16,7 @@ from invoicing.storage.models import (
     IssuedInvoice,
     PaymentReminder,
 )
-from invoicing.utils import whatsapp_number
+from invoicing.utils import sum_of_cents, whatsapp_number
 from invoicing.web.earnings import EarningsLedger
 from invoicing.web.invoice_mail_composer import InvoiceMailComposer
 from invoicing.web.store_queries import StoreQueries
@@ -83,6 +83,9 @@ class InvoiceListViewBuilder:
             "earnings": earnings_rows,
             "earnings_total": earnings_total,
             "overdue": self._overdue_days(unpaid, settings.payment_days),
+            "open_groups": self._open_invoices_by_customer(
+                unpaid, self._overdue_days(unpaid, settings.payment_days)
+            ),
             "paid_years": self._paid_years(issued),
             "issued_years": self._issued_years(issued),
             "datev_numbers_are_set": bool(
@@ -98,6 +101,32 @@ class InvoiceListViewBuilder:
         for row in rows:
             days.setdefault(row.invoice_id, []).append(row.sent_on)
         return days
+
+    @staticmethod
+    def _open_invoices_by_customer(
+        unpaid: Sequence[IssuedInvoice], overdue: dict[int, int]
+    ) -> list[OpenInvoicesOfOneCustomer]:
+        """One card per customer, newest customer first, newest invoice first.
+
+        The card's reminder is written about the oldest overdue invoice and
+        speaks for the others, so no invoice ends up with a second reminder.
+        """
+        by_customer: dict[int, list[IssuedInvoice]] = {}
+        for record in unpaid:
+            by_customer.setdefault(record.customer_id, []).append(record)
+        return [
+            OpenInvoicesOfOneCustomer(
+                customer_id=customer_id,
+                invoices=tuple(invoices),
+                open_total=sum_of_cents(record.printed_total for record in invoices),
+                reminder_target=min(
+                    (record for record in invoices if record.number in overdue),
+                    key=lambda record: record.number,
+                    default=None,
+                ),
+            )
+            for customer_id, invoices in by_customer.items()
+        ]
 
     @staticmethod
     def _overdue_days(unpaid: Sequence[IssuedInvoice], due_days: int) -> dict[int, int]:

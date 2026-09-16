@@ -426,9 +426,10 @@ def test_the_reminder_preview_lists_every_attached_pdf(
     assert "Rechnung Nr 116" in page
 
 
-def test_a_plain_reminder_stays_about_its_one_invoice(
+def test_a_plain_reminder_still_speaks_for_every_open_invoice(
     client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """One card has one reminder button, so its reminder must cover them all."""
     sent: dict[str, Any] = {}
     monkeypatch.setattr(
         "invoicing.mail.SmtpMailer.send_pdf",
@@ -446,4 +447,73 @@ def test_a_plain_reminder_stays_about_its_one_invoice(
 
     client.post("/rechnungen/115/erinnern")
 
-    assert list(sent["more_pdfs"]) == []
+    assert sent["subject"] == "Zahlungserinnerung zu den Rechnungen Nr. 115 und 116"
+    assert "P.S.: Offen ist außerdem noch die Rechnung Nr. 116" in str(sent["body"])
+    assert len(list(sent["more_pdfs"])) == 1
+
+
+def test_open_invoices_of_one_customer_share_one_card_and_one_reminder(
+    client: TestClient, location: Path
+) -> None:
+    """Both overdue, like 117 and 120: one card, exactly one reminder button."""
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+    _make_overdue(location, 115, 60)
+    _make_overdue(location, 116, 30)
+
+    page = client.get("/rechnungen").text
+
+    assert page.count('class="open-invoice-group"') == 1
+    assert "2 offene Rechnungen" in page
+    assert page.count("/erinnerung") == 1
+    assert "/rechnungen/115/erinnerung" in page
+    assert "für beide" in page
+
+
+def test_a_single_open_invoice_keeps_its_plain_card(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _make_overdue(location, 115, 60)
+
+    page = client.get("/rechnungen").text
+
+    assert "offene Rechnungen" not in page
+    assert "für beide" not in page
+    assert "/rechnungen/115/erinnerung" in page
+
+
+def test_the_card_reminder_notes_every_overdue_invoice(
+    client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No invoice may slip through without a reminder just because it shares a card."""
+    monkeypatch.setattr("invoicing.mail.SmtpMailer.send_pdf", lambda *a, **k: None)
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+    _make_overdue(location, 115, 60)
+    _make_overdue(location, 116, 30)
+
+    client.post("/rechnungen/115/erinnern")
+
+    with Session(InvoiceDatabase(location).open()) as session:
+        for number in (115, 116):
+            record = session.exec(
+                select(IssuedInvoice).where(IssuedInvoice.number == number)
+            ).one()
+            reminders = session.exec(
+                select(PaymentReminder).where(PaymentReminder.invoice_id == record.id)
+            ).all()
+            assert len(reminders) == 1, number

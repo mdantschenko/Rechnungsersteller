@@ -1210,3 +1210,19 @@ summary:focus-visible {
   font: inherit;
   cursor: pointer;
 }
+
+.open-invoice-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.open-invoice-group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.25rem 0.25rem 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}

@@ -131,9 +131,17 @@
 <p class="hint">Noch keine Rechnung ausgestellt.</p>
 {% else %}
 <ul class="plain list-card">
-  {% for invoice in issued %}
-  {% set late = overdue.get(invoice.number) %}
-  <li>
+  {% for group in open_groups %}
+  <li class="open-invoice-group">
+    {% if group.invoices | length > 1 %}
+    <div class="open-invoice-group-heading">
+      {{ names[group.customer_id] }} · {{ group.invoices | length }} offene Rechnungen
+      <span class="spread"></span>
+      <span class="amount">{{ group.open_total | euro }}</span>
+    </div>
+    {% endif %}
+    {% for invoice in group.invoices %}
+    {% set late = overdue.get(invoice.number) %}
     <div class="reminder{{ ' is-overdue' if late }}">
       <div class="reminder-body">
         <a class="reminder-link" href="/rechnungen/{{ invoice.number }}/ansehen">
@@ -170,10 +178,12 @@
           <form method="post" action="/rechnungen/{{ invoice.number }}/bezahlt">
             <button class="button button-small" type="submit">✓ Geld erhalten</button>
           </form>
-          {% if late %}
+          {% if group.reminder_target and invoice.number == group.reminder_target.number %}
           <a class="button button-small color-red"
              href="/rechnungen/{{ invoice.number }}/erinnerung">
             {{ 'Erneut erinnern' if sent else 'Zahlungserinnerung' }}
+            {%- if group.invoices | length == 2 %} für beide
+            {%- elif group.invoices | length > 2 %} für alle {{ group.invoices | length }}{% endif %}
           </a>
           {% endif %}
           <a class="button button-small" href="/rechnungen/{{ invoice.number }}.pdf?herunterladen=1" download
@@ -197,6 +207,7 @@
         {% endif %}
       </div>
     </div>
+    {% endfor %}
   </li>
   {% endfor %}
 </ul>
