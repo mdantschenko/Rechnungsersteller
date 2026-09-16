@@ -18,6 +18,7 @@ from invoicing.billing import BillingRunOrchestrator
 from invoicing.constant import DATEV_CSV_MEDIA_TYPE, INVOICE_NUMBERS_FORM_SEPARATOR
 from invoicing.datev_export import DatevBookingBatchExport
 from invoicing.datev_export_error import DatevExportError
+from invoicing.german_formatter import german_formatter
 from invoicing.mail_error import MailError
 from invoicing.pdf import InvoiceDocumentWriter, PdfPreview
 from invoicing.storage.models import (
@@ -446,6 +447,9 @@ def preview_payment_reminder(
         )
     customer = session.get(Customer, record.customer_id)
     count = _reminders_so_far(session, record.id) + 1
+    too_soon = _too_soon_for_another_reminder(request, session, record)
+    if too_soon is not None:
+        return too_soon
     outgoing = InvoiceMailComposer(session).reminder_to_send(
         record, count, date.today()
     )
@@ -518,6 +522,23 @@ def preview_invoice_mail(
     )
 
 
+def _too_soon_for_another_reminder(
+    request: Request, session: Session, record: IssuedInvoice
+) -> Response | None:
+    """The redirect that stops a second reminder inside the payment window."""
+    allowed_on = InvoiceMailComposer(session).next_reminder_allowed_on(
+        record, date.today()
+    )
+    if allowed_on is None:
+        return None
+    return notice_redirect(
+        request,
+        "/rechnungen",
+        f"Rechnung Nr. {record.number} wurde vor Kurzem erinnert — die nächste "
+        f"Erinnerung geht ab {german_formatter.format_german_date(allowed_on)}.",
+    )
+
+
 def _reminders_so_far(session: Session, invoice_id: int) -> int:
     return len(
         session.exec(
@@ -546,6 +567,9 @@ def send_payment_reminder(
         )
     customer = session.get(Customer, record.customer_id)
     count = _reminders_so_far(session, record.id) + 1
+    too_soon = _too_soon_for_another_reminder(request, session, record)
+    if too_soon is not None:
+        return too_soon
     composer = InvoiceMailComposer(session)
     outgoing = composer.reminder_to_send(record, count, date.today())
     if _goes_by_mail(customer) and customer:

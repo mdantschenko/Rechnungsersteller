@@ -15,6 +15,7 @@ from invoicing.storage.models import (
     Lesson,
     LessonAlarm,
     NumberState,
+    PaymentReminder,
     PushSubscription,
 )
 
@@ -529,16 +530,26 @@ def test_a_reminder_is_recorded_and_counted(client: TestClient, location: Path) 
         f"/rechnungen/{customer_id}/freigeben", data={"closing_day": "2026-06-15"}
     )
 
-    client.post("/rechnungen/115/erinnern")
     page = client.post("/rechnungen/115/erinnern").text
+    refused = client.post("/rechnungen/115/erinnern").text
 
-    assert "2. Erinnerung" in page
-    assert "Erinnerung Vorschau" not in page
+    assert "1. Erinnerung" in page
+    assert "wurde vor Kurzem erinnert" in refused
 
     with Session(InvoiceDatabase(location).open()) as session:
         record = session.exec(select(IssuedInvoice)).one()
         record.issued_on = date.today() - timedelta(days=30)
         session.add(record)
+        session.commit()
+
+    overdue_but_just_reminded = client.get("/rechnungen").text
+    assert "Erinnerung Vorschau" not in overdue_but_just_reminded
+    assert "die nächste Erinnerung geht ab" in overdue_but_just_reminded
+
+    with Session(InvoiceDatabase(location).open()) as session:
+        for reminder in session.exec(select(PaymentReminder)).all():
+            reminder.sent_on = date.today() - timedelta(days=14)
+            session.add(reminder)
         session.commit()
 
     assert "Erinnerung Vorschau" in client.get("/rechnungen").text

@@ -496,3 +496,69 @@ def test_the_card_reminder_notes_every_overdue_invoice(
                 select(PaymentReminder).where(PaymentReminder.invoice_id == record.id)
             ).all()
             assert len(reminders) == 1, number
+
+
+def _reminder_sent_days_ago(location: Path, days: int) -> None:
+    with Session(InvoiceDatabase(location).open()) as session:
+        for reminder in session.exec(select(PaymentReminder)).all():
+            reminder.sent_on = date.today() - timedelta(days=days)
+            session.add(reminder)
+        session.commit()
+
+
+def test_a_second_reminder_waits_for_the_payment_window(
+    client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outbox: list[object] = []
+    monkeypatch.setattr(
+        "invoicing.mail.SmtpMailer.send_pdf", lambda *a, **k: outbox.append(k)
+    )
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _make_overdue(location, 115, 60)
+    client.post("/rechnungen/115/erinnern")
+
+    listing = client.get("/rechnungen").text
+    refused = client.post("/rechnungen/115/erinnern").text
+
+    assert "Erinnerung Vorschau" not in listing
+    assert "die nächste Erinnerung geht ab" in listing
+    assert "wurde vor Kurzem erinnert" in refused
+    assert len(outbox) == 1
+
+
+def test_the_reminder_opens_again_once_the_window_has_passed(
+    client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outbox: list[object] = []
+    monkeypatch.setattr(
+        "invoicing.mail.SmtpMailer.send_pdf", lambda *a, **k: outbox.append(k)
+    )
+    customer_id = _customer_with_email(client)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _make_overdue(location, 115, 60)
+    client.post("/rechnungen/115/erinnern")
+    _reminder_sent_days_ago(location, 14)
+
+    assert "Erinnerung Vorschau" in client.get("/rechnungen").text
+    client.post("/rechnungen/115/erinnern")
+    assert len(outbox) == 2
+
+
+def test_the_window_counts_for_every_open_invoice_of_the_customer(
+    client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reminder about 117 also covered 120, so 120 may not be reminded alone."""
+    monkeypatch.setattr("invoicing.mail.SmtpMailer.send_pdf", lambda *a, **k: None)
+    _two_open_invoices(client, location)
+    _make_overdue(location, 115, 60)
+    _make_overdue(location, 116, 30)
+    client.post("/rechnungen/115/erinnern")
+
+    refused = client.post("/rechnungen/116/erinnern").text
+
+    assert "wurde vor Kurzem erinnert" in refused

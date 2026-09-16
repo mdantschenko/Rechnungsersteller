@@ -358,5 +358,9 @@ class OpenInvoicesOfOneCustomer:
     """The oldest overdue invoice; its reminder speaks for all the others."""
 
     last_reminded_on: date | None
+    next_reminder_on: date | None
+    """When a reminder may go out again: the last one plus the payment window.
+    None while nothing is overdue or a reminder may go out right now."""
+
     next_due_on: date | None
     """When the soonest sent invoice runs out of its payment window."""
