@@ -170,7 +170,7 @@
           <form method="post" action="/rechnungen/{{ invoice.number }}/bezahlt">
             <button class="button button-small" type="submit">✓ Geld erhalten</button>
           </form>
-          {% if invoice.number in reminder_targets %}
+          {% if late %}
           <a class="button button-small color-red"
              href="/rechnungen/{{ invoice.number }}/erinnerung">
             {{ 'Erneut erinnern' if sent else 'Zahlungserinnerung' }}

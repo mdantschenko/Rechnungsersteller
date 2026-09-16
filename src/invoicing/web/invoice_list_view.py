@@ -83,9 +83,6 @@ class InvoiceListViewBuilder:
             "earnings": earnings_rows,
             "earnings_total": earnings_total,
             "overdue": self._overdue_days(unpaid, settings.payment_days),
-            "reminder_targets": self._reminder_targets(
-                unpaid, self._overdue_days(unpaid, settings.payment_days)
-            ),
             "paid_years": self._paid_years(issued),
             "issued_years": self._issued_years(issued),
             "datev_numbers_are_set": bool(
@@ -101,24 +98,6 @@ class InvoiceListViewBuilder:
         for row in rows:
             days.setdefault(row.invoice_id, []).append(row.sent_on)
         return days
-
-    @staticmethod
-    def _reminder_targets(
-        unpaid: Sequence[IssuedInvoice], overdue: dict[int, int]
-    ) -> set[int]:
-        """The one invoice per customer that carries the reminder button.
-
-        It is the customer's oldest overdue invoice; its reminder speaks for
-        every other open one, so no customer gets two reminders in a day.
-        """
-        oldest_overdue_by_customer: dict[int, int] = {}
-        for record in unpaid:
-            if record.number not in overdue:
-                continue
-            known = oldest_overdue_by_customer.get(record.customer_id)
-            if known is None or record.number < known:
-                oldest_overdue_by_customer[record.customer_id] = record.number
-        return set(oldest_overdue_by_customer.values())
 
     @staticmethod
     def _overdue_days(unpaid: Sequence[IssuedInvoice], due_days: int) -> dict[int, int]:
