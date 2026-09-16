@@ -476,9 +476,10 @@ def preview_payment_reminder(
     customer = session.get(Customer, record.customer_id)
     composer = InvoiceMailComposer(session)
     count = _reminders_so_far(session, record.id) + 1
-    pdf = (
-        InvoicePdfArchive(session).find_pdf(record, customer.name) if customer else None
-    )
+    archive = InvoicePdfArchive(session)
+    pdf = archive.find_pdf(record, customer.name) if customer else None
+    named_alongside = composer.named_in_the_reminder(record)
+    further_pdfs = archive.pdfs_of(named_alongside, customer.name) if customer else []
     goes_by_mail = (
         customer is not None
         and customer.delivery is InvoiceDelivery.EMAIL
@@ -491,7 +492,9 @@ def preview_payment_reminder(
             "heading": f"{count}. Zahlungserinnerung",
             "subject": f"Zahlungserinnerung zur Rechnung Nr. {number}",
             "body": composer.reminder_mail_body(record, count),
-            "attachments": [pdf.name] if pdf else [],
+            "attachments": [
+                attached.name for attached in [pdf, *further_pdfs] if attached
+            ],
             "recipient": (
                 customer.email
                 if goes_by_mail and customer
@@ -534,6 +537,7 @@ def send_payment_reminder(
                 request, "/rechnungen", f"Die PDF zu Rechnung Nr. {number} fehlt."
             )
         composer = InvoiceMailComposer(session)
+        named_alongside = composer.named_in_the_reminder(record)
         try:
             mail.mailer_for(StoreQueries(session).app_settings()).send_pdf(
                 to=customer.email,
@@ -541,9 +545,16 @@ def send_payment_reminder(
                 body=composer.reminder_mail_body(record, count),
                 pdf=pdf,
                 sender_name=composer.issuer_name(),
+                more_pdfs=InvoicePdfArchive(session).pdfs_of(
+                    named_alongside, customer.name
+                ),
             )
         except MailError as error:
             return notice_redirect(request, "/rechnungen", str(error))
+        for reminded in composer.overdue_among(named_alongside, date.today()):
+            session.add(
+                PaymentReminder(invoice_id=reminded.id or 0, sent_on=date.today())
+            )
         message = f"{count}. Erinnerung an {customer.email} geschickt."
     else:
         message = (

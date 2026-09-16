@@ -106,6 +106,19 @@ class InvoiceMailComposer:
             signature,
         )
 
+    def named_in_the_reminder(self, record: IssuedInvoice) -> list[IssuedInvoice]:
+        """The other unpaid invoices a reminder letter speaks about itself.
+
+        Only a customer's own reminder letter that uses the open-invoice block
+        or its placeholders names them; every other reminder stays about the
+        one invoice.
+        """
+        customer = self._session.get(Customer, record.customer_id)
+        letter = customer.reminder_text if customer and customer.reminder_text else ""
+        if not OpenInvoicesInTheLetter.is_spoken_about_in(letter):
+            return []
+        return self.still_unpaid(record)
+
     def still_unpaid(self, record: IssuedInvoice) -> list[IssuedInvoice]:
         """The customer's other invoices that nobody has paid yet.
 

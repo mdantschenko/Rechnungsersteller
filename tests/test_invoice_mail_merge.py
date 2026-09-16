@@ -349,3 +349,101 @@ def test_nothing_is_offered_when_the_customer_owes_nothing_else(
     page = client.post("/rechnungen/115/bezahlt").text
 
     assert "Auch als bezahlt markieren" not in page
+
+
+REMINDER_NAMING_THE_OTHERS = """Guten Tag Frank,
+
+könntest du bitte nachschauen, ob die Rechnung für {MONAT} überwiesen wurde? \
+Ich kann nämlich keinen Zahlungseingang finden.{WENN OFFEN} Außerdem ist auch \
+die Rechnung für {ALTER MONAT} noch offen.{ENDE}
+
+Zusammenfassung:
+Rechnung Nr. {NUMMER}: {BETRAG}{WENN OFFEN}
+Rechnung Nr. {ALTE RECHNUNG}: {ALTER BETRAG}
+SUMME: {SUMME}{ENDE}
+
+Liebe Grüße
+Michael
+"""
+
+
+def _customer_with_reminder_letter(client: TestClient, letter: str) -> int:
+    customer_id = _customer_with_email(client)
+    client.post(
+        f"/kunden/{customer_id}",
+        data={
+            "name": "Erika Beispiel",
+            "street": "Beispielstraße 21",
+            "city": "54321 Beispielstadt",
+            "email": "erika@example.com",
+            "status": "active",
+            "delivery": "email",
+            "reminder_text": letter,
+        },
+    )
+    return customer_id
+
+
+def test_a_reminder_naming_the_others_carries_their_pdfs(
+    client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict[str, Any] = {}
+    monkeypatch.setattr(
+        "invoicing.mail.SmtpMailer.send_pdf",
+        lambda mailer, **parts: sent.update(parts),
+    )
+    customer_id = _customer_with_reminder_letter(client, REMINDER_NAMING_THE_OTHERS)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+
+    client.post("/rechnungen/115/erinnern")
+
+    body = str(sent["body"])
+    assert "Außerdem ist auch die Rechnung für Juni bis Juli noch offen." in body
+    assert "Rechnung Nr. 116:" in body
+    assert "SUMME:" in body
+    assert len(list(sent["more_pdfs"])) == 1
+
+
+def test_the_reminder_preview_lists_every_attached_pdf(
+    client: TestClient, location: Path
+) -> None:
+    customer_id = _customer_with_reminder_letter(client, REMINDER_NAMING_THE_OTHERS)
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+
+    page = client.get("/rechnungen/115/erinnerung").text
+
+    assert "Rechnung Nr 115" in page
+    assert "Rechnung Nr 116" in page
+
+
+def test_a_plain_reminder_stays_about_its_one_invoice(
+    client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict[str, Any] = {}
+    monkeypatch.setattr(
+        "invoicing.mail.SmtpMailer.send_pdf",
+        lambda mailer, **parts: sent.update(parts),
+    )
+    customer_id = _customer_with_reminder_letter(
+        client, "Rechnung {NUMMER} ist noch offen."
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
+    )
+    _released_invoice(
+        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
+    )
+
+    client.post("/rechnungen/115/erinnern")
+
+    assert list(sent["more_pdfs"]) == []
