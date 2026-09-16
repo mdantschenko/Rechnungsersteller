@@ -452,10 +452,10 @@ def test_a_plain_reminder_still_speaks_for_every_open_invoice(
     assert len(list(sent["more_pdfs"])) == 1
 
 
-def test_open_invoices_of_one_customer_share_one_card_and_one_reminder(
+def test_open_invoices_of_one_customer_share_one_reminder_button(
     client: TestClient, location: Path
 ) -> None:
-    """Both overdue, like 117 and 120: one card, exactly one reminder button."""
+    """Both overdue, like 117 and 120: two plain cards, one reminder button."""
     customer_id = _customer_with_email(client)
     _released_invoice(
         client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
@@ -468,11 +468,11 @@ def test_open_invoices_of_one_customer_share_one_card_and_one_reminder(
 
     page = client.get("/rechnungen").text
 
-    assert page.count('class="open-invoice-group"') == 1
-    assert "2 offene Rechnungen" in page
+    assert "open-invoice-group" not in page
+    assert "offene Rechnungen" not in page
     assert page.count("/erinnerung") == 1
     assert "/rechnungen/115/erinnerung" in page
-    assert "für beide" in page
+    assert "Nr. 116" in page
 
 
 def test_a_single_open_invoice_keeps_its_plain_card(
@@ -486,8 +486,6 @@ def test_a_single_open_invoice_keeps_its_plain_card(
 
     page = client.get("/rechnungen").text
 
-    assert "offene Rechnungen" not in page
-    assert "für beide" not in page
     assert "/rechnungen/115/erinnerung" in page
 
 
