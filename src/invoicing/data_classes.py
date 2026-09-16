@@ -339,3 +339,17 @@ class InvoiceMailToSend:
 
     to_note_as_reminded: tuple[models.IssuedInvoice, ...]
     """Only the overdue ones — a friendly hint is not a payment reminder."""
+
+
+@dataclass(frozen=True, slots=True)
+class OpenInvoicesOfOneCustomer:
+    """Every unpaid invoice of one customer, shown and reminded as one card."""
+
+    customer_id: int
+    invoices: tuple[models.IssuedInvoice, ...]
+    """Newest first."""
+
+    open_total: Decimal
+    reminder_target: models.IssuedInvoice | None
+    """The oldest overdue invoice; the card's one reminder is written about it
+    and names the others. None while nothing is overdue."""
