@@ -191,6 +191,8 @@
       <a class="button button-fill color-red" href="/rechnungen/{{ card.to_remind.number }}/erinnerung">
         {{ 'Sammel-Erinnerung' if several else 'Erinnerung' }} Vorschau
       </a>
+      {% elif card.next_reminder_on %}
+      <p class="hint">Erinnert am {{ card.last_reminded_on | german_date }} — die nächste Erinnerung geht ab {{ card.next_reminder_on | german_date }}.</p>
       {% elif card.to_send %}
       {{ send_invoice_button(card.to_send, mode) }}
       {% endif %}

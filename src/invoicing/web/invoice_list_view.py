@@ -62,7 +62,7 @@ class InvoiceListViewBuilder:
         reminders = self._reminder_days()
         return {
             "open_cards": self._open_invoices_by_customer(
-                unpaid, overdue, reminders, settings.payment_days
+                unpaid, overdue, reminders, settings.payment_days, today
             ),
             "today": today,
             "due": self.open_billing_runs(today),
@@ -110,13 +110,16 @@ class InvoiceListViewBuilder:
         overdue: dict[int, int],
         reminders: dict[int, list[date]],
         payment_days: int,
+        today: date,
     ) -> list[OpenInvoicesOfOneCustomer]:
         """One card per customer, newest customer first, newest invoice first."""
         by_customer: dict[int, list[IssuedInvoice]] = {}
         for record in unpaid:
             by_customer.setdefault(record.customer_id, []).append(record)
         return [
-            cls._card_for(customer_id, invoices, overdue, reminders, payment_days)
+            cls._card_for(
+                customer_id, invoices, overdue, reminders, payment_days, today
+            )
             for customer_id, invoices in by_customer.items()
         ]
 
@@ -127,6 +130,7 @@ class InvoiceListViewBuilder:
         overdue: dict[int, int],
         reminders: dict[int, list[date]],
         payment_days: int,
+        today: date,
     ) -> OpenInvoicesOfOneCustomer:
         late = [record for record in invoices if record.number in overdue]
         unsent = [record for record in invoices if record.sent_on is None]
@@ -138,14 +142,28 @@ class InvoiceListViewBuilder:
         reminded_on = [
             day for record in invoices for day in reminders.get(record.id or 0, [])
         ]
+        last_reminded_on = max(reminded_on, default=None)
+        reminder_window_ends = (
+            last_reminded_on + timedelta(days=payment_days)
+            if last_reminded_on
+            else None
+        )
+        may_remind_now = bool(late) and (
+            reminder_window_ends is None or reminder_window_ends <= today
+        )
         return OpenInvoicesOfOneCustomer(
             customer_id=customer_id,
             invoices=tuple(invoices),
             open_total=sum_of_cents(record.printed_total for record in invoices),
             overdue_count=len(late),
             to_send=max(unsent, key=lambda record: record.number, default=None),
-            to_remind=min(late, key=lambda record: record.number, default=None),
-            last_reminded_on=max(reminded_on, default=None),
+            to_remind=(
+                min(late, key=lambda record: record.number) if may_remind_now else None
+            ),
+            last_reminded_on=last_reminded_on,
+            next_reminder_on=(
+                reminder_window_ends if late and not may_remind_now else None
+            ),
             next_due_on=min(
                 (record.issued_on + timedelta(days=payment_days) for record in waiting),
                 default=None,

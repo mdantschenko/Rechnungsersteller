@@ -1283,3 +1283,7 @@ summary:focus-visible {
   padding-top: 0.625rem;
   border-top: 1px solid var(--hairline);
 }
+
+.customer-card-action .hint {
+  margin: 0;
+}

@@ -8,13 +8,18 @@ where the older invoice is mentioned; otherwise a postscript says it.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, timedelta
 
 from sqlmodel import Session, col, select
 
 from invoicing.data_classes import InvoiceMailToSend
 from invoicing.german_formatter import german_formatter
-from invoicing.storage.models import Customer, IssuedInvoice, Issuer
+from invoicing.storage.models import (
+    Customer,
+    IssuedInvoice,
+    Issuer,
+    PaymentReminder,
+)
 from invoicing.utils import replace_placeholders_once
 from invoicing.web.open_invoices_in_the_letter import OpenInvoicesInTheLetter
 from invoicing.web.store_queries import StoreQueries
@@ -145,6 +150,28 @@ class InvoiceMailComposer:
         numbers = sorted(invoice.number for invoice in (record, *still_open))
         named = ", ".join(str(number) for number in numbers[:-1])
         return f"Zahlungserinnerung zu den Rechnungen Nr. {named} und {numbers[-1]}"
+
+    def next_reminder_allowed_on(
+        self, record: IssuedInvoice, today: date
+    ) -> date | None:
+        """The day the next reminder may leave, or None when it may leave now.
+
+        A reminder speaks for every open invoice of the customer, so the
+        payment window starts again with the last reminder any of them got.
+        """
+        invoice_ids = [record.id or 0]
+        invoice_ids.extend(other.id or 0 for other in self.still_unpaid(record))
+        sent_on = self._session.exec(
+            select(col(PaymentReminder.sent_on)).where(
+                col(PaymentReminder.invoice_id).in_(invoice_ids)
+            )
+        ).all()
+        last = max(sent_on, default=None)
+        if last is None:
+            return None
+        payment_days = StoreQueries(self._session).app_settings().payment_days
+        allowed_on = last + timedelta(days=payment_days)
+        return allowed_on if allowed_on > today else None
 
     def still_unpaid(self, record: IssuedInvoice) -> list[IssuedInvoice]:
         """The customer's other invoices that nobody has paid yet.
