@@ -286,9 +286,7 @@ def test_marking_it_unpaid_brings_a_hidden_invoice_back(
     assert "bezahlt am" in client.get("/rechnungen").text
 
 
-def test_paying_one_invoice_offers_to_close_the_others(
-    client: TestClient, location: Path
-) -> None:
+def _two_open_invoices(client: TestClient, location: Path) -> int:
     customer_id = _customer_with_email(client)
     _released_invoice(
         client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
@@ -296,59 +294,58 @@ def test_paying_one_invoice_offers_to_close_the_others(
     _released_invoice(
         client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
     )
-
-    page = client.post("/rechnungen/116/bezahlt").text
-
-    assert "Auch als bezahlt markieren" in page
-    assert "Nr. 115" in page
+    return customer_id
 
 
-def test_the_offer_closes_the_other_invoices_in_one_click(
+def test_a_customer_with_several_open_invoices_gets_one_card(
     client: TestClient, location: Path
 ) -> None:
-    customer_id = _customer_with_email(client)
-    _released_invoice(
-        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
-    )
-    _released_invoice(
-        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
-    )
-    client.post("/rechnungen/116/bezahlt")
+    _two_open_invoices(client, location)
 
-    client.post("/rechnungen/auch-bezahlt", data={"nummern": "115"})
+    page = client.get("/rechnungen").text
+
+    assert page.count('<li class="customer-card') == 1
+    assert "2 Rechnungen offen (Nr. 116, Nr. 115)" in page
+    assert 'name="nummern" value="116,115"' in page
+    assert "✓ alle" in page
+
+
+def test_the_card_tick_closes_every_open_invoice(
+    client: TestClient, location: Path
+) -> None:
+    _two_open_invoices(client, location)
+
+    client.post("/rechnungen/mehrere-bezahlt", data={"nummern": "116,115"})
 
     with Session(InvoiceDatabase(location).open()) as session:
-        older = session.exec(
-            select(IssuedInvoice).where(IssuedInvoice.number == 115)
-        ).one()
-        assert older.paid_on is not None
+        for number in (115, 116):
+            record = session.exec(
+                select(IssuedInvoice).where(IssuedInvoice.number == number)
+            ).one()
+            assert record.paid_on is not None, number
 
 
-def test_the_offer_appears_only_once(client: TestClient, location: Path) -> None:
-    """It is a one-time question, not a banner that nags on every visit."""
-    customer_id = _customer_with_email(client)
-    _released_invoice(
-        client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
-    )
-    _released_invoice(
-        client, location, customer_id, date(2026, 6, 20), date(2026, 7, 15)
-    )
-    assert "Auch als bezahlt markieren" in client.post("/rechnungen/116/bezahlt").text
-
-    assert "Auch als bezahlt markieren" not in client.get("/rechnungen").text
-
-
-def test_nothing_is_offered_when_the_customer_owes_nothing_else(
-    client: TestClient, location: Path
+def test_an_unsent_invoice_shows_its_mail_before_it_leaves(
+    client: TestClient, location: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    outbox: list[object] = []
+    monkeypatch.setattr(
+        "invoicing.mail.SmtpMailer.send_pdf", lambda *a, **k: outbox.append(k)
+    )
     customer_id = _customer_with_email(client)
     _released_invoice(
         client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
     )
 
-    page = client.post("/rechnungen/115/bezahlt").text
+    listing = client.get("/rechnungen").text
+    preview = client.get("/rechnungen/115/versand").text
 
-    assert "Auch als bezahlt markieren" not in page
+    assert "Rechnung ansehen und senden" in listing
+    assert "/rechnungen/115/versand" in listing
+    assert "Rechnung Nr. 115 senden" in preview
+    assert "Jetzt senden" in preview
+    assert "erika@example.com" in preview
+    assert outbox == []
 
 
 REMINDER_NAMING_THE_OTHERS = """Guten Tag Frank,
@@ -452,10 +449,10 @@ def test_a_plain_reminder_still_speaks_for_every_open_invoice(
     assert len(list(sent["more_pdfs"])) == 1
 
 
-def test_every_overdue_invoice_keeps_its_own_reminder_button(
+def test_one_card_carries_one_reminder_for_every_overdue_invoice(
     client: TestClient, location: Path
 ) -> None:
-    """Both overdue, like 117 and 120: two plain cards, two reminder buttons."""
+    """Both overdue, like 117 and 120: one card, one reminder that names both."""
     customer_id = _customer_with_email(client)
     _released_invoice(
         client, location, customer_id, date(2026, 5, 20), date(2026, 6, 15)
@@ -468,9 +465,10 @@ def test_every_overdue_invoice_keeps_its_own_reminder_button(
 
     page = client.get("/rechnungen").text
 
-    assert "open-invoice-group" not in page
+    assert page.count("/erinnerung") == 1
     assert "/rechnungen/115/erinnerung" in page
-    assert "/rechnungen/116/erinnerung" in page
+    assert "Sammel-Erinnerung ansehen und senden" in page
+    assert "2 davon überfällig" in page
 
 
 def test_a_single_open_invoice_keeps_its_plain_card(
@@ -485,6 +483,8 @@ def test_a_single_open_invoice_keeps_its_plain_card(
     page = client.get("/rechnungen").text
 
     assert "/rechnungen/115/erinnerung" in page
+    assert "Erinnerung ansehen und senden" in page
+    assert "Sammel-Erinnerung" not in page
 
 
 def test_the_card_reminder_notes_every_overdue_invoice(

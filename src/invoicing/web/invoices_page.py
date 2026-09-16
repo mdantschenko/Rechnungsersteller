@@ -15,11 +15,7 @@ from starlette.responses import FileResponse, RedirectResponse, Response
 
 from invoicing import mail
 from invoicing.billing import BillingRunOrchestrator
-from invoicing.constant import (
-    DATEV_CSV_MEDIA_TYPE,
-    STILL_OPEN_OFFER_NUMBER_SEPARATOR,
-    STILL_OPEN_OFFER_SESSION_KEY,
-)
+from invoicing.constant import DATEV_CSV_MEDIA_TYPE, INVOICE_NUMBERS_FORM_SEPARATOR
 from invoicing.datev_export import DatevBookingBatchExport
 from invoicing.datev_export_error import DatevExportError
 from invoicing.mail_error import MailError
@@ -45,9 +41,9 @@ router = APIRouter()
 def invoice_list(
     request: Request, session: Session = Depends(database_session)
 ) -> Response:
-    context = InvoiceListViewBuilder(session).list_context()
-    context["still_open_offer"] = request.session.pop(STILL_OPEN_OFFER_SESSION_KEY, "")
-    return template_renderer.render(request, "invoices.html", context)
+    return template_renderer.render(
+        request, "invoices.html", InvoiceListViewBuilder(session).list_context()
+    )
 
 
 @router.get("/rechnungen/finanzamt/{year}.zip")
@@ -378,29 +374,21 @@ def mark_paid(
         )
     record.paid_on = date.today()
     session.add(record)
-    still_open = InvoiceMailComposer(session).still_unpaid(record)
-    request.session.pop(STILL_OPEN_OFFER_SESSION_KEY, None)
-    if still_open:
-        request.session[STILL_OPEN_OFFER_SESSION_KEY] = (
-            STILL_OPEN_OFFER_NUMBER_SEPARATOR.join(
-                str(invoice.number) for invoice in still_open
-            )
-        )
     return notice_redirect(
         request, "/rechnungen", f"Rechnung Nr. {number} ist bezahlt. 🎉"
     )
 
 
-@router.post("/rechnungen/auch-bezahlt")
-def mark_the_other_open_invoices_paid(
+@router.post("/rechnungen/mehrere-bezahlt")
+def mark_several_invoices_paid(
     request: Request,
     nummern: str = Form(...),
     session: Session = Depends(database_session),
 ) -> Response:
-    """Close the invoices the offer named, in one click."""
+    """Close every named invoice in one click — the customer paid the lot."""
     store = StoreQueries(session)
     closed = []
-    for number in nummern.split(STILL_OPEN_OFFER_NUMBER_SEPARATOR):
+    for number in nummern.split(INVOICE_NUMBERS_FORM_SEPARATOR):
         record = store.issued_invoice_by_number(int(number))
         if record is None or record.paid_on is not None:
             continue
@@ -411,7 +399,7 @@ def mark_the_other_open_invoices_paid(
     return notice_redirect(
         request,
         "/rechnungen",
-        f"Auch {named} ist bezahlt. 🎉" if closed else "Nichts mehr offen.",
+        f"{named} bezahlt. 🎉" if closed else "Nichts mehr offen.",
     )
 
 
@@ -478,16 +466,9 @@ def preview_payment_reminder(
     outgoing = InvoiceMailComposer(session).reminder_to_send(
         record, count, date.today()
     )
-    archive = InvoicePdfArchive(session)
-    customer_name = customer.name if customer else ""
-    attached = [
-        pdf.name
-        for pdf in [
-            archive.find_pdf(record, customer_name),
-            *archive.pdfs_of(outgoing.rides_along, customer_name),
-        ]
-        if pdf
-    ]
+    attached = _attached_pdf_names(
+        session, record, outgoing.rides_along, customer.name if customer else ""
+    )
     return template_renderer.render(
         request,
         "mail_preview.html",
@@ -503,6 +484,53 @@ def preview_payment_reminder(
                 "eingestellt, die Erinnerung wird nur vermerkt"
             ),
             "send_action": f"/rechnungen/{number}/erinnern",
+        },
+    )
+
+
+def _attached_pdf_names(
+    session: Session,
+    record: IssuedInvoice,
+    rides_along: Sequence[IssuedInvoice],
+    customer_name: str,
+) -> list[str]:
+    archive = InvoicePdfArchive(session)
+    found = [archive.find_pdf(record, customer_name)]
+    found.extend(archive.pdfs_of(rides_along, customer_name))
+    return [pdf.name for pdf in found if pdf]
+
+
+@router.get("/rechnungen/{number}/versand")
+def preview_invoice_mail(
+    number: int, request: Request, session: Session = Depends(database_session)
+) -> Response:
+    """Show the invoice mail exactly as it would leave the house."""
+    record = StoreQueries(session).issued_invoice_by_number(number)
+    if record is None:
+        return notice_redirect(
+            request, "/rechnungen", f"Es gibt keine Rechnung Nr. {number}."
+        )
+    customer = session.get(Customer, record.customer_id)
+    if customer is None or not customer.email:
+        return notice_redirect(
+            request,
+            "/rechnungen",
+            "Für diesen Kunden ist keine E-Mail-Adresse hinterlegt — "
+            "bitte auf der Kundenseite eintragen.",
+        )
+    outgoing = InvoiceMailComposer(session).mail_to_send(record, date.today())
+    return template_renderer.render(
+        request,
+        "mail_preview.html",
+        {
+            "heading": f"Rechnung Nr. {number} senden",
+            "subject": outgoing.subject,
+            "body": outgoing.body,
+            "attachments": _attached_pdf_names(
+                session, record, outgoing.rides_along, customer.name
+            ),
+            "recipient": customer.email,
+            "send_action": f"/rechnungen/{number}/senden",
         },
     )
 
