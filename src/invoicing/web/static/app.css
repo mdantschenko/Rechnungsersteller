@@ -1027,17 +1027,12 @@ textarea {
 
 /* --- page transitions ------------------------------------------------------ */
 
-/* Browsers with cross-document view transitions morph the white pill of the
-   segmented switch to its new place and slide the content in the direction
-   of the swipe. Everyone else navigates instantly, which is also fine. */
+/* Browsers with cross-document view transitions keep the segmented switch
+   standing still and slide the content in the direction of the swipe. Everyone else navigates instantly, which is also fine. */
 
 @media (prefers-reduced-motion: no-preference) {
   @view-transition {
     navigation: auto;
-  }
-
-  .segmented a.is-current {
-    view-transition-name: segment-pill;
   }
 
   .segmented {
@@ -1052,8 +1047,16 @@ textarea {
     view-transition-name: tab-bar;
   }
 
-  ::view-transition-group(segment-pill) {
-    animation-duration: 0.25s;
+  ::view-transition-group(view-switch) {
+    animation: none;
+  }
+
+  ::view-transition-old(view-switch) {
+    display: none;
+  }
+
+  ::view-transition-new(view-switch) {
+    animation: none;
   }
 }
 
