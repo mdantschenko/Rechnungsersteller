@@ -552,6 +552,7 @@ CACHE_OPTIONAL_VERSIONED_PATHS = (
     "/static/swipe.js",
     "/static/share-pdf.js",
     "/static/keep-scroll-position.js",
+    "/static/scroll-to-today.js",
 )
 CACHE_VERSIONED_PATH_PATTERN = "{path}?v={version}"
 CACHE_OFFLINE_FALLBACK_TEXT = "Kein Netz"
