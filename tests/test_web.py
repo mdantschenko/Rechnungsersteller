@@ -11,6 +11,8 @@ from invoicing.constant import NO_STORE_CACHE_CONTROL
 from invoicing.storage.invoice_database import InvoiceDatabase
 from invoicing.storage.models import (
     AppSettings,
+    Customer,
+    CustomerStatus,
     IssuedInvoice,
     Lesson,
     LessonAlarm,
@@ -609,33 +611,23 @@ def test_exam_grades_and_stats_live_on_the_customer_page(client: TestClient) -> 
     assert "1 (50 %)" in page
 
 
-def test_a_customer_without_invoices_can_be_deleted(
+def test_ending_the_tutoring_makes_the_customer_inactive_and_clears_coming_lessons(
     client: TestClient, location: Path
 ) -> None:
     customer_id = _add_customer(client)
     _set_terms(client, customer_id)
-    _add_lesson(client, customer_id, date(2026, 5, 20))
+    past_lesson_id = _add_lesson(client, customer_id, date(2020, 5, 20))
+    _add_lesson(client, customer_id, date.today() + timedelta(days=7))
 
-    page = client.post(f"/kunden/{customer_id}/loeschen").text
+    page = client.post(f"/kunden/{customer_id}/beenden").text
 
-    assert "gelöscht" in page
+    assert "beendet" in page
     with Session(InvoiceDatabase(location).open()) as session:
-        assert session.exec(select(Lesson)).all() == []
-
-
-def test_a_customer_with_invoices_cannot_be_deleted(client: TestClient) -> None:
-    customer_id = _add_customer(client)
-    _set_terms(client, customer_id)
-    lesson_id = _add_lesson(client, customer_id, date(2026, 5, 20))
-    client.post(f"/termine/{lesson_id}/erledigt")
-    client.post(
-        f"/rechnungen/{customer_id}/freigeben", data={"closing_day": "2026-06-15"}
-    )
-
-    page = client.post(f"/kunden/{customer_id}/loeschen").text
-
-    assert "kann nicht" in page
-    assert "Erika Beispiel" in client.get("/kunden").text
+        remaining = session.exec(select(Lesson)).all()
+        assert [lesson.id for lesson in remaining] == [past_lesson_id]
+        customer = session.get(Customer, customer_id)
+        assert customer is not None
+        assert customer.status is CustomerStatus.ARCHIVED
 
 
 def test_earnings_and_the_tax_zip_follow_the_money(client: TestClient) -> None:

@@ -11,14 +11,10 @@ from starlette.responses import RedirectResponse, Response
 
 from invoicing.constant import BillingCycle, TotalRule, ValueKind, ValueSource
 from invoicing.storage.models import (
-    BillingTemplate,
     Customer,
     CustomerStatus,
     ExamGrade,
     InvoiceDelivery,
-    IssuedInvoice,
-    Lesson,
-    LessonSeries,
 )
 from invoicing.utils import notice_redirect
 from invoicing.web.customer_administration import CustomerAdministration
@@ -103,39 +99,14 @@ def remove_exam_grade(
     return RedirectResponse(f"/kunden/{customer_id}", status_code=303)
 
 
-@router.post("/kunden/{customer_id}/loeschen")
-def delete_customer(
+@router.post("/kunden/{customer_id}/beenden")
+def end_tutoring(
     customer_id: int, request: Request, session: Session = Depends(database_session)
 ) -> Response:
-    """Remove a customer for good — unless invoices depend on them."""
-    customer = StoreQueries(session).customer(customer_id)
-    has_invoices = session.exec(
-        select(IssuedInvoice).where(IssuedInvoice.customer_id == customer_id)
-    ).first()
-    if has_invoices is not None:
-        return notice_redirect(
-            request,
-            f"/kunden/{customer_id}",
-            f"{customer.name} hat ausgestellte Rechnungen und kann nicht "
-            "gelöscht werden — bitte stattdessen archivieren.",
-        )
-    for lesson in session.exec(
-        select(Lesson).where(Lesson.customer_id == customer_id)
-    ).all():
-        session.delete(lesson)
-    for series in session.exec(
-        select(LessonSeries).where(LessonSeries.customer_id == customer_id)
-    ).all():
-        session.delete(series)
-    terms = session.exec(
-        select(BillingTemplate).where(BillingTemplate.customer_id == customer_id)
-    ).first()
-    if terms is not None:
-        for column in terms.columns:
-            session.delete(column)
-        session.delete(terms)
-    session.delete(customer)
-    return notice_redirect(request, "/kunden", f"{customer.name} gelöscht.")
+    """Set the customer inactive and take their coming lessons off the calendar."""
+    CustomerAdministration(session).end_tutoring(customer_id)
+    name = StoreQueries(session).customer(customer_id).name
+    return notice_redirect(request, "/kunden", f"Nachhilfe mit {name} beendet.")
 
 
 @router.post("/kunden/{customer_id}")

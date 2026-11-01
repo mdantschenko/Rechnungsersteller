@@ -280,6 +280,34 @@ class CustomerAdministration:
             series.active = False
             self._session.add(series)
 
+    def end_tutoring(self, customer_id: int) -> None:
+        """Make the customer inactive and clear their calendar from tomorrow on.
+
+        Stops every running series and removes the planned lessons after today
+        that are not billed. Answered and billed lessons stay.
+        """
+        customer = self._store.customer(customer_id)
+        customer.status = CustomerStatus.ARCHIVED
+        self._session.add(customer)
+
+        for series in self._session.exec(
+            select(LessonSeries)
+            .where(LessonSeries.customer_id == customer_id)
+            .where(col(LessonSeries.active))
+        ).all():
+            series.active = False
+            self._session.add(series)
+
+        upcoming = (
+            select(Lesson)
+            .where(Lesson.customer_id == customer_id)
+            .where(Lesson.taught_on > date.today())
+            .where(Lesson.status == LessonStatus.PLANNED)
+            .where(Lesson.invoice_id == None)  # noqa: E711
+        )
+        for lesson in self._session.exec(upcoming).all():
+            self._session.delete(lesson)
+
     def remember_reminder(self, customer_id: int, reminder_at: str) -> None:
         """Remember the reminder time on the customer.
 

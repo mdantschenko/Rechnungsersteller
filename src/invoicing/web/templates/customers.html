@@ -4,7 +4,7 @@
 {% block heading %}Kunden{% endblock %}
 {% block subheading %}
 <p class="page-subtitle">
-  {{ active | length }} aktiv{% if archived %} · {{ archived | length }} archiviert{% endif %}
+  {{ active | length }} aktiv{% if archived %} · {{ archived | length }} inaktiv{% endif %}
 </p>
 {% endblock %}
 
@@ -44,7 +44,8 @@
 </details>
 
 {% if archived %}
-<div class="section-title">Archiv</div>
+<details class="section-fold">
+<summary class="section-title">Inaktiv ({{ archived | length }})</summary>
 <ul class="plain">
   {% for customer in archived %}
   <li>
@@ -62,6 +63,7 @@
   </li>
   {% endfor %}
 </ul>
-<p class="hint">Archivierte Kunden erscheinen nirgends sonst, ihre Historie bleibt.</p>
+<p class="hint">Inaktive Kunden erscheinen nirgends sonst, ihre Historie bleibt.</p>
+</details>
 {% endif %}
 {% endblock %}

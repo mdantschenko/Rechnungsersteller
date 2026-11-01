@@ -95,7 +95,7 @@ PayPal: ich@example.com</p>
     <label>Status
       <select name="status">
         <option value="active" {{ 'selected' if customer.status.value == 'active' }}>Aktiv</option>
-        <option value="archived" {{ 'selected' if customer.status.value == 'archived' }}>Archiviert</option>
+        <option value="archived" {{ 'selected' if customer.status.value == 'archived' }}>Inaktiv</option>
       </select>
     </label>
     <button class="button button-fill" type="submit">Speichern</button>
@@ -384,9 +384,11 @@ PayPal: ich@example.com</p>
 {% endfor %}
 {% endif %}
 
-<form method="post" action="/kunden/{{ customer.id }}/loeschen" style="margin: 1rem 1rem 0"
-      onsubmit="return confirm('{{ customer.name }} endgültig löschen? Alle Termine und Serien werden mit entfernt.')">
-  <button class="button button-fill color-red" type="submit">Kunde löschen</button>
+{% if customer.status.value == 'active' %}
+<form method="post" action="/kunden/{{ customer.id }}/beenden" style="margin: 1rem 1rem 0"
+      onsubmit="return confirm('Nachhilfe mit {{ customer.name }} beenden? Alle kommenden Termine und Serien werden entfernt.')">
+  <button class="button button-fill color-red" type="submit">Nachhilfe beenden</button>
 </form>
-<p class="hint">Geht nur ohne ausgestellte Rechnungen — sonst archivieren.</p>
+<p class="hint">Der Kunde wird inaktiv, seine Historie und Rechnungen bleiben.</p>
+{% endif %}
 {% endblock %}
